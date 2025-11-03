@@ -3,7 +3,7 @@ package h8io.cfg.impl.hocon
 import com.typesafe.config.ConfigObject
 import h8io.cfg.{CfgMap, CfgNone, CfgOrigin, CfgValue}
 
-import scala.jdk.CollectionConverters.IteratorHasAsScala
+import scala.jdk.CollectionConverters.*
 
 final case class CfgMapImpl(underlying: ConfigObject) extends CfgMap {
   def get(key: String): CfgValue =
