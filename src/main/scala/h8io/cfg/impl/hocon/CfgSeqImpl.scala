@@ -7,7 +7,7 @@ import scala.jdk.CollectionConverters.*
 
 final case class CfgSeqImpl(underlying: ConfigList) extends CfgSeq {
   def apply(i: Int): CfgValue =
-    if (i < 0 || i > underlying.size) CfgNone(CfgOriginImpl(underlying.origin)) else Wrap(underlying.get(i))
+    if (i < 0 || i >= underlying.size) CfgNone(CfgOriginImpl(underlying.origin)) else Wrap(underlying.get(i))
 
   def iterator: Iterator[CfgValue] = underlying.iterator.asScala.map(Wrap.apply)
 
