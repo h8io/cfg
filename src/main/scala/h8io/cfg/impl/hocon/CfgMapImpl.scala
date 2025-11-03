@@ -12,5 +12,11 @@ final case class CfgMapImpl(underlying: ConfigObject) extends CfgMap {
   def iterator: Iterator[(String, CfgValue)] =
     underlying.entrySet.iterator.asScala.map(e => e.getKey -> Wrap(e.getValue))
 
+  override def isEmpty: Boolean = underlying.isEmpty
+
+  override def size: Int = underlying.size()
+
+  override def knownSize: Int = underlying.size()
+
   def origin: CfgOrigin = CfgOriginImpl(underlying.origin)
 }

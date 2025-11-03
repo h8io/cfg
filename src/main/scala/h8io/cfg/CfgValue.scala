@@ -12,8 +12,16 @@ final case class CfgScalar(value: String, origin: CfgOrigin) extends CfgValue
 
 trait CfgMap extends CfgValue with Iterable[(String, CfgValue)] {
   def apply(key: String): CfgValue
+
+  def isEmpty: Boolean
+
+  def size: Int
+
+  def knownSize: Int
 }
 
 trait CfgSeq extends CfgValue with Iterable[CfgValue] {
   def apply(i: Int): CfgValue
+
+  def knownSize: Int
 }
