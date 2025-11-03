@@ -1,7 +1,7 @@
 package h8io.cfg.impl.hocon
 
 import h8io.cfg.impl.hocon.context.CfgContext
-import h8io.cfg.{CfgList, CfgMap, CfgNull, CfgScalar}
+import h8io.cfg.{CfgMap, CfgNull, CfgScalar, CfgSeq}
 import org.scalatest.Inside
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -23,9 +23,9 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
     }
   }
 
-  it should "create a CfgList object" in {
+  it should "create a CfgSeq object" in {
     val listValue = config.get("list")
-    inside(Wrap(listValue)) { case list: CfgList =>
+    inside(Wrap(listValue)) { case list: CfgSeq =>
       list.iterator.map(
         inside(_) {
           case CfgScalar(value, _) => Some(value)

@@ -6,7 +6,7 @@ import h8io.cfg.{CfgMap, CfgNone, CfgOrigin, CfgValue}
 import scala.jdk.CollectionConverters.*
 
 final case class CfgMapImpl(underlying: ConfigObject) extends CfgMap {
-  def get(key: String): CfgValue =
+  def apply(key: String): CfgValue =
     if (underlying.containsKey(key)) Wrap(underlying.get(key)) else CfgNone(CfgOriginImpl(underlying.origin))
 
   def iterator: Iterator[(String, CfgValue)] =
