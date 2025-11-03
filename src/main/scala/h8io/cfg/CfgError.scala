@@ -1,5 +1,3 @@
 package h8io.cfg
 
-class CfgError {
-
-}
+class CfgError {}

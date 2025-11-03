@@ -3,14 +3,20 @@ package h8io.cfg.impl.hocon
 import com.typesafe.config.ConfigObject
 import h8io.cfg.{CfgMap, CfgNone, CfgOrigin, CfgValue}
 
-import scala.jdk.CollectionConverters.IteratorHasAsScala
+import scala.jdk.CollectionConverters.*
 
 final case class CfgMapImpl(underlying: ConfigObject) extends CfgMap {
-  def get(key: String): CfgValue =
-    if (underlying.containsKey(key)) wrap(underlying.get(key)) else CfgNone(CfgOriginImpl(underlying.origin))
+  def apply(key: String): CfgValue =
+    if (underlying.containsKey(key)) Wrap(underlying.get(key)) else CfgNone(CfgOriginImpl(underlying.origin))
 
   def iterator: Iterator[(String, CfgValue)] =
-    underlying.entrySet.iterator.asScala.map(e => e.getKey -> wrap(e.getValue))
+    underlying.entrySet.iterator.asScala.map(e => e.getKey -> Wrap(e.getValue))
+
+  override def isEmpty: Boolean = underlying.isEmpty
+
+  override def size: Int = underlying.size()
+
+  override def knownSize: Int = underlying.size()
 
   def origin: CfgOrigin = CfgOriginImpl(underlying.origin)
 }
