@@ -1,7 +1,8 @@
 package h8io.cfg.impl.hocon
 
+import com.typesafe.config.{ConfigObject, ConfigOrigin}
 import h8io.cfg.impl.hocon.context.CfgContext
-import h8io.cfg.{CfgMap, CfgNone, CfgNull, CfgScalar, CfgSeq}
+import h8io.cfg.*
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.Inside
 import org.scalatest.flatspec.AnyFlatSpec
@@ -68,5 +69,51 @@ class CfgMapImplTest extends AnyFlatSpec with Matchers with Inside with MockFact
       }.toList should contain theSameElementsAs List("a" -> None, "b" -> Some("c"), "null" -> Some("null"))
       inside(map.origin) { case CfgOriginImpl(origin) => origin should be theSameInstanceAs obj.origin }
     }
+  }
+
+  "iterator" should "return a correct sequence of entries" in {
+    val obj = hocon"""a: null, b: c, null: "null""""
+    CfgMapImpl(obj).iterator.map { case (key, value) =>
+      val expectedOrigin = obj.get(key).origin
+      inside(value) {
+        case CfgScalar(value, CfgOriginImpl(origin)) =>
+          origin should be theSameInstanceAs expectedOrigin
+          key -> Some(value)
+        case CfgNull(CfgOriginImpl(origin)) =>
+          origin should be theSameInstanceAs expectedOrigin
+          key -> None
+      }
+    }.toList should contain theSameElementsAs List("a" -> None, "b" -> Some("c"), "null" -> Some("null"))
+  }
+
+  "isEmpty" should "return true" in {
+    val obj = mock[ConfigObject]
+    (obj.isEmpty _).expects().returns(true)
+    CfgMapImpl(obj).isEmpty shouldBe true
+  }
+
+  it should "return false" in {
+    val obj = mock[ConfigObject]
+    (obj.isEmpty _).expects().returns(false)
+    CfgMapImpl(obj).isEmpty shouldBe false
+  }
+
+  "size" should "return the same value as underlying.size" in {
+    val obj = mock[ConfigObject]
+    (obj.size _).expects().returns(17)
+    CfgMapImpl(obj).size shouldBe 17
+  }
+
+  "knownSize" should "return the same value as underlying.size" in {
+    val obj = mock[ConfigObject]
+    (obj.size _).expects().returns(42)
+    CfgMapImpl(obj).knownSize shouldBe 42
+  }
+
+  "origin" should "be a wrap on underlying origin object" in {
+    val obj = mock[ConfigObject]
+    val expectedOrigin = mock[ConfigOrigin]
+    (obj.origin _).expects().returns(expectedOrigin)
+    inside(CfgMapImpl(obj).origin) { case CfgOriginImpl(origin) => origin should be theSameInstanceAs expectedOrigin }
   }
 }
