@@ -1,10 +1,10 @@
-package h8io.cfg.impl
+package h8io.cfg.impl.hocon
 
 import com.typesafe.config.{ConfigList, ConfigObject, ConfigValue, ConfigValueType}
 import h8io.cfg.{CfgNull, CfgScalar, CfgValue}
 
-package object hocon {
-  private[hocon] def wrap(value: ConfigValue): CfgValue =
+object Wrap {
+  @inline private[hocon] def apply(value: ConfigValue): CfgValue =
     value match {
       case obj: ConfigObject => CfgMapImpl(obj)
       case list: ConfigList => CfgListImpl(list)

@@ -7,10 +7,10 @@ import scala.jdk.CollectionConverters.*
 
 final case class CfgMapImpl(underlying: ConfigObject) extends CfgMap {
   def get(key: String): CfgValue =
-    if (underlying.containsKey(key)) wrap(underlying.get(key)) else CfgNone(CfgOriginImpl(underlying.origin))
+    if (underlying.containsKey(key)) Wrap(underlying.get(key)) else CfgNone(CfgOriginImpl(underlying.origin))
 
   def iterator: Iterator[(String, CfgValue)] =
-    underlying.entrySet.iterator.asScala.map(e => e.getKey -> wrap(e.getValue))
+    underlying.entrySet.iterator.asScala.map(e => e.getKey -> Wrap(e.getValue))
 
   def origin: CfgOrigin = CfgOriginImpl(underlying.origin)
 }
