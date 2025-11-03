@@ -9,8 +9,8 @@ package object hocon {
       case obj: ConfigObject => CfgMapImpl(obj)
       case list: ConfigList => CfgListImpl(list)
       case scalar: ConfigValue => scalar.valueType match {
-        case ConfigValueType.NULL => CfgNull(CfgOriginImpl(scalar.origin))
-        case _ => CfgScalar(scalar.unwrapped.toString, CfgOriginImpl(scalar.origin))
-      }
+          case ConfigValueType.NULL => CfgNull(CfgOriginImpl(scalar.origin))
+          case _ => CfgScalar(scalar.unwrapped.toString, CfgOriginImpl(scalar.origin))
+        }
     }
 }
