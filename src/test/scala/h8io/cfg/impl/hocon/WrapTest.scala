@@ -7,7 +7,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class WrapTest extends AnyFlatSpec with Matchers with Inside {
-  private val config = hocon"map { a: x, b: y, c: z, d: null }, list: [1, 2, 3, null], scalar: 42, null: null"
+  private val config = hocon"map { a: x, b: y, c: z, d: null }, seq: [1, 2, 3, null], scalar: 42, null: null"
 
   "Wrap" should "create a CfgMap object" in {
     val mapValue = config.get("map")
@@ -19,30 +19,35 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
         }
       }.toList should contain theSameElementsAs
         List("a" -> Some("x"), "b" -> Some("y"), "c" -> Some("z"), "d" -> None)
-      map.origin shouldEqual CfgOriginImpl(mapValue.origin)
+      inside(map.origin) { case CfgOriginImpl(origin) => origin should be theSameInstanceAs mapValue.origin }
     }
   }
 
   it should "create a CfgSeq object" in {
-    val listValue = config.get("list")
-    inside(Wrap(listValue)) { case list: CfgSeq =>
-      list.iterator.map(
+    val seqValue = config.get("seq")
+    inside(Wrap(seqValue)) { case seq: CfgSeq =>
+      seq.iterator.map(
         inside(_) {
           case CfgScalar(value, _) => Some(value)
           case CfgNull(_) => None
         }).toList should contain theSameElementsInOrderAs
         List(Some("1"), Some("2"), Some("3"), None)
-      list.origin shouldEqual CfgOriginImpl(listValue.origin)
+      inside(seq.origin) { case CfgOriginImpl(origin) => origin should be theSameInstanceAs seqValue.origin }
     }
   }
 
   it should "create a CfgScalar object" in {
     val scalarValue = config.get("scalar")
-    Wrap(scalarValue) shouldBe CfgScalar("42", CfgOriginImpl(scalarValue.origin))
+    inside(Wrap(scalarValue)) { case CfgScalar("42", CfgOriginImpl(scalarOrigin)) =>
+      scalarOrigin should be theSameInstanceAs scalarValue.origin
+    }
   }
 
   it should "create a CfgNull object" in {
     val nullValue = config.get("null")
     Wrap(nullValue) shouldBe CfgNull(CfgOriginImpl(nullValue.origin))
+    inside(Wrap(nullValue)) { case CfgNull(CfgOriginImpl(nullOrigin)) =>
+      nullOrigin should be theSameInstanceAs nullValue.origin
+    }
   }
 }
