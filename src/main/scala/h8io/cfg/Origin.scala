@@ -1,5 +1,5 @@
 package h8io.cfg
 
-trait CfgOrigin {
+trait Origin {
   def description: String
 }

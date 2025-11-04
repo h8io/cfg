@@ -1,16 +1,16 @@
 package h8io.cfg.impl.hocon
 
 import com.typesafe.config.{ConfigList, ConfigObject, ConfigValue, ConfigValueType}
-import h8io.cfg.{CfgNull, CfgScalar, CfgValue}
+import h8io.cfg.{Entry, Path}
 
-object Wrap {
-  @inline private[hocon] def apply(value: ConfigValue): CfgValue =
+private[hocon] object Wrap {
+  @inline def apply[P <: Path](path: P, value: ConfigValue): Entry[P] =
     value match {
-      case obj: ConfigObject => CfgMapImpl(obj)
-      case list: ConfigList => CfgSeqImpl(list)
+      case obj: ConfigObject => MapImpl(path, obj)
+      case list: ConfigList => SeqImpl(path, list)
       case scalar: ConfigValue => scalar.valueType match {
-          case ConfigValueType.NULL => CfgNull(CfgOriginImpl(scalar.origin))
-          case _ => CfgScalar(scalar.unwrapped.toString, CfgOriginImpl(scalar.origin))
+          case ConfigValueType.NULL => Entry.Null(path, OriginImpl(scalar.origin))
+          case _ => Entry.Scalar(path, scalar.unwrapped.toString, OriginImpl(scalar.origin))
         }
     }
 }
