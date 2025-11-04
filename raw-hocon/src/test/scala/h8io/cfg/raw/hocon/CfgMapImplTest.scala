@@ -2,7 +2,7 @@ package h8io.cfg.raw.hocon
 
 import com.typesafe.config.{ConfigObject, ConfigOrigin}
 import h8io.cfg.raw.hocon.context.CfgContext
-import h8io.cfg.raw.{Entry, Path}
+import h8io.cfg.raw.{Entry, Ref}
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.Inside
 import org.scalatest.flatspec.AnyFlatSpec
@@ -12,7 +12,7 @@ class CfgMapImplTest extends AnyFlatSpec with Matchers with Inside with MockFact
   "apply" should "return a CfgScalar" in {
     val obj = hocon"""scalar: 42"""
     val scalar = obj.get("scalar")
-    inside(MapImpl(Path.Root, obj)("scalar")) { case Entry.Scalar(Path.Key("scalar"), "42", OriginImpl(scalarOrigin)) =>
+    inside(MapImpl(Ref.Root, obj)("scalar")) { case Entry.Scalar(Ref.Key("scalar"), "42", OriginImpl(scalarOrigin)) =>
       scalarOrigin should be theSameInstanceAs scalar.origin
     }
   }
@@ -20,14 +20,14 @@ class CfgMapImplTest extends AnyFlatSpec with Matchers with Inside with MockFact
   it should "return a CfgNull" in {
     val obj = hocon"""scalar: null"""
     val scalar = obj.get("scalar")
-    inside(MapImpl(Path.Root, obj)("scalar")) { case Entry.Null(Path.Key("scalar"), OriginImpl(scalarOrigin)) =>
+    inside(MapImpl(Ref.Root, obj)("scalar")) { case Entry.Null(Ref.Key("scalar"), OriginImpl(scalarOrigin)) =>
       scalarOrigin should be theSameInstanceAs scalar.origin
     }
   }
 
   it should "return a CfgNone" in {
     val obj = hocon"""scalar: 13"""
-    inside(MapImpl(Path.Root, obj)("unexistent")) { case Entry.None(Path.Key("unexistent"), OriginImpl(scalarOrigin)) =>
+    inside(MapImpl(Ref.Root, obj)("unexistent")) { case Entry.None(Ref.Key("unexistent"), OriginImpl(scalarOrigin)) =>
       scalarOrigin should be theSameInstanceAs obj.origin
     }
   }
@@ -35,14 +35,14 @@ class CfgMapImplTest extends AnyFlatSpec with Matchers with Inside with MockFact
   it should "return a CfgSeq" in {
     val obj = hocon"""seq: [a, null, b, null, c, null, "null"]"""
     val list = obj.toConfig.getList("seq")
-    inside(MapImpl(Path.Root, obj)("seq")) { case seq: Entry.Seq[?] =>
+    inside(MapImpl(Ref.Root, obj)("seq")) { case seq: Entry.Seq[?] =>
       seq.iterator.zipWithIndex.map { case (value, i) =>
         val expectedOrigin = list.get(i).origin
         inside(value) {
-          case Entry.Scalar(Path.Index(`i`), value, OriginImpl(origin)) =>
+          case Entry.Scalar(Ref.Index(`i`), value, OriginImpl(origin)) =>
             origin should be theSameInstanceAs expectedOrigin
             Some(value)
-          case Entry.Null(Path.Index(`i`), OriginImpl(origin)) =>
+          case Entry.Null(Ref.Index(`i`), OriginImpl(origin)) =>
             origin should be theSameInstanceAs expectedOrigin
             None
         }
@@ -55,9 +55,9 @@ class CfgMapImplTest extends AnyFlatSpec with Matchers with Inside with MockFact
   it should "return a CfgMap" in {
     val cfg = hocon"""map { a: null, b: c, null: "null" }"""
     val obj = cfg.toConfig.getObject("map")
-    inside(MapImpl(Path.Root, cfg)("map")) { case map: Entry.Map[?] =>
+    inside(MapImpl(Ref.Root, cfg)("map")) { case map: Entry.Map[?] =>
       map.iterator.map { entry =>
-        val expectedOrigin = obj.get(entry.path.key).origin
+        val expectedOrigin = obj.get(entry.id.key).origin
         inside(entry) {
           case Entry.Scalar(path, value, OriginImpl(origin)) =>
             origin should be theSameInstanceAs expectedOrigin
@@ -73,8 +73,8 @@ class CfgMapImplTest extends AnyFlatSpec with Matchers with Inside with MockFact
 
   "iterator" should "return a correct sequence of entries" in {
     val obj = hocon"""a: null, b: c, null: "null""""
-    MapImpl(Path.Root, obj).iterator.map { entry =>
-      val expectedOrigin = obj.get(entry.path.key).origin
+    MapImpl(Ref.Root, obj).iterator.map { entry =>
+      val expectedOrigin = obj.get(entry.id.key).origin
       inside(entry) {
         case Entry.Scalar(path, value, OriginImpl(origin)) =>
           origin should be theSameInstanceAs expectedOrigin
@@ -89,32 +89,32 @@ class CfgMapImplTest extends AnyFlatSpec with Matchers with Inside with MockFact
   "isEmpty" should "return true" in {
     val obj = mock[ConfigObject]
     (obj.isEmpty _).expects().returns(true)
-    MapImpl(Path.Root, obj).isEmpty shouldBe true
+    MapImpl(Ref.Root, obj).isEmpty shouldBe true
   }
 
   it should "return false" in {
     val obj = mock[ConfigObject]
     (obj.isEmpty _).expects().returns(false)
-    MapImpl(Path.Root, obj).isEmpty shouldBe false
+    MapImpl(Ref.Root, obj).isEmpty shouldBe false
   }
 
   "size" should "return the same value as underlying.size" in {
     val obj = mock[ConfigObject]
     (obj.size _).expects().returns(17)
-    MapImpl(Path.Root, obj).size shouldBe 17
+    MapImpl(Ref.Root, obj).size shouldBe 17
   }
 
   "knownSize" should "return the same value as underlying.size" in {
     val obj = mock[ConfigObject]
     (obj.size _).expects().returns(42)
-    MapImpl(Path.Root, obj).knownSize shouldBe 42
+    MapImpl(Ref.Root, obj).knownSize shouldBe 42
   }
 
   "origin" should "be a wrap on underlying origin object" in {
     val obj = mock[ConfigObject]
     val expectedOrigin = mock[ConfigOrigin]
     (obj.origin _).expects().returns(expectedOrigin)
-    inside(MapImpl(Path.Root, obj).origin) { case OriginImpl(origin) =>
+    inside(MapImpl(Ref.Root, obj).origin) { case OriginImpl(origin) =>
       origin should be theSameInstanceAs expectedOrigin
     }
   }
