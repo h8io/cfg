@@ -45,7 +45,13 @@ ThisBuild / crossScalaVersions += "2.12.20"
 
 ThisBuild / libraryDependencies ++= TestBundle % Test
 
+val raw = (project in file("raw")).settings(name := "cfg-raw")
+
+val hocon = (project in file("raw-hocon"))
+  .settings(name := "cfg-raw-hocon", libraryDependencies ++= Seq(Config, ScalaCollectionCompat))
+  .dependsOn(raw)
+
 val root = (project in file(".")).enablePlugins(ScoverageSummaryPlugin).settings(
   name := ProjectName,
   libraryDependencies ++= Seq(Cats, Config, ScalaCollectionCompat)
-)
+).aggregate(raw, hocon)
