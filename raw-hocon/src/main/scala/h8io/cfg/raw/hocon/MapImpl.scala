@@ -1,17 +1,17 @@
 package h8io.cfg.raw.hocon
 
 import com.typesafe.config.ConfigObject
-import h8io.cfg.raw.{Entry, Origin, Path}
+import h8io.cfg.raw.{Entry, Origin, Ref}
 
 import scala.jdk.CollectionConverters.*
 
-private[hocon] final case class MapImpl[P <: Path](path: P, underlying: ConfigObject) extends Entry.Map[P] {
-  def apply(key: Path.Key): Entry[Path.Key] =
+private[hocon] final case class MapImpl[P <: Ref](id: P, underlying: ConfigObject) extends Entry.Map[P] {
+  def apply(key: Ref.Key): Entry[Ref.Key] =
     if (underlying.containsKey(key.key)) Wrap(key, underlying.get(key.key))
     else Entry.None(key, OriginImpl(underlying.origin))
 
-  def iterator: Iterator[Entry[Path.Key]] =
-    underlying.entrySet.iterator.asScala.map(e => Wrap(Path.Key(e.getKey), e.getValue))
+  def iterator: Iterator[Entry[Ref.Key]] =
+    underlying.entrySet.iterator.asScala.map(e => Wrap(Ref.Key(e.getKey), e.getValue))
 
   def origin: Origin = OriginImpl(underlying.origin)
 

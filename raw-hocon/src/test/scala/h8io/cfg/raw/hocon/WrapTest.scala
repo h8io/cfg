@@ -1,7 +1,7 @@
 package h8io.cfg.raw.hocon
 
 import context.CfgContext
-import h8io.cfg.raw.{Entry, Path}
+import h8io.cfg.raw.{Entry, Ref}
 import org.scalatest.Inside
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -11,7 +11,7 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
 
   "Wrap" should "create a CfgMap object" in {
     val mapValue = config.get("map")
-    val rootPath = Path.Index(42)
+    val rootPath = Ref.Index(42)
     inside(Wrap(rootPath, mapValue)) { case map: Entry.Map[?] =>
       map.iterator.map {
         inside(_) {
@@ -26,11 +26,11 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
 
   it should "create a CfgSeq object" in {
     val seqValue = config.get("seq")
-    inside(Wrap(Path.Root, seqValue)) { case seq: Entry.Seq[?] =>
+    inside(Wrap(Ref.Root, seqValue)) { case seq: Entry.Seq[?] =>
       seq.iterator.zipWithIndex.map { case (entry, i) =>
         inside(entry) {
-          case Entry.Scalar(Path.Index(`i`), value, _) => Some(value)
-          case Entry.Null(Path.Index(`i`), _) => None
+          case Entry.Scalar(Ref.Index(`i`), value, _) => Some(value)
+          case Entry.Null(Ref.Index(`i`), _) => None
         }
       }.toList should contain theSameElementsInOrderAs
         List(Some("1"), Some("2"), Some("3"), None)
@@ -40,14 +40,14 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
 
   it should "create a CfgScalar object" in {
     val scalarValue = config.get("scalar")
-    inside(Wrap(Path.Root, scalarValue)) { case Entry.Scalar(Path.Root, "42", OriginImpl(scalarOrigin)) =>
+    inside(Wrap(Ref.Root, scalarValue)) { case Entry.Scalar(Ref.Root, "42", OriginImpl(scalarOrigin)) =>
       scalarOrigin should be theSameInstanceAs scalarValue.origin
     }
   }
 
   it should "create a CfgNull object" in {
     val nullValue = config.get("null")
-    inside(Wrap(Path.Root, nullValue)) { case Entry.Null(Path.Root, OriginImpl(origin)) =>
+    inside(Wrap(Ref.Root, nullValue)) { case Entry.Null(Ref.Root, OriginImpl(origin)) =>
       origin should be theSameInstanceAs nullValue.origin
     }
   }
