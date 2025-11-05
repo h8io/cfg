@@ -13,7 +13,7 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     val obj = hocon"""scalar: 42"""
     val scalar = obj.get("scalar")
     inside(MapImpl(Id.Root, obj)("scalar")) {
-      case Node.Scalar(Id.Key("scalar"), "42", OriginImpl(scalarOrigin)) =>
+      case Node.Scalar(Id.Key("scalar", Id.Root), "42", OriginImpl(scalarOrigin)) =>
         scalarOrigin should be theSameInstanceAs scalar.origin
     }
   }
@@ -22,7 +22,7 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     val obj = hocon"""scalar: null"""
     val scalar = obj.get("scalar")
     inside(MapImpl(Id.Root, obj)("scalar")) {
-      case Node.Null(Id.Key("scalar"), OriginImpl(scalarOrigin)) =>
+      case Node.Null(Id.Key("scalar", Id.Root), OriginImpl(scalarOrigin)) =>
         scalarOrigin should be theSameInstanceAs scalar.origin
     }
   }
@@ -30,7 +30,7 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
   it should "return a Node.None object" in {
     val obj = hocon"""scalar: 13"""
     inside(MapImpl(Id.Root, obj)("unexistent")) {
-      case Node.None(Id.Key("unexistent"), OriginImpl(scalarOrigin)) =>
+      case Node.None(Id.Key("unexistent", Id.Root), OriginImpl(scalarOrigin)) =>
         scalarOrigin should be theSameInstanceAs obj.origin
     }
   }
@@ -42,10 +42,10 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
       seq.iterator.zipWithIndex.map { case (value, i) =>
         val expectedOrigin = list.get(i).origin
         inside(value) {
-          case Node.Scalar(Id.Index(`i`), value, OriginImpl(origin)) =>
+          case Node.Scalar(Id.Index(`i`, seq.id), value, OriginImpl(origin)) =>
             origin should be theSameInstanceAs expectedOrigin
             Some(value)
-          case Node.Null(Id.Index(`i`), OriginImpl(origin)) =>
+          case Node.Null(Id.Index(`i`, seq.id), OriginImpl(origin)) =>
             origin should be theSameInstanceAs expectedOrigin
             None
         }

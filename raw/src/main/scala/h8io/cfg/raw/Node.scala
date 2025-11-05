@@ -1,7 +1,7 @@
 package h8io.cfg.raw
 
 sealed trait Node[+I <: Id] {
-  def id: I
+  val id: I
   def origin: Origin
 }
 
@@ -19,10 +19,10 @@ object Node {
   }
 
   trait Map[I <: Id] extends Container[I, Id.Key] {
-    final def apply(key: String): Node[Id.Key] = apply(Id.Key(key))
+    final def apply(key: String): Node[Id.Key] = apply(Id.Key(key, id))
   }
 
   trait Seq[I <: Id] extends Container[I, Id.Index] {
-    final def apply(i: Int): Node[Id.Index] = apply(Id.Index(i))
+    final def apply(i: Int): Node[Id.Index] = apply(Id.Index(i, id))
   }
 }
