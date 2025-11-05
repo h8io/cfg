@@ -11,7 +11,7 @@ private[hocon] final case class SeqImpl[I <: Id](id: I, underlying: ConfigList) 
     else Node.None(index, OriginImpl(underlying.origin))
 
   def iterator: Iterator[Node[Id.Index]] =
-    underlying.iterator.asScala.zipWithIndex.map { case (value, i) => Wrap(Id.Index(i), value) }
+    underlying.iterator.asScala.zipWithIndex.map { case (value, i) => Wrap(Id.Index(i, id), value) }
 
   def origin: Origin = OriginImpl(underlying.origin)
 
