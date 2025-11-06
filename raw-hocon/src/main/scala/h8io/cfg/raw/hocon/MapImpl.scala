@@ -7,11 +7,11 @@ import scala.jdk.CollectionConverters.*
 
 private[hocon] final case class MapImpl[I <: Id](id: I, underlying: ConfigObject) extends Node.Map[I] {
   def apply(key: Id.Key): Node[Id.Key] =
-    if (underlying.containsKey(key.key)) Wrap(key, underlying.get(key.key))
+    if (underlying.containsKey(key.key)) wrap(key, underlying.get(key.key))
     else Node.None(key, OriginImpl(underlying.origin))
 
   def iterator: Iterator[Node[Id.Key]] =
-    underlying.entrySet.iterator.asScala.map(e => Wrap(Id.Key(e.getKey, id), e.getValue))
+    underlying.entrySet.iterator.asScala.map(e => wrap(Id.Key(e.getKey, id), e.getValue))
 
   def origin: Origin = OriginImpl(underlying.origin)
 
