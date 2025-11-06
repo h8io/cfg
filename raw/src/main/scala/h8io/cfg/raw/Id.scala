@@ -8,9 +8,11 @@ sealed trait Id {
 }
 
 object Id {
-  case object Root extends Id {
-    def path: String = ""
+  sealed trait Root extends Id {
+    final def path: String = ""
   }
+
+  case object Root extends Root
 
   final case class Key(key: String, parent: Id) extends Id {
     def path: String = if (parent == Id.Root) quote(key) else parent.path + '.' + quote(key)

@@ -7,11 +7,11 @@ import scala.jdk.CollectionConverters.*
 
 private[hocon] final case class SeqImpl[I <: Id](id: I, underlying: ConfigList) extends Node.Seq[I] {
   def apply(index: Id.Index): Node[Id.Index] =
-    if (index.fits(underlying.size)) Wrap(index, underlying.get(index.index))
+    if (index.fits(underlying.size)) wrap(index, underlying.get(index.index))
     else Node.None(index, OriginImpl(underlying.origin))
 
   def iterator: Iterator[Node[Id.Index]] =
-    underlying.iterator.asScala.zipWithIndex.map { case (value, i) => Wrap(Id.Index(i, id), value) }
+    underlying.iterator.asScala.zipWithIndex.map { case (value, i) => wrap(Id.Index(i, id), value) }
 
   def origin: Origin = OriginImpl(underlying.origin)
 
