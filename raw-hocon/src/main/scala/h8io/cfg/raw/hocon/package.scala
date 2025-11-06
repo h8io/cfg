@@ -5,12 +5,12 @@ import com.typesafe.config.*
 import java.net.URL
 
 package object hocon {
-  def read(urls: URL*): Node.Map[Id.Root] =
+  def apply(urls: URL*): Node.Map[Id.Root] =
     MapImpl(Id.Root,
       urls.iterator
         .map(ConfigFactory.parseURL)
         .reduceOption((p, n) => n withFallback p)
-        .map(_.resolve())
+        .map(ConfigFactory.load)
         .getOrElse(ConfigFactory.load).root())
 
   @inline private[hocon] def wrap[I <: Id](id: I, value: ConfigValue): Node[I] =
