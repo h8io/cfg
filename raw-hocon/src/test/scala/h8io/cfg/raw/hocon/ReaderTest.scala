@@ -19,6 +19,7 @@ class ReaderTest extends AnyFlatSpec with Matchers {
     cfg("source") should matchPattern { case Node.Scalar(Id.Key("source", Id.Root), "reference", _) => }
     cfg("src") should matchPattern { case Node.Scalar(Id.Key("src", Id.Root), "reference", _) => }
     cfg("property") should matchPattern { case Node.None(Id.Key("property", Id.Root), _) => }
+    cfg("nullable") should matchPattern { case Node.None(Id.Key("nullable", Id.Root), _) => }
   }
 
   it should "read from a single URL" in {
@@ -31,6 +32,7 @@ class ReaderTest extends AnyFlatSpec with Matchers {
     cfg("source") should matchPattern { case Node.Scalar(Id.Key("source", Id.Root), "reference", _) => }
     cfg("src") should matchPattern { case Node.Scalar(Id.Key("src", Id.Root), "reference", _) => }
     cfg("property") should matchPattern { case Node.Scalar(Id.Key("property", Id.Root), "12", _) => }
+    cfg("nullable") should matchPattern { case Node.Null(Id.Key("nullable", Id.Root), _) => }
   }
 
   it should "read from two URLs" in {
@@ -43,6 +45,7 @@ class ReaderTest extends AnyFlatSpec with Matchers {
     cfg("source") should matchPattern { case Node.Scalar(Id.Key("source", Id.Root), "overridden", _) => }
     cfg("src") should matchPattern { case Node.Scalar(Id.Key("src", Id.Root), "overridden", _) => }
     cfg("property") should matchPattern { case Node.Scalar(Id.Key("property", Id.Root), "42", _) => }
+    cfg("nullable") should matchPattern { case Node.Scalar(Id.Key("nullable", Id.Root), "non-null", _) => }
   }
 
   private def resource(path: String): URL = getClass.getClassLoader.getResource(path)
