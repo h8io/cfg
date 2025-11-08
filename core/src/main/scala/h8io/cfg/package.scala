@@ -12,8 +12,6 @@ package object cfg {
 
   type Decoder[-N <: Node[Id], +T] = N => DecoderResult[T]
 
-  type UniversalDecoder[+T] = Decoder[Node[Id], T]
-
   implicit def decoderFunctor[N <: Node[Id]]: Functor[Decoder[N, *]] =
     new Functor[Decoder[N, *]] {
       override def map[A, B](fa: Decoder[N, A])(f: A => B): Decoder[N, B] =

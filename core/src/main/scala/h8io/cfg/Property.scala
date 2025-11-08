@@ -11,9 +11,9 @@ trait Property[+T] extends Decoder[Node.Map[Id], T] {
 }
 
 object Property {
-  def fromDecoder[T](name: String)(implicit decoder: UniversalDecoder[T]): FromDecoder[T] = FromDecoder(name, decoder)
+  def fromDecoder[T](name: String)(implicit decoder: Decoder[Node[Id], T]): FromDecoder[T] = FromDecoder(name, decoder)
 
-  final case class FromDecoder[+T](name: String, decoder: UniversalDecoder[T]) extends Property[T] {
+  final case class FromDecoder[+T](name: String, decoder: Decoder[Node[Id], T]) extends Property[T] {
     def apply(cfg: Node.Map[Id]): DecoderResult[T] = decoder(cfg(name))
   }
 
