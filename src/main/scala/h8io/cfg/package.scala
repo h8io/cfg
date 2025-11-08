@@ -12,7 +12,7 @@ package object cfg {
 
   type Decoder[-N <: Node[Id], +T] = N => DecoderResult[T]
 
-  implicit def decoderFunctor[N <: Node[Id]]: Functor[λ[T => Decoder[N, T]]] =
+  implicit def DecoderFunctor[N <: Node[Id]]: Functor[λ[T => Decoder[N, T]]] =
     new Functor[λ[T => Decoder[N, T]]] {
       override def map[A, B](fa: Decoder[N, A])(f: A => B): Decoder[N, B] =
         node =>
