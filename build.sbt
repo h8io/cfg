@@ -51,7 +51,9 @@ val hocon = (project in file("raw/hocon"))
   .settings(name := "cfg-raw-hocon", libraryDependencies ++= Seq(Config, ScalaCollectionCompat))
   .dependsOn(raw)
 
+val core = (project in file("core")).settings(name := "cfg-core", libraryDependencies += Cats).dependsOn(raw)
+
 val root = (project in file(".")).enablePlugins(ScoverageSummaryPlugin).settings(
   name := ProjectName,
   libraryDependencies ++= Seq(Cats, Config, ScalaCollectionCompat)
-).aggregate(raw, hocon)
+).aggregate(raw, hocon, core)
