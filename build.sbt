@@ -52,17 +52,21 @@ ThisBuild / scalacOptions ++=
 ThisBuild / javacOptions ++= Seq("-target", "8")
 
 ThisBuild / scalaVersion := "2.13.17"
-ThisBuild / crossScalaVersions += "2.12.20"
+// ThisBuild / crossScalaVersions += "2.12.20"
 
 ThisBuild / libraryDependencies ++= TestBundle % Test
+ThisBuild / libraryDependencies ++= (CrossVersion.partialVersion(scalaVersion.value) match {
+  case Some((2, 12)) => Seq(ScalaCollectionCompat)
+  case _ => Nil
+})
 
 val raw = (project in file("raw")).settings(name := "cfg-raw")
 
 val hocon = (project in file("raw/hocon"))
-  .settings(name := "cfg-raw-hocon", libraryDependencies ++= Seq(Config, ScalaCollectionCompat))
+  .settings(name := "cfg-raw-hocon", libraryDependencies += Config)
   .dependsOn(raw)
 
 val root = (project in file(".")).enablePlugins(ScoverageSummaryPlugin).settings(
   name := ProjectName,
-  libraryDependencies ++= Seq(Cats, Config, ScalaCollectionCompat)
+  libraryDependencies ++= Seq(Cats, Config)
 ).dependsOn(raw).aggregate(raw, hocon)

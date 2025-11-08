@@ -14,7 +14,7 @@ object Node {
 
   final case class Scalar[+I <: Id](id: I, value: String, origin: Origin) extends Some[I]
 
-  sealed trait Container[+I <: Id, CI <: Id] extends Some[I] with (CI => Node[CI]) with Iterable[Some[CI]] {
+  sealed trait Container[+I <: Id, CI <: Id] extends Some[I] with (CI => Node[CI]) with IterableOnce[Some[CI]] {
     def isEmpty: Boolean
     def size: Int
     def knownSize: Int
