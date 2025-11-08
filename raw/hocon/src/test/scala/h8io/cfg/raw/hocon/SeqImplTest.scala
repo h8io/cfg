@@ -52,11 +52,12 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     inside(SeqImpl(Id.Root, list)(1)) { case seq: Node.Seq[?] =>
       seq.iterator.zipWithIndex.map { case (value, i) =>
         val expectedOrigin = nested.get(i).origin
+        val id = seq.id
         inside(value) {
-          case Node.Scalar(Id.Index(`i`, seq.id), value, OriginImpl(origin)) =>
+          case Node.Scalar(Id.Index(`i`, `id`), value, OriginImpl(origin)) =>
             origin should be theSameInstanceAs expectedOrigin
             Some(value)
-          case Node.Null(Id.Index(`i`, seq.id), OriginImpl(origin)) =>
+          case Node.Null(Id.Index(`i`, `id`), OriginImpl(origin)) =>
             origin should be theSameInstanceAs expectedOrigin
             None
         }
