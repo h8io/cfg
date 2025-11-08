@@ -10,7 +10,7 @@ private[hocon] final case class SeqImpl[I <: Id](id: I, underlying: ConfigList) 
     if (index.fits(underlying.size)) wrap(index, underlying.get(index.index))
     else Node.None(index, OriginImpl(underlying.origin))
 
-  def iterator: Iterator[Node[Id.Index]] =
+  def iterator: Iterator[Node.Some[Id.Index]] =
     underlying.iterator.asScala.zipWithIndex.map { case (value, i) => wrap(Id.Index(i, id), value) }
 
   def origin: Origin = OriginImpl(underlying.origin)

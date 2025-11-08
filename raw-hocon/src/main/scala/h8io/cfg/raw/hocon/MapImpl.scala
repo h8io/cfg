@@ -10,7 +10,7 @@ private[hocon] final case class MapImpl[I <: Id](id: I, underlying: ConfigObject
     if (underlying.containsKey(key.key)) wrap(key, underlying.get(key.key))
     else Node.None(key, OriginImpl(underlying.origin))
 
-  def iterator: Iterator[Node[Id.Key]] =
+  def iterator: Iterator[Node.Some[Id.Key]] =
     underlying.entrySet.iterator.asScala.map(e => wrap(Id.Key(e.getKey, id), e.getValue))
 
   def origin: Origin = OriginImpl(underlying.origin)

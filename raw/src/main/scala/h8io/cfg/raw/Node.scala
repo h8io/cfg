@@ -8,11 +8,13 @@ sealed trait Node[+I <: Id] {
 object Node {
   final case class None[+I <: Id](id: I, origin: Origin) extends Node[I]
 
-  final case class Null[+I <: Id](id: I, origin: Origin) extends Node[I]
+  sealed trait Some[+I <: Id] extends Node[I]
 
-  final case class Scalar[+I <: Id](id: I, value: String, origin: Origin) extends Node[I]
+  final case class Null[+I <: Id](id: I, origin: Origin) extends Some[I]
 
-  sealed trait Container[+I <: Id, CI <: Id] extends Node[I] with (CI => Node[CI]) with Iterable[Node[CI]] {
+  final case class Scalar[+I <: Id](id: I, value: String, origin: Origin) extends Some[I]
+
+  sealed trait Container[+I <: Id, CI <: Id] extends Some[I] with (CI => Node[CI]) with Iterable[Some[CI]] {
     def isEmpty: Boolean
     def size: Int
     def knownSize: Int
