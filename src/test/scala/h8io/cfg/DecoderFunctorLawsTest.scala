@@ -3,7 +3,7 @@ package h8io.cfg
 import cats.Eq
 import cats.data.Validated
 import cats.laws.discipline.FunctorTests
-import h8io.cfg.raw.{Id, Node, Origin}
+import h8io.cfg.raw.{Id, Node}
 import h8io.cfg.testutil.{MockDecoderError, MockOrigin}
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalamock.scalatest.MockFactory
@@ -13,14 +13,13 @@ import org.typelevel.discipline.scalatest.FunSuiteDiscipline
 
 import java.time.Instant
 
-class DecoderFunctorTest extends AnyFunSuite with FunSuiteDiscipline with Checkers with MockFactory {
-  private val genOrigin: Gen[Origin] = Arbitrary.arbitrary[String].map(MockOrigin(_))
-
+class DecoderFunctorLawsTest extends AnyFunSuite with FunSuiteDiscipline with Checkers with MockFactory {
   private implicit def arbDecoder[T: Arbitrary]: Arbitrary[Decoder[Node.Null[Id], T]] =
     Arbitrary {
       Gen.oneOf(
         Arbitrary.arbitrary[T].map(value => (_: Node.Null[Id]) => Validated.valid(value)),
-        genOrigin.map(o => (key: Node.Null[Id]) => Validated.invalidNec(MockDecoderError(key.id, o)))
+        Arbitrary.arbitrary[String].map(description =>
+          (key: Node.Null[Id]) => Validated.invalidNec(MockDecoderError(key.id, MockOrigin(description))))
       )
     }
 
