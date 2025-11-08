@@ -41,11 +41,12 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     inside(MapImpl(Id.Root, obj)("seq")) { case seq: Node.Seq[?] =>
       seq.iterator.zipWithIndex.map { case (value, i) =>
         val expectedOrigin = list.get(i).origin
+        val id = seq.id
         inside(value) {
-          case Node.Scalar(Id.Index(`i`, seq.id), value, OriginImpl(origin)) =>
+          case Node.Scalar(Id.Index(`i`, `id`), value, OriginImpl(origin)) =>
             origin should be theSameInstanceAs expectedOrigin
             Some(value)
-          case Node.Null(Id.Index(`i`, seq.id), OriginImpl(origin)) =>
+          case Node.Null(Id.Index(`i`, `id`), OriginImpl(origin)) =>
             origin should be theSameInstanceAs expectedOrigin
             None
         }

@@ -28,9 +28,10 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
     val seqValue = config.get("seq")
     inside(wrap(Id.Root, seqValue)) { case seq: Node.Seq[?] =>
       seq.iterator.zipWithIndex.map { case (node, i) =>
+        val id = seq.id
         inside(node) {
-          case Node.Scalar(Id.Index(`i`, seq.id), value, _) => Some(value)
-          case Node.Null(Id.Index(`i`, seq.id), _) => None
+          case Node.Scalar(Id.Index(`i`, `id`), value, _) => Some(value)
+          case Node.Null(Id.Index(`i`, `id`), _) => None
         }
       }.toList should contain theSameElementsInOrderAs
         List(Some("1"), Some("2"), Some("3"), None)

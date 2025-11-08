@@ -14,11 +14,15 @@ object Id {
 
   case object Root extends Root
 
-  final case class Key(key: String, parent: Id) extends Id {
+  sealed trait Branch extends Id {
+    def parent: Id
+  }
+
+  final case class Key(key: String, parent: Id) extends Branch {
     def path: String = if (parent == Id.Root) quote(key) else parent.path + '.' + quote(key)
   }
 
-  final case class Index(index: Int, parent: Id) extends Id {
+  final case class Index(index: Int, parent: Id) extends Branch {
     @inline def fits(n: Int): Boolean = index >= 0 && index < n
 
     def path: String = parent.path + '[' + index + ']'
