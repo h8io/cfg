@@ -13,7 +13,7 @@ package object hocon {
         .map(ConfigFactory.load)
         .getOrElse(ConfigFactory.load).root())
 
-  @inline private[hocon] def wrap[I <: Id](id: I, value: ConfigValue): Node[I] =
+  @inline private[hocon] def wrap[I <: Id](id: I, value: ConfigValue): Node.Some[I] =
     value match {
       case obj: ConfigObject => MapImpl(id, obj)
       case list: ConfigList => SeqImpl(id, list)
