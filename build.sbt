@@ -27,8 +27,19 @@ ThisBuild / versionScheme := Some("semver-spec")
 ThisBuild / dynverSonatypeSnapshots := true
 ThisBuild / dynverSeparator := "-"
 
-val Scalac2Options = Seq("-Xsource:3", "-language:higherKinds", "--deprecation", "--feature", "--unchecked", "-Xlint:_",
-  "-Xfatal-warnings", "-opt:l:inline", "-opt-warnings")
+ThisBuild / libraryDependencies +=
+  compilerPlugin("org.typelevel" %% "kind-projector" % "0.13.4" cross CrossVersion.full)
+
+val Scalac2Options = Seq(
+  "-Xsource:3",
+  "-language:higherKinds",
+  "--deprecation",
+  "--feature",
+  "--unchecked",
+  "-Xlint:_",
+  "-Xfatal-warnings",
+  "-opt:l:inline",
+  "-opt-warnings")
 
 ThisBuild / scalacOptions ++=
   (CrossVersion.partialVersion(scalaVersion.value) match {
