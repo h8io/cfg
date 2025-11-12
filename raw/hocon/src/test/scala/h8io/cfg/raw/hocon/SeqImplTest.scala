@@ -49,7 +49,7 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
   it should "return Node.Seq" in {
     val list = hocon"""list: [three, [t, w, o], one]""".toConfig.getList("list")
     val nested = list.get(1).asInstanceOf[ConfigList]
-    inside(SeqImpl(Id.Root, list)(1)) { case seq: Node.Seq[?] =>
+    inside(SeqImpl(Id.Root, list)(1)) { case seq: Node.Seq =>
       seq.iterator.zipWithIndex.map { case (value, i) =>
         val expectedOrigin = nested.get(i).origin
         val id = seq.id
@@ -67,22 +67,21 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
   }
 
   it should "return Node.Map" in {
-    val list = hocon"""list: [three, [t, w, o], {n: 2, o: 1, e: 3}]""".toConfig.getList("list")
+    val list = hocon"""list: [three, [t, w, o], {n: 2, o: 1, e: 3, _: null}]""".toConfig.getList("list")
     val index = list.size() - 1
     val obj = list.get(index).asInstanceOf[ConfigObject]
-    inside(SeqImpl(Id.Root, list)(index)) { case seq: Node.Map[?] =>
-      seq.iterator.map { node =>
-        val expectedOrigin = obj.get(node.id.key).origin
+    inside(SeqImpl(Id.Root, list)(index)) { case map: Node.Map =>
+      map.iterator.map { node =>
         inside(node) {
-          case Node.Scalar(id, value, OriginImpl(origin)) =>
-            origin should be theSameInstanceAs expectedOrigin
-            id.key -> Some(value)
-          case Node.Null(id, OriginImpl(origin)) =>
-            origin should be theSameInstanceAs expectedOrigin
-            id.key -> None
+          case Node.Scalar(Id.Key(key, Id.Index(`index`, Id.Root)), value, OriginImpl(origin)) =>
+            origin should be theSameInstanceAs obj.get(key).origin
+            key -> Some(value)
+          case Node.Null(Id.Key(key, Id.Index(`index`, Id.Root)), OriginImpl(origin)) =>
+            origin should be theSameInstanceAs obj.get(key).origin
+            key -> None
         }
-      }.toList should contain theSameElementsAs List("o" -> Some("1"), "n" -> Some("2"), "e" -> Some("3"))
-      inside(seq.origin) { case OriginImpl(origin) => origin should be theSameInstanceAs obj.origin }
+      }.toList should contain theSameElementsAs List("o" -> Some("1"), "n" -> Some("2"), "e" -> Some("3"), "_" -> None)
+      inside(map.origin) { case OriginImpl(origin) => origin should be theSameInstanceAs obj.origin }
     }
   }
 

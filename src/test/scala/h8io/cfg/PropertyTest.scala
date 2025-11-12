@@ -14,8 +14,8 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
   "fromDecoder" should "create a property from a decoder" in
     forAll(Gen.zip(Gen.alphaStr, Gen.alphaNumStr, Gen.alphaNumStr, Gen.alphaNumStr)) {
       case (name, value, result, description) =>
-        val root = mock[Node.Map[Id]]("node")
-        implicit val decoder: Decoder[Node[Id], String] = mock[Decoder[Node[Id], String]]("decoder")
+        val root = mock[Node.Map]("node")
+        implicit val decoder: Decoder[Node, String] = mock[Decoder[Node, String]]("decoder")
         val property = Property.fromDecoder(name)
         inSequence {
           val node = Node.Scalar(Id.Key(name, Id.Root), value, MockOrigin(description))
@@ -67,8 +67,8 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
   "optional" should "create a property from a decoder" in
     forAll(Gen.zip(Gen.alphaStr, Gen.alphaNumStr, Gen.alphaNumStr, Gen.alphaNumStr)) {
       case (name, value, result, description) =>
-        val root = mock[Node.Map[Id]]("node")
-        implicit val decoder: Decoder[Node.Some[Id], String] = mock[Decoder[Node[Id], String]]("decoder")
+        val root = mock[Node.Map]("node")
+        implicit val decoder: Decoder[Node.Some, String] = mock[Decoder[Node, String]]("decoder")
         val property = Property.optional(name)
         inSequence {
           val node = Node.Scalar(Id.Key(name, Id.Root), value, MockOrigin(description))
@@ -111,8 +111,8 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
   "mandatory" should "create a property from a decoder" in
     forAll(Gen.zip(Gen.alphaStr, Gen.alphaNumStr, Gen.alphaNumStr, Gen.alphaNumStr)) {
       case (name, value, result, description) =>
-        val root = mock[Node.Map[Id]]("node")
-        implicit val decoder: Decoder[Node.Some[Id], String] = mock[Decoder[Node[Id], String]]("decoder")
+        val root = mock[Node.Map]("node")
+        implicit val decoder: Decoder[Node.Some, String] = mock[Decoder[Node, String]]("decoder")
         val property = Property.mandatory(name)
         inSequence {
           val node = Node.Scalar(Id.Key(name, Id.Root), value, MockOrigin(description))
