@@ -12,11 +12,11 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
   "wrap" should "create a Node.Map object" in {
     val mapValue = config.get("map")
     val rootId = Id.Index(42, Id.Root)
-    inside(wrap(rootId, mapValue)) { case map: Node.Map[?] =>
+    inside(wrap(rootId, mapValue)) { case map: Node.Map =>
       map.iterator.map {
         inside(_) {
-          case Node.Scalar(id, value, _) => id.key -> Some(value)
-          case Node.Null(id, _) => id.key -> None
+          case Node.Scalar(Id.Key(key, `rootId`), value, _) => key -> Some(value)
+          case Node.Null(Id.Key(key, `rootId`), _) => key -> None
         }
       }.toList should contain theSameElementsAs
         List("a" -> Some("x"), "b" -> Some("y"), "c" -> Some("z"), "d" -> None)
@@ -26,7 +26,7 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
 
   it should "create a Node.Seq object" in {
     val seqValue = config.get("seq")
-    inside(wrap(Id.Root, seqValue)) { case seq: Node.Seq[?] =>
+    inside(wrap(Id.Root, seqValue)) { case seq: Node.Seq =>
       seq.iterator.zipWithIndex.map { case (node, i) =>
         val id = seq.id
         inside(node) {

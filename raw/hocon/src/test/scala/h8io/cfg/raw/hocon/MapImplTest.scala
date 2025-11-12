@@ -38,7 +38,7 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
   it should "return a Node.Seq object" in {
     val obj = hocon"""seq: [a, null, b, null, c, null, "null"]"""
     val list = obj.toConfig.getList("seq")
-    inside(MapImpl(Id.Root, obj)("seq")) { case seq: Node.Seq[?] =>
+    inside(MapImpl(Id.Root, obj)("seq")) { case seq: Node.Seq =>
       seq.iterator.zipWithIndex.map { case (value, i) =>
         val expectedOrigin = list.get(i).origin
         val id = seq.id
@@ -59,16 +59,15 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
   it should "return a Node.Map object" in {
     val cfg = hocon"""map { a: null, b: c, null: "null" }"""
     val obj = cfg.toConfig.getObject("map")
-    inside(MapImpl(Id.Root, cfg)("map")) { case map: Node.Map[?] =>
+    inside(MapImpl(Id.Root, cfg)("map")) { case map: Node.Map =>
       map.iterator.map { node =>
-        val expectedOrigin = obj.get(node.id.key).origin
         inside(node) {
-          case Node.Scalar(id, value, OriginImpl(origin)) =>
-            origin should be theSameInstanceAs expectedOrigin
-            id.key -> Some(value)
-          case Node.Null(id, OriginImpl(origin)) =>
-            origin should be theSameInstanceAs expectedOrigin
-            id.key -> None
+          case Node.Scalar(Id.Key(key, Id.Key("map", Id.Root)), value, OriginImpl(origin)) =>
+            origin should be theSameInstanceAs obj.get(key).origin
+            key -> Some(value)
+          case Node.Null(Id.Key(key, Id.Key("map", Id.Root)), OriginImpl(origin)) =>
+            origin should be theSameInstanceAs obj.get(key).origin
+            key -> None
         }
       }.toList should contain theSameElementsAs List("a" -> None, "b" -> Some("c"), "null" -> Some("null"))
       inside(map.origin) { case OriginImpl(origin) => origin should be theSameInstanceAs obj.origin }
@@ -78,14 +77,13 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
   "iterator" should "return a correct sequence of nodes" in {
     val obj = hocon"""a: null, b: c, null: "null""""
     MapImpl(Id.Root, obj).iterator.map { node =>
-      val expectedOrigin = obj.get(node.id.key).origin
       inside(node) {
-        case Node.Scalar(id, value, OriginImpl(origin)) =>
-          origin should be theSameInstanceAs expectedOrigin
-          id.key -> Some(value)
-        case Node.Null(id, OriginImpl(origin)) =>
-          origin should be theSameInstanceAs expectedOrigin
-          id.key -> None
+        case Node.Scalar(Id.Key(key, Id.Root), value, OriginImpl(origin)) =>
+          origin should be theSameInstanceAs obj.get(key).origin
+          key -> Some(value)
+        case Node.Null(Id.Key(key, Id.Root), OriginImpl(origin)) =>
+          origin should be theSameInstanceAs obj.get(key).origin
+          key -> None
       }
     }.toList should contain theSameElementsAs List("a" -> None, "b" -> Some("c"), "null" -> Some("null"))
   }

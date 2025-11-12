@@ -14,17 +14,17 @@ import org.typelevel.discipline.scalatest.FunSuiteDiscipline
 import java.time.Instant
 
 class DecoderFunctorLawsTest extends AnyFunSuite with FunSuiteDiscipline with Checkers with MockFactory {
-  private implicit def arbDecoder[T: Arbitrary]: Arbitrary[Decoder[Node.Null[Id], T]] =
+  private implicit def arbDecoder[T: Arbitrary]: Arbitrary[Decoder[Node.Null, T]] =
     Arbitrary {
       Gen.oneOf(
-        Arbitrary.arbitrary[T].map(value => (_: Node.Null[Id]) => Validated.valid(value)),
+        Arbitrary.arbitrary[T].map(value => (_: Node.Null) => Validated.valid(value)),
         Arbitrary.arbitrary[String].map(description =>
-          (key: Node.Null[Id]) => Validated.invalidNec(MockDecoderError(key.id, MockOrigin(description))))
+          (key: Node.Null) => Validated.invalidNec(MockDecoderError(key.id, MockOrigin(description))))
       )
     }
 
-  private implicit def nullDecoderEq[T]: Eq[Decoder[Node.Null[Id], T]] =
-    Eq.instance[Decoder[Node.Null[Id], T]] { (a, b) =>
+  private implicit def nullDecoderEq[T]: Eq[Decoder[Node.Null, T]] =
+    Eq.instance[Decoder[Node.Null, T]] { (a, b) =>
       val rootNode = Node.Null(Id.Root, MockOrigin("input origin"))
       val keyNode = Node.Null(Id.Key("input-key", Id.Root), MockOrigin("input origin"))
       val indexNode = Node.Null(Id.Index(42, Id.Root), MockOrigin("input origin"))
@@ -33,5 +33,5 @@ class DecoderFunctorLawsTest extends AnyFunSuite with FunSuiteDiscipline with Ch
       a.apply(indexNode) == b.apply(indexNode)
     }
 
-  checkAll("DecoderFunctor", FunctorTests[λ[T => Decoder[Node.Null[Id], T]]].functor[String, Instant, Long])
+  checkAll("DecoderFunctor", FunctorTests[λ[T => Decoder[Node.Null, T]]].functor[String, Instant, Long])
 }
