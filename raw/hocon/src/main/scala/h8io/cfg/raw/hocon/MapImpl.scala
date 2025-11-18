@@ -15,9 +15,5 @@ private[hocon] final case class MapImpl(id: Id, underlying: ConfigObject) extend
 
   def origin: Origin = OriginImpl(underlying.origin)
 
-  override def isEmpty: Boolean = underlying.isEmpty
-
   override def size: Int = underlying.size()
-
-  override def knownSize: Int = underlying.size()
 }

@@ -100,28 +100,10 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     }.toList should contain theSameElementsAs List(Some("a"), None, Some("b"), Some("c"), None, Some("null"))
   }
 
-  "isEmpty" should "return true" in {
-    val list = mock[ConfigList]
-    (list.isEmpty _).expects().returns(true)
-    SeqImpl(Id.Root, list).isEmpty shouldBe true
-  }
-
-  it should "return false" in {
-    val list = mock[ConfigList]
-    (list.isEmpty _).expects().returns(false)
-    SeqImpl(Id.Root, list).isEmpty shouldBe false
-  }
-
   "size" should "return the same value as underlying.size" in {
     val list = mock[ConfigList]
     (list.size _).expects().returns(25)
     SeqImpl(Id.Root, list).size shouldBe 25
-  }
-
-  "knownSize" should "return the same value as underlying.size" in {
-    val list = mock[ConfigList]
-    (list.size _).expects().returns(1024)
-    SeqImpl(Id.Root, list).knownSize shouldBe 1024
   }
 
   "origin" should "be a wrap on underlying origin object" in {

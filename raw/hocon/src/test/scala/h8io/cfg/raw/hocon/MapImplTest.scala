@@ -88,28 +88,10 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     }.toList should contain theSameElementsAs List("a" -> None, "b" -> Some("c"), "null" -> Some("null"))
   }
 
-  "isEmpty" should "return true" in {
-    val obj = mock[ConfigObject]
-    (obj.isEmpty _).expects().returns(true)
-    MapImpl(Id.Root, obj).isEmpty shouldBe true
-  }
-
-  it should "return false" in {
-    val obj = mock[ConfigObject]
-    (obj.isEmpty _).expects().returns(false)
-    MapImpl(Id.Root, obj).isEmpty shouldBe false
-  }
-
   "size" should "return the same value as underlying.size" in {
     val obj = mock[ConfigObject]
     (obj.size _).expects().returns(17)
     MapImpl(Id.Root, obj).size shouldBe 17
-  }
-
-  "knownSize" should "return the same value as underlying.size" in {
-    val obj = mock[ConfigObject]
-    (obj.size _).expects().returns(42)
-    MapImpl(Id.Root, obj).knownSize shouldBe 42
   }
 
   "origin" should "be a wrap on underlying origin object" in {

@@ -14,10 +14,10 @@ object Node {
 
   final case class Scalar(id: Id, value: String, origin: Origin) extends Some
 
-  sealed trait Container[CI <: Id] extends Some with (CI => Node) with IterableOnce[Some] {
-    def isEmpty: Boolean
+  sealed trait Container[CI <: Id] extends Some with (CI => Node) {
+    def iterator: Iterator[Some]
     def size: Int
-    def knownSize: Int
+    final def isEmpty: Boolean = size == 0
   }
 
   trait Map extends Container[Id.Key] {
