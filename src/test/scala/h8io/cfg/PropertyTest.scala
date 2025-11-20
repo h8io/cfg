@@ -3,7 +3,7 @@ package h8io.cfg
 import cats.data.Validated
 import h8io.cfg.errors.Missing
 import h8io.cfg.raw.{Id, Node}
-import h8io.cfg.testutil.MockOrigin
+import h8io.cfg.testutil.MockLocation
 import org.scalacheck.Gen
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.flatspec.AnyFlatSpec
@@ -18,14 +18,14 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
         implicit val decoder: Decoder[Node, String] = mock[Decoder[Node, String]]("decoder")
         val property = Property.fromDecoder(name)
         inSequence {
-          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockOrigin(description))
+          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           (decoder.apply _).expects(node).returning(Validated.Valid(result))
           property(root) shouldBe Validated.Valid(result)
         }
         inSequence {
-          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockOrigin(description))
+          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
           val error = mock[DecoderError]
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
@@ -33,14 +33,14 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
           property(root) shouldBe Validated.invalidNec(error)
         }
         inSequence {
-          val node = Node.Null(Id.Key(name, Id.Root), MockOrigin(description))
+          val node = Node.Null(Id.Key(name, Id.Root), MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           (decoder.apply _).expects(node).returning(Validated.Valid(result))
           property(root) shouldBe Validated.Valid(result)
         }
         inSequence {
-          val node = Node.Null(Id.Key(name, Id.Root), MockOrigin(description))
+          val node = Node.Null(Id.Key(name, Id.Root), MockLocation(description))
           val error = mock[DecoderError]
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
@@ -48,14 +48,14 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
           property(root) shouldBe Validated.invalidNec(error)
         }
         inSequence {
-          val node = Node.None(Id.Key(name, Id.Root), MockOrigin(description))
+          val node = Node.None(Id.Key(name, Id.Root), MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           (decoder.apply _).expects(node).returning(Validated.Valid(result))
           property(root) shouldBe Validated.Valid(result)
         }
         inSequence {
-          val node = Node.None(Id.Key(name, Id.Root), MockOrigin(description))
+          val node = Node.None(Id.Key(name, Id.Root), MockLocation(description))
           val error = mock[DecoderError]
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
@@ -71,14 +71,14 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
         implicit val decoder: Decoder[Node.Some, String] = mock[Decoder[Node, String]]("decoder")
         val property = Property.optional(name)
         inSequence {
-          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockOrigin(description))
+          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           (decoder.apply _).expects(node).returning(Validated.Valid(result))
           property(root) shouldBe Validated.Valid(Some(result))
         }
         inSequence {
-          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockOrigin(description))
+          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
           val error = mock[DecoderError]
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
@@ -86,14 +86,14 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
           property(root) shouldBe Validated.invalidNec(error)
         }
         inSequence {
-          val node = Node.Null(Id.Key(name, Id.Root), MockOrigin(description))
+          val node = Node.Null(Id.Key(name, Id.Root), MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           (decoder.apply _).expects(node).returning(Validated.Valid(result))
           property(root) shouldBe Validated.Valid(Some(result))
         }
         inSequence {
-          val node = Node.Null(Id.Key(name, Id.Root), MockOrigin(description))
+          val node = Node.Null(Id.Key(name, Id.Root), MockLocation(description))
           val error = mock[DecoderError]
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
@@ -101,7 +101,7 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
           property(root) shouldBe Validated.invalidNec(error)
         }
         inSequence {
-          val node = Node.None(Id.Key(name, Id.Root), MockOrigin(description))
+          val node = Node.None(Id.Key(name, Id.Root), MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           property(root) shouldBe Validated.Valid(None)
@@ -115,14 +115,14 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
         implicit val decoder: Decoder[Node.Some, String] = mock[Decoder[Node, String]]("decoder")
         val property = Property.mandatory(name)
         inSequence {
-          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockOrigin(description))
+          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           (decoder.apply _).expects(node).returning(Validated.Valid(result))
           property(root) shouldBe Validated.Valid(result)
         }
         inSequence {
-          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockOrigin(description))
+          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
           val error = mock[DecoderError]
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
@@ -130,14 +130,14 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
           property(root) shouldBe Validated.invalidNec(error)
         }
         inSequence {
-          val node = Node.Null(Id.Key(name, Id.Root), MockOrigin(description))
+          val node = Node.Null(Id.Key(name, Id.Root), MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           (decoder.apply _).expects(node).returning(Validated.Valid(result))
           property(root) shouldBe Validated.Valid(result)
         }
         inSequence {
-          val node = Node.Null(Id.Key(name, Id.Root), MockOrigin(description))
+          val node = Node.Null(Id.Key(name, Id.Root), MockLocation(description))
           val error = mock[DecoderError]
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
@@ -145,10 +145,10 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
           property(root) shouldBe Validated.invalidNec(error)
         }
         inSequence {
-          val node = Node.None(Id.Key(name, Id.Root), MockOrigin(description))
+          val node = Node.None(Id.Key(name, Id.Root), MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
-          property(root) shouldBe Validated.invalidNec(Missing(Id.Key(name, Id.Root), MockOrigin(description)))
+          property(root) shouldBe Validated.invalidNec(Missing(Id.Key(name, Id.Root), root))
         }
     }
 }

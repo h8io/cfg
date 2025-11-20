@@ -20,7 +20,7 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
         }
       }.toList should contain theSameElementsAs
         List("a" -> Some("x"), "b" -> Some("y"), "c" -> Some("z"), "d" -> None)
-      inside(map.origin) { case OriginImpl(origin) => origin should be theSameInstanceAs mapValue.origin }
+      inside(map.location) { case LocationImpl(origin) => origin should be theSameInstanceAs mapValue.origin }
     }
   }
 
@@ -35,20 +35,20 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
         }
       }.toList should contain theSameElementsInOrderAs
         List(Some("1"), Some("2"), Some("3"), None)
-      inside(seq.origin) { case OriginImpl(origin) => origin should be theSameInstanceAs seqValue.origin }
+      inside(seq.location) { case LocationImpl(origin) => origin should be theSameInstanceAs seqValue.origin }
     }
   }
 
   it should "create a Node.Scalar object" in {
     val scalarValue = config.get("scalar")
-    inside(wrap(Id.Root, scalarValue)) { case Node.Scalar(Id.Root, "42", OriginImpl(scalarOrigin)) =>
+    inside(wrap(Id.Root, scalarValue)) { case Node.Scalar(Id.Root, "42", LocationImpl(scalarOrigin)) =>
       scalarOrigin should be theSameInstanceAs scalarValue.origin
     }
   }
 
   it should "create a Node.Null object" in {
     val nullValue = config.get("null")
-    inside(wrap(Id.Root, nullValue)) { case Node.Null(Id.Root, OriginImpl(origin)) =>
+    inside(wrap(Id.Root, nullValue)) { case Node.Null(Id.Root, LocationImpl(origin)) =>
       origin should be theSameInstanceAs nullValue.origin
     }
   }

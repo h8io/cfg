@@ -4,7 +4,7 @@ import cats.Eq
 import cats.data.Validated
 import cats.laws.discipline.FunctorTests
 import h8io.cfg.raw.{Id, Node}
-import h8io.cfg.testutil.{MockDecoderError, MockOrigin}
+import h8io.cfg.testutil.{MockDecoderError, MockLocation}
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.funsuite.AnyFunSuite
@@ -18,16 +18,15 @@ class DecoderFunctorLawsTest extends AnyFunSuite with FunSuiteDiscipline with Ch
     Arbitrary {
       Gen.oneOf(
         Arbitrary.arbitrary[T].map(value => (_: Node.Null) => Validated.valid(value)),
-        Arbitrary.arbitrary[String].map(description =>
-          (key: Node.Null) => Validated.invalidNec(MockDecoderError(key.id, MockOrigin(description))))
+        Gen.const((key: Node.Null) => Validated.invalidNec(MockDecoderError(key)))
       )
     }
 
   private implicit def nullDecoderEq[T]: Eq[Decoder[Node.Null, T]] =
     Eq.instance[Decoder[Node.Null, T]] { (a, b) =>
-      val rootNode = Node.Null(Id.Root, MockOrigin("input origin"))
-      val keyNode = Node.Null(Id.Key("input-key", Id.Root), MockOrigin("input origin"))
-      val indexNode = Node.Null(Id.Index(42, Id.Root), MockOrigin("input origin"))
+      val rootNode = Node.Null(Id.Root, MockLocation("root location"))
+      val keyNode = Node.Null(Id.Key("input-key", Id.Root), MockLocation("key location"))
+      val indexNode = Node.Null(Id.Index(42, Id.Root), MockLocation("index location"))
       a.apply(rootNode) == b.apply(rootNode) &&
       a.apply(keyNode) == b.apply(keyNode) &&
       a.apply(indexNode) == b.apply(indexNode)
