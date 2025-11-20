@@ -32,7 +32,7 @@ object Property {
   final case class Mandatory[+T](name: String, decoder: Decoder[Node.Some, T]) extends Property[T] {
     def apply(cfg: Node.Map): DecoderResult[T] =
       cfg(name) match {
-        case Node.None(id, origin) => Validated.invalidNec(Missing(id, origin))
+        case Node.None(id, _) => Validated.invalidNec(Missing(id, cfg))
         case some: Node.Some => decoder(some)
       }
   }

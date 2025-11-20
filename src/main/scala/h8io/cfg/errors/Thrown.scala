@@ -1,6 +1,6 @@
 package h8io.cfg.errors
 
 import h8io.cfg.DecoderError
-import h8io.cfg.raw.{Id, Origin}
+import h8io.cfg.raw.Node
 
-final case class Thrown(id: Id, origin: Origin, cause: Throwable) extends DecoderError
+final case class Thrown(node: Node, cause: Throwable) extends DecoderError

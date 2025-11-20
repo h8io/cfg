@@ -2,17 +2,17 @@ package h8io.cfg.raw
 
 sealed trait Node {
   def id: Id
-  def origin: Origin
+  def location: Location
 }
 
 object Node {
-  final case class None(id: Id, origin: Origin) extends Node
+  final case class None(id: Id, location: Location) extends Node
 
   sealed trait Some extends Node
 
-  final case class Null(id: Id, origin: Origin) extends Some
+  final case class Null(id: Id, location: Location) extends Some
 
-  final case class Scalar(id: Id, value: String, origin: Origin) extends Some
+  final case class Scalar(id: Id, value: String, location: Location) extends Some
 
   sealed trait Container[CI <: Id] extends Some with (CI => Node) {
     def iterator: Iterator[Some]
