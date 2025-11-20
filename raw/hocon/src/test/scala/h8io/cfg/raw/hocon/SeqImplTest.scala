@@ -1,6 +1,6 @@
 package h8io.cfg.raw.hocon
 
-import com.typesafe.config.{ConfigList, ConfigObject, ConfigOrigin}
+import com.typesafe.config.{ConfigList, ConfigObject, ConfigOrigin, ConfigRenderOptions}
 import h8io.cfg.raw.hocon.context.CfgContext
 import h8io.cfg.raw.{Id, Node}
 import org.scalamock.scalatest.MockFactory
@@ -8,28 +8,26 @@ import org.scalatest.Inside
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+import scala.util.Random
+
 class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory {
   "apply" should "return Node.None if index is negative" in {
-    val list = hocon"""list: [null, 42, 17]""".toConfig.getList("list")
-    inside(SeqImpl(Id.Root, list)(-13)) { case Node.None(Id.Index(-13, Id.Root), LocationImpl(origin)) =>
-      origin should be theSameInstanceAs list.origin
-    }
+    val seq = SeqImpl(Id.Root, hocon"""list: [null, 42, 17]""".toConfig.getList("list"))
+    inside(seq(-13)) { case Node.None(Id.Index(-13, Id.Root), `seq`) => }
   }
 
   it should "return Node.None if index is equal to the array size" in {
     val list = hocon"""list: [1, 1, 2, 3, 5, 8]""".toConfig.getList("list")
-    val index = list.size + 17
-    inside(SeqImpl(Id.Root, list)(index)) { case Node.None(Id.Index(`index`, Id.Root), LocationImpl(origin)) =>
-      origin should be theSameInstanceAs list.origin
-    }
+    val seq = SeqImpl(Id.Root, list)
+    val index = list.size
+    seq(index) should matchPattern { case Node.None(Id.Index(`index`, Id.Root), `seq`) => }
   }
 
   it should "return Node.None if index is greater than the array size" in {
     val list = hocon"""list: [one, two, three]""".toConfig.getList("list")
+    val seq = SeqImpl(Id.Root, list)
     val index = list.size + 17
-    inside(SeqImpl(Id.Root, list)(index)) { case Node.None(Id.Index(`index`, Id.Root), LocationImpl(origin)) =>
-      origin should be theSameInstanceAs list.origin
-    }
+    seq(index) should matchPattern { case Node.None(Id.Index(`index`, Id.Root), `seq`) => }
   }
 
   it should "return Node.Null" in {
@@ -113,5 +111,12 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     inside(SeqImpl(Id.Root, list).location) { case LocationImpl(origin) =>
       origin should be theSameInstanceAs expectedOrigin
     }
+  }
+
+  "toString" should "delegate call to underlying.render" in {
+    val list = mock[ConfigList]
+    val expected = Random.nextString(16)
+    (list.render(_: ConfigRenderOptions)).expects(RenderOptions).returns(expected)
+    SeqImpl(Id.Root, list).toString should be theSameInstanceAs expected
   }
 }

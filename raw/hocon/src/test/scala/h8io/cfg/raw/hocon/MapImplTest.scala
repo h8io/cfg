@@ -1,12 +1,14 @@
 package h8io.cfg.raw.hocon
 
-import com.typesafe.config.{ConfigObject, ConfigOrigin}
+import com.typesafe.config.{ConfigObject, ConfigOrigin, ConfigRenderOptions}
 import h8io.cfg.raw.hocon.context.CfgContext
 import h8io.cfg.raw.{Id, Node}
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.Inside
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+
+import scala.util.Random
 
 class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory {
   "apply" should "return a Node.Scalar object" in {
@@ -28,11 +30,8 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
   }
 
   it should "return a Node.None object" in {
-    val obj = hocon"""scalar: 13"""
-    inside(MapImpl(Id.Root, obj)("unexistent")) {
-      case Node.None(Id.Key("unexistent", Id.Root), LocationImpl(scalarOrigin)) =>
-        scalarOrigin should be theSameInstanceAs obj.origin
-    }
+    val map = MapImpl(Id.Root, hocon"""scalar: 13""")
+    map("unexistent") should matchPattern { case Node.None(Id.Key("unexistent", Id.Root), `map`) => }
   }
 
   it should "return a Node.Seq object" in {
@@ -101,5 +100,12 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     inside(MapImpl(Id.Root, obj).location) { case LocationImpl(origin) =>
       origin should be theSameInstanceAs expectedOrigin
     }
+  }
+
+  "toString" should "delegate call to underlying.render" in {
+    val obj = mock[ConfigObject]
+    val expected = Random.nextString(16)
+    (obj.render(_: ConfigRenderOptions)).expects(RenderOptions).returns(expected)
+    MapImpl(Id.Root, obj).toString should be theSameInstanceAs expected
   }
 }

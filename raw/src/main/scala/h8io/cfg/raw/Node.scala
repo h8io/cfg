@@ -1,14 +1,19 @@
 package h8io.cfg.raw
 
+import h8io.cfg.CfgError
+
 sealed trait Node {
   def id: Id
-  def location: Location
 }
 
 object Node {
-  final case class None(id: Id, location: Location) extends Node
+  final case class None(id: Id, parent: Node.Container[?]) extends Node with CfgError {
+    def node: Node.None = this
+  }
 
-  sealed trait Some extends Node
+  sealed trait Some extends Node {
+    def location: Location
+  }
 
   final case class Null(id: Id, location: Location) extends Some
 

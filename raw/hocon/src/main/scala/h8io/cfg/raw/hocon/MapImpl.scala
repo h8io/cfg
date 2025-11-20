@@ -8,7 +8,7 @@ import scala.jdk.CollectionConverters.*
 private[hocon] final case class MapImpl(id: Id, underlying: ConfigObject) extends Node.Map {
   def apply(key: Id.Key): Node =
     if (underlying.containsKey(key.key)) wrap(key, underlying.get(key.key))
-    else Node.None(key, LocationImpl(underlying.origin))
+    else Node.None(key, this)
 
   def iterator: Iterator[Node.Some] =
     underlying.entrySet.iterator.asScala.map(e => wrap(Id.Key(e.getKey, id), e.getValue))
@@ -16,4 +16,6 @@ private[hocon] final case class MapImpl(id: Id, underlying: ConfigObject) extend
   def location: Location = LocationImpl(underlying.origin)
 
   override def size: Int = underlying.size()
+
+  override def toString: String = underlying.render(RenderOptions)
 }

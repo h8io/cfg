@@ -1,7 +1,6 @@
 package h8io.cfg
 
 import cats.data.Validated
-import h8io.cfg.errors.Missing
 import h8io.cfg.raw.Node
 
 trait Property[+T] extends Decoder[Node.Map, T] {
@@ -32,7 +31,7 @@ object Property {
   final case class Mandatory[+T](name: String, decoder: Decoder[Node.Some, T]) extends Property[T] {
     def apply(cfg: Node.Map): DecoderResult[T] =
       cfg(name) match {
-        case Node.None(id, _) => Validated.invalidNec(Missing(id, cfg))
+        case none: Node.None => Validated.invalidNec(none)
         case some: Node.Some => decoder(some)
       }
   }
