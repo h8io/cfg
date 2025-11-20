@@ -8,7 +8,7 @@ import scala.jdk.CollectionConverters.*
 private[hocon] final case class SeqImpl(id: Id, underlying: ConfigList) extends Node.Seq {
   def apply(index: Id.Index): Node =
     if (index.fits(underlying.size)) wrap(index, underlying.get(index.index))
-    else Node.None(index, LocationImpl(underlying.origin))
+    else Node.None(index, this)
 
   def iterator: Iterator[Node.Some] =
     underlying.iterator.asScala.zipWithIndex.map { case (value, i) => wrap(Id.Index(i, id), value) }
@@ -16,4 +16,6 @@ private[hocon] final case class SeqImpl(id: Id, underlying: ConfigList) extends 
   def location: Location = LocationImpl(underlying.origin)
 
   override def size: Int = underlying.size()
+
+  override def toString(): String = underlying.render(RenderOptions)
 }

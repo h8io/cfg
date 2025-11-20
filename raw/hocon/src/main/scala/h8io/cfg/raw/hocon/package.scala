@@ -22,4 +22,6 @@ package object hocon {
           case _ => Node.Scalar(id, scalar.unwrapped.toString, LocationImpl(scalar.origin))
         }
     }
+
+  private[hocon] val RenderOptions: ConfigRenderOptions = ConfigRenderOptions.defaults().setJson(false)
 }
