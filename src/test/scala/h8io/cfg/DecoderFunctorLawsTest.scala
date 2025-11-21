@@ -4,7 +4,7 @@ import cats.Eq
 import cats.data.Validated
 import cats.laws.discipline.FunctorTests
 import h8io.cfg.raw.{Id, Node}
-import h8io.cfg.testutil.{MockCfgError, MockLocation}
+import h8io.cfg.testutil.{MockDecoderError, MockLocation}
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.funsuite.AnyFunSuite
@@ -18,7 +18,7 @@ class DecoderFunctorLawsTest extends AnyFunSuite with FunSuiteDiscipline with Ch
     Arbitrary {
       Gen.oneOf(
         Arbitrary.arbitrary[T].map(value => (_: Node.Value) => Validated.valid(value)),
-        Gen.const((key: Node.Value) => Validated.invalidNec(MockCfgError(key)))
+        Gen.const((key: Node.Value) => Validated.invalidNec(MockDecoderError(key)))
       )
     }
 
