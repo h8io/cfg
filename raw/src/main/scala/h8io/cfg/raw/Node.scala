@@ -19,7 +19,7 @@ object Node {
     def node: Node.Null = this
   }
 
-  trait Value extends Some
+  sealed trait Value extends Some
 
   final case class Scalar(id: Id, value: String, location: Location) extends Value
 

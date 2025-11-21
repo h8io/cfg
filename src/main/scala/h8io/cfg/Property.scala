@@ -3,16 +3,16 @@ package h8io.cfg
 import cats.data.Validated
 import h8io.cfg.raw.Node
 
-trait Property[+T] extends Decoder[Node.Map, T] {
+trait Property[+T] extends (Node.Map => PropertyValue[T]) {
   def name: String
-  def apply(cfg: Node.Map): DecoderResult[T]
+  def apply(cfg: Node.Map): PropertyValue[T]
 }
 
 object Property {
   def optional[T](name: String)(implicit decoder: Decoder[Node.Value, T]): Optional[T] = Optional(name, decoder)
 
   final case class Optional[+T](name: String, decoder: Decoder[Node.Value, T]) extends Property[Option[T]] {
-    def apply(cfg: Node.Map): DecoderResult[Option[T]] =
+    def apply(cfg: Node.Map): PropertyValue[Option[T]] =
       cfg(name) match {
         case node: Node.Value => decoder(node).map(Some(_))
         case _: Node.None | _: Node.Null => Validated.Valid(None)
@@ -22,7 +22,7 @@ object Property {
   def mandatory[T](name: String)(implicit decoder: Decoder[Node.Value, T]): Mandatory[T] = Mandatory(name, decoder)
 
   final case class Mandatory[+T](name: String, decoder: Decoder[Node.Value, T]) extends Property[T] {
-    def apply(cfg: Node.Map): DecoderResult[T] =
+    def apply(cfg: Node.Map): PropertyValue[T] =
       cfg(name) match {
         case node: Node.Value => decoder(node)
         case node: CfgError => Validated.invalidNec(node)
