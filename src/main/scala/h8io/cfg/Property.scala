@@ -10,12 +10,6 @@ trait Property[+T] extends Decoder[Node.Map, T] {
 }
 
 object Property {
-  def fromDecoder[T](name: String)(implicit decoder: Decoder[Node, T]): FromDecoder[T] = FromDecoder(name, decoder)
-
-  final case class FromDecoder[+T](name: String, decoder: Decoder[Node, T]) extends Property[T] {
-    def apply(cfg: Node.Map): DecoderResult[T] = decoder(cfg(name))
-  }
-
   def optional[T](name: String)(implicit decoder: Decoder[Node.Some, T]): Optional[T] = Optional(name, decoder)
 
   final case class Optional[+T](name: String, decoder: Decoder[Node.Some, T]) extends Property[Option[T]] {
