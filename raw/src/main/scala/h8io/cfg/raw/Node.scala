@@ -19,9 +19,11 @@ object Node {
     def node: Node.Null = this
   }
 
-  final case class Scalar(id: Id, value: String, location: Location) extends Some
+  trait Value extends Some
 
-  sealed trait Container[CI <: Id] extends Some with (CI => Node) {
+  final case class Scalar(id: Id, value: String, location: Location) extends Value
+
+  sealed trait Container[CI <: Id] extends Value with (CI => Node) {
     def iterator: Iterator[Some]
     def size: Int
     final def isEmpty: Boolean = size == 0
