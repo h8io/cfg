@@ -15,7 +15,9 @@ object Node {
     def location: Location
   }
 
-  final case class Null(id: Id, location: Location) extends Some
+  final case class Null(id: Id, location: Location) extends Some with CfgError {
+    def node: Node.Null = this
+  }
 
   final case class Scalar(id: Id, value: String, location: Location) extends Some
 
