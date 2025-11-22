@@ -2,7 +2,8 @@ package h8io.cfg
 
 import cats.Eq
 import cats.data.Validated
-import cats.laws.discipline.FunctorTests
+import cats.laws.discipline.MonadTests
+import cats.laws.discipline.SemigroupalTests.Isomorphisms
 import h8io.cfg.raw.{Id, Node}
 import h8io.cfg.testutil.{MockDecoderError, MockLocation}
 import org.scalacheck.{Arbitrary, Gen}
@@ -13,7 +14,7 @@ import org.typelevel.discipline.scalatest.FunSuiteDiscipline
 
 import java.time.Instant
 
-class DecoderFunctorLawsTest extends AnyFunSuite with FunSuiteDiscipline with Checkers with MockFactory {
+class DecoderMonadLawsTest extends AnyFunSuite with FunSuiteDiscipline with Checkers with MockFactory {
   private implicit def arbDecoder[T: Arbitrary]: Arbitrary[Decoder[T]] =
     Arbitrary {
       Gen.oneOf(
@@ -36,5 +37,9 @@ class DecoderFunctorLawsTest extends AnyFunSuite with FunSuiteDiscipline with Ch
     }
   }
 
-  checkAll("DecoderFunctor", FunctorTests[Decoder].functor[String, Instant, Long])
+  private implicit def instantEq: Eq[Instant] = Eq.fromUniversalEquals
+
+  implicit val decoderIsomorphisms: Isomorphisms[Decoder] = Isomorphisms.invariant[Decoder]
+
+  checkAll("DecoderMonad", MonadTests[Decoder].monad[String, Instant, Long])
 }

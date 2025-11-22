@@ -32,7 +32,6 @@ package object cfg {
           case Validated.Valid(Left(next)) => loop(next)
           case invalid @ Validated.Invalid(_) => invalid
         }
-
       loop(a)
     }
   }
