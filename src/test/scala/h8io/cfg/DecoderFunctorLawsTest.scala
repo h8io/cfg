@@ -14,7 +14,7 @@ import org.typelevel.discipline.scalatest.FunSuiteDiscipline
 import java.time.Instant
 
 class DecoderFunctorLawsTest extends AnyFunSuite with FunSuiteDiscipline with Checkers with MockFactory {
-  private implicit def arbDecoder[T: Arbitrary]: Arbitrary[Decoder[Node.Value, T]] =
+  private implicit def arbDecoder[T: Arbitrary]: Arbitrary[Decoder[T]] =
     Arbitrary {
       Gen.oneOf(
         Arbitrary.arbitrary[T].map(value => (_: Node.Value) => Validated.valid(value)),
@@ -22,8 +22,8 @@ class DecoderFunctorLawsTest extends AnyFunSuite with FunSuiteDiscipline with Ch
       )
     }
 
-  private implicit def decoderEq[T]: Eq[Decoder[Node.Value, T]] = {
-    def eq(id: Id, a: Decoder[Node.Value, T], b: Decoder[Node.Value, T]): Boolean = {
+  private implicit def decoderEq[T]: Eq[Decoder[T]] = {
+    def eq(id: Id, a: Decoder[T], b: Decoder[T]): Boolean = {
       val scalarNode = Node.Scalar(id, "scalar value", MockLocation(s"location for $id"))
       val mapNode = mock[Node.Map]
       val seqNode = mock[Node.Seq]
@@ -31,10 +31,10 @@ class DecoderFunctorLawsTest extends AnyFunSuite with FunSuiteDiscipline with Ch
       a.apply(mapNode) == b.apply(mapNode) &&
       a.apply(seqNode) == b.apply(seqNode)
     }
-    Eq.instance[Decoder[Node.Value, T]] { (a, b) =>
+    Eq.instance[Decoder[T]] { (a, b) =>
       eq(Id.Root, a, b) && eq(Id.Key("input-key", Id.Root), a, b) && eq(Id.Index(42, Id.Root), a, b)
     }
   }
 
-  checkAll("DecoderFunctor", FunctorTests[λ[T => Decoder[Node.Value, T]]].functor[String, Instant, Long])
+  checkAll("DecoderFunctor", FunctorTests[Decoder].functor[String, Instant, Long])
 }

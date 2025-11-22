@@ -9,10 +9,9 @@ package object cfg {
 
   type PropertyValue[+T] = ValidatedNec[CfgError, T]
 
-  type Decoder[-N <: Node.Value, +T] = N => DecoderResult[T]
+  type Decoder[+T] = Node.Value => DecoderResult[T]
 
-  implicit def DecoderFunctor[N <: Node.Value]: Functor[λ[T => Decoder[N, T]]] =
-    new Functor[λ[T => Decoder[N, T]]] {
-      override def map[A, B](fa: Decoder[N, A])(f: A => B): Decoder[N, B] = fa(_).map(f)
-    }
+  implicit object DecoderFunctor extends Functor[Decoder] {
+    override def map[A, B](fa: Decoder[A])(f: A => B): Decoder[B] = fa.andThen(_.map(f))
+  }
 }

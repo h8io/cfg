@@ -1,6 +1,7 @@
 package h8io.cfg
 
 import cats.data.Validated
+import h8io.cfg.errors.Thrown
 import h8io.cfg.raw.Node
 
 trait Property[+T] extends (Node.Map => PropertyValue[T]) {
@@ -9,23 +10,29 @@ trait Property[+T] extends (Node.Map => PropertyValue[T]) {
 }
 
 object Property {
-  def optional[T](name: String)(implicit decoder: Decoder[Node.Value, T]): Optional[T] = Optional(name, decoder)
+  def optional[T](name: String)(implicit decoder: Decoder[T]): Optional[T] = Optional(name, decoder)
 
-  final case class Optional[+T](name: String, decoder: Decoder[Node.Value, T]) extends Property[Option[T]] {
+  final case class Optional[+T](name: String, decoder: Decoder[T]) extends Property[Option[T]] {
     def apply(cfg: Node.Map): PropertyValue[Option[T]] =
       cfg(name) match {
-        case node: Node.Value => decoder(node).map(Some(_))
+        case node: Node.Value => safeApply(decoder, node).map(Some(_))
         case _: Node.None | _: Node.Null => Validated.Valid(None)
       }
   }
 
-  def mandatory[T](name: String)(implicit decoder: Decoder[Node.Value, T]): Mandatory[T] = Mandatory(name, decoder)
+  def mandatory[T](name: String)(implicit decoder: Decoder[T]): Mandatory[T] = Mandatory(name, decoder)
 
-  final case class Mandatory[+T](name: String, decoder: Decoder[Node.Value, T]) extends Property[T] {
+  final case class Mandatory[+T](name: String, decoder: Decoder[T]) extends Property[T] {
     def apply(cfg: Node.Map): PropertyValue[T] =
       cfg(name) match {
-        case node: Node.Value => decoder(node)
+        case node: Node.Value => safeApply(decoder, node)
         case node: CfgError => Validated.invalidNec(node)
       }
   }
+
+  private def safeApply[T](decoder: Decoder[T], node: Node.Value): DecoderResult[T] =
+    try decoder(node)
+    catch {
+      case e: Exception => Validated.invalidNec(Thrown(node, e))
+    }
 }
