@@ -13,7 +13,7 @@ trait Property[+T] extends (Node.Map => Property.Value[T]) {
 }
 
 object Property {
-  type Value[+T] = ValidatedNec[CfgError, T]
+  type Value[+T] = ValidatedNec[CfgError.Any, T]
 
   def decode[T](node: Node.Value)(implicit decoder: Decoder[T]): Decoder.Result[T] =
     try decoder(node)
@@ -33,7 +33,7 @@ object Property {
     def apply(cfg: Node.Map): Value[T] =
       cfg(name) match {
         case node: Node.Value => decode(node)
-        case node: CfgError => node.invalidNec
+        case node: CfgError.Any => node.invalidNec
       }
   }
 }

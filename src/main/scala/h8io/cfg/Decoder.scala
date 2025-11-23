@@ -1,11 +1,14 @@
 package h8io.cfg
 
 import cats.data.{Validated, ValidatedNec}
+import h8io.cfg.raw.Node
 
 import scala.annotation.tailrec
 
 object Decoder {
-  type Result[+T] = ValidatedNec[DecoderError, T]
+  type Error = CfgError[Node.Value]
+
+  type Result[+T] = ValidatedNec[Error, T]
 
   implicit object Monad extends cats.Monad[Decoder] {
     override def map[A, B](fa: Decoder[A])(f: A => B): Decoder[B] = fa.andThen(_.map(f))

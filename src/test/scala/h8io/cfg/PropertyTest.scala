@@ -26,7 +26,7 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
         }
         inSequence {
           val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
-          val error = mock[DecoderError]
+          val error = mock[Decoder.Error]
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           (decoder.apply _).expects(node).returning(Validated.invalidNec(error))
@@ -77,7 +77,7 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
         }
         inSequence {
           val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
-          val error = mock[DecoderError]
+          val error = mock[Decoder.Error]
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           (decoder.apply _).expects(node).returning(Validated.invalidNec(error))
