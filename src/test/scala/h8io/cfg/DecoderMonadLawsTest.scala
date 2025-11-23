@@ -18,8 +18,8 @@ class DecoderMonadLawsTest extends AnyFunSuite with FunSuiteDiscipline with Chec
   private implicit def arbDecoder[T: Arbitrary]: Arbitrary[Decoder[T]] =
     Arbitrary {
       Gen.oneOf(
-        Arbitrary.arbitrary[T].map(value => (_: Node.Value) => Validated.valid(value)),
-        Gen.const((key: Node.Value) => Validated.invalidNec(MockDecoderError(key)))
+        Arbitrary.arbitrary[T].map[Decoder.Safe[T]](value => (_: Node.Value) => Validated.valid(value)),
+        Gen.const[Decoder.Safe[T]]((key: Node.Value) => Validated.invalidNec(MockDecoderError(key)))
       )
     }
 
