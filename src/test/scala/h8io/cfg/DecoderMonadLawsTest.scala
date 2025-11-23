@@ -4,6 +4,7 @@ import cats.Eq
 import cats.data.Validated
 import cats.laws.discipline.MonadTests
 import cats.laws.discipline.SemigroupalTests.Isomorphisms
+import h8io.cfg.Decoder.Monad
 import h8io.cfg.raw.{Id, Node}
 import h8io.cfg.testutil.{MockDecoderError, MockLocation}
 import org.scalacheck.{Arbitrary, Gen}
@@ -18,8 +19,8 @@ class DecoderMonadLawsTest extends AnyFunSuite with FunSuiteDiscipline with Chec
   private implicit def arbDecoder[T: Arbitrary]: Arbitrary[Decoder[T]] =
     Arbitrary {
       Gen.oneOf(
-        Arbitrary.arbitrary[T].map[Decoder.Safe[T]](value => (_: Node.Value) => Validated.valid(value)),
-        Gen.const[Decoder.Safe[T]]((key: Node.Value) => Validated.invalidNec(MockDecoderError(key)))
+        Arbitrary.arbitrary[T].map[Decoder[T]](value => (_: Node.Value) => Validated.valid(value)),
+        Gen.const[Decoder[T]]((key: Node.Value) => Validated.invalidNec(MockDecoderError(key)))
       )
     }
 

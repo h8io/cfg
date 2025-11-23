@@ -15,8 +15,8 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
     forAll(Gen.zip(Gen.alphaStr, Gen.alphaNumStr, Gen.alphaNumStr, Gen.alphaNumStr)) {
       case (name, value, result, description) =>
         val root = mock[Node.Map]("node")
-        implicit val decoder: Decoder[String] = mock[Decoder.Safe[String]]("decoder")
-        val property = Property.optional(name)
+        implicit val decoder: Decoder[String] = mock[Decoder[String]]("decoder")
+        val property = Property.Optional(name)
         inSequence {
           val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
@@ -50,8 +50,8 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
     forAll(Gen.zip(Gen.alphaStr, Gen.alphaNumStr, Gen.alphaNumStr)) {
       case (name, value, description) =>
         val root = mock[Node.Map]("node")
-        implicit val decoder: Decoder[String] = mock[Decoder.Unsafe[String]]("decoder")
-        val property = Property.optional(name)
+        implicit val decoder: Decoder[String] = mock[Decoder[String]]("decoder")
+        val property = Property.Optional(name)
         inSequence {
           val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
           val exception = new RuntimeException("decoder exception")
@@ -66,8 +66,8 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
     forAll(Gen.zip(Gen.alphaStr, Gen.alphaNumStr, Gen.alphaNumStr, Gen.alphaNumStr)) {
       case (name, value, result, description) =>
         val root = mock[Node.Map]("node")
-        implicit val decoder: Decoder[String] = mock[Decoder.Safe[String]]("decoder")
-        val property = Property.mandatory(name)
+        implicit val decoder: Decoder[String] = mock[Decoder[String]]("decoder")
+        val property = Property.Mandatory(name)
         inSequence {
           val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
@@ -101,8 +101,8 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
     forAll(Gen.zip(Gen.alphaStr, Gen.alphaNumStr, Gen.alphaNumStr)) {
       case (name, value, description) =>
         val root = mock[Node.Map]("node")
-        implicit val decoder: Decoder[String] = mock[Decoder.Unsafe[String]]("decoder")
-        val property = Property.mandatory(name)
+        implicit val decoder: Decoder[String] = mock[Decoder[String]]("decoder")
+        val property = Property.Mandatory(name)
         inSequence {
           val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
           val exception = new RuntimeException("decoder exception")
