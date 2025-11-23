@@ -21,6 +21,20 @@ object Property {
       case NonFatal(e) => Thrown(node, e).invalidNec
     }
 
+  implicit object Functor extends cats.Functor[Property] {
+    override def map[A, B](fa: Property[A])(f: A => B): Property[B] =
+      new Property[B] {
+        override def name: String = fa.name
+        override def apply(cfg: Node.Map): Value[B] =
+          fa(cfg).andThen { value =>
+            try Validated.Valid(f(value))
+            catch {
+              case NonFatal(e) => Thrown(cfg, e).invalidNec
+            }
+          }
+      }
+  }
+
   final case class Optional[+T: Decoder](name: String) extends Property[Option[T]] {
     def apply(cfg: Node.Map): Value[Option[T]] =
       cfg(name) match {
