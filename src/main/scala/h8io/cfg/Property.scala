@@ -1,6 +1,7 @@
 package h8io.cfg
 
 import cats.data.{Validated, ValidatedNec}
+import cats.implicits.catsSyntaxValidatedIdBinCompat0
 import h8io.cfg.errors.Thrown
 import h8io.cfg.raw.Node
 
@@ -17,7 +18,7 @@ object Property {
   def decode[T](node: Node.Value)(implicit decoder: Decoder[T]): Decoder.Result[T] =
     try decoder(node)
     catch {
-      case NonFatal(e) => Validated.invalidNec(Thrown(node, e))
+      case NonFatal(e) => Thrown(node, e).invalidNec
     }
 
   final case class Optional[+T: Decoder](name: String) extends Property[Option[T]] {
@@ -32,7 +33,7 @@ object Property {
     def apply(cfg: Node.Map): Value[T] =
       cfg(name) match {
         case node: Node.Value => decode(node)
-        case node: CfgError => Validated.invalidNec(node)
+        case node: CfgError => node.invalidNec
       }
   }
 }
