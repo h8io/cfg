@@ -68,5 +68,5 @@ val hocon = (project in file("raw/hocon"))
 
 val root = (project in file(".")).enablePlugins(ScoverageSummaryPlugin).settings(
   name := ProjectName,
-  libraryDependencies ++= Seq(Cats, Config)
+  libraryDependencies ++= Seq(Cats, Config, H8IOReflect)
 ).dependsOn(raw).aggregate(raw, hocon)

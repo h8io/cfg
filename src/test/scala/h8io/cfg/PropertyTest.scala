@@ -1,6 +1,7 @@
 package h8io.cfg
 
 import cats.data.Validated
+import h8io.cfg.errors.Thrown
 import h8io.cfg.raw.{Id, Node}
 import h8io.cfg.testutil.MockLocation
 import org.scalacheck.Gen
@@ -10,12 +11,12 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with ScalaCheckPropertyChecks {
-  "optional" should "create a property from a decoder" in
+  "optional" should "create a property from a decoder and return the decoder result" in
     forAll(Gen.zip(Gen.alphaStr, Gen.alphaNumStr, Gen.alphaNumStr, Gen.alphaNumStr)) {
       case (name, value, result, description) =>
         val root = mock[Node.Map]("node")
-        implicit val decoder: Decoder[Node.Value, String] = mock[Decoder[Node.Value, String]]("decoder")
-        val property = Property.optional(name)
+        implicit val decoder: Decoder[String] = mock[Decoder[String]]("decoder")
+        val property = Property.Optional(name)
         inSequence {
           val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
@@ -45,12 +46,28 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
         }
     }
 
-  "mandatory" should "create a property from a decoder" in
+  it should "create a property from a decoder and return the Thrown error with decoder exception" in
+    forAll(Gen.zip(Gen.alphaStr, Gen.alphaNumStr, Gen.alphaNumStr)) {
+      case (name, value, description) =>
+        val root = mock[Node.Map]("node")
+        implicit val decoder: Decoder[String] = mock[Decoder[String]]("decoder")
+        val property = Property.Optional(name)
+        inSequence {
+          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
+          val exception = new RuntimeException("decoder exception")
+          (() => root.id).expects().returning(Id.Root)
+          (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
+          (decoder.apply _).expects(node).throws(exception)
+          property(root) shouldBe Validated.invalidNec(Thrown(node, exception))
+        }
+    }
+
+  "mandatory" should "create a property from a decoder and return the decoder result" in
     forAll(Gen.zip(Gen.alphaStr, Gen.alphaNumStr, Gen.alphaNumStr, Gen.alphaNumStr)) {
       case (name, value, result, description) =>
         val root = mock[Node.Map]("node")
-        implicit val decoder: Decoder[Node.Value, String] = mock[Decoder[Node.Value, String]]("decoder")
-        val property = Property.mandatory(name)
+        implicit val decoder: Decoder[String] = mock[Decoder[String]]("decoder")
+        val property = Property.Mandatory(name)
         inSequence {
           val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
@@ -77,6 +94,22 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           property(root) shouldBe Validated.invalidNec(node)
+        }
+    }
+
+  it should "create a property from a decoder and return the Thrown error with decoder exception" in
+    forAll(Gen.zip(Gen.alphaStr, Gen.alphaNumStr, Gen.alphaNumStr)) {
+      case (name, value, description) =>
+        val root = mock[Node.Map]("node")
+        implicit val decoder: Decoder[String] = mock[Decoder[String]]("decoder")
+        val property = Property.Mandatory(name)
+        inSequence {
+          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
+          val exception = new RuntimeException("decoder exception")
+          (() => root.id).expects().returning(Id.Root)
+          (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
+          (decoder.apply _).expects(node).throws(exception)
+          property(root) shouldBe Validated.invalidNec(Thrown(node, exception))
         }
     }
 }
