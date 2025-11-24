@@ -7,8 +7,22 @@ import h8io.cfg.raw.Node
 import scala.util.control.NonFatal
 
 trait Property[+T] extends (Node.Map => Property.Value[T]) {
+  self =>
+
   def name: String
   def apply(cfg: Node.Map): Property.Value[T]
+
+  final def >=>[U](f: T => Property.Value[U]): Property[U] =
+    new Property[U] {
+      override def name: String = self.name
+      override def apply(cfg: Node.Map): Property.Value[U] =
+        self(cfg).andThen { value =>
+          try f(value)
+          catch {
+            case NonFatal(e) => Property.Thrown(cfg, this, e).invalidNec
+          }
+        }
+    }
 }
 
 object Property {
