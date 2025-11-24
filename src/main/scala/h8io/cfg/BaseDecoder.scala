@@ -13,7 +13,7 @@ abstract class BaseDecoder[+T: Type] extends Decoder[T] {
       case seq: Node.Seq => parse(seq)
     }
 
-  private def unexpected(node: Node.Value): Decoder.Result[T] = UnexpectedNode(node, implicitly[Type[T]]).invalidNec[T]
+  private def unexpected(node: Node.Value): Decoder.Result[T] = UnexpectedNode(node, implicitly[Type[T]]).invalidNec
 
   protected def parse(scalar: Node.Scalar): Decoder.Result[T] = unexpected(scalar)
   protected def parse(map: Node.Map): Decoder.Result[T] = unexpected(map)
