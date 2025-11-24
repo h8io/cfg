@@ -1,7 +1,7 @@
 package h8io.cfg
 
 import cats.data.Validated
-import cats.implicits.catsSyntaxValidatedIdBinCompat0
+import cats.syntax.all.*
 import h8io.cfg.Decoder.Result
 import h8io.cfg.errors.UnexpectedNode
 import h8io.cfg.raw.{Id, Location, Node}
@@ -14,7 +14,7 @@ import org.scalatest.matchers.should.Matchers
 class BaseDecoderTest extends AnyFlatSpec with Matchers with Inside with MockFactory {
   "BaseDecoder" should "parse scalar if scalar parse method is overridden" in {
     val decoder = new BaseDecoder[Node.Scalar] {
-      override protected def parse(scalar: Node.Scalar): Result[Node.Scalar] = Validated.Valid(scalar)
+      override protected def parse(scalar: Node.Scalar): Result[Node.Scalar] = scalar.valid
     }
     val scalar = Node.Scalar(Id.Root, "test scalar", mock[Location])
     inside(decoder(scalar)) { case Validated.Valid(result) => result should be theSameInstanceAs scalar }
@@ -28,7 +28,7 @@ class BaseDecoderTest extends AnyFlatSpec with Matchers with Inside with MockFac
 
   it should "parse map if map parse method is overridden" in {
     val decoder = new BaseDecoder[Node.Map] {
-      override protected def parse(map: Node.Map): Result[Node.Map] = Validated.Valid(map)
+      override protected def parse(map: Node.Map): Result[Node.Map] = map.valid
     }
     val map = mock[Node.Map]
     inside(decoder(map)) { case Validated.Valid(result) => result should be theSameInstanceAs map }
@@ -42,7 +42,7 @@ class BaseDecoderTest extends AnyFlatSpec with Matchers with Inside with MockFac
 
   it should "parse seq if seq parse method is overridden" in {
     val decoder = new BaseDecoder[Node.Seq] {
-      override protected def parse(seq: Node.Seq): Result[Node.Seq] = Validated.Valid(seq)
+      override protected def parse(seq: Node.Seq): Result[Node.Seq] = seq.valid
     }
     val map = mock[Node.Seq]
     inside(decoder(map)) { case Validated.Valid(result) => result should be theSameInstanceAs map }

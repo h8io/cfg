@@ -1,8 +1,7 @@
 package h8io.cfg
 
-import cats.data.{Validated, ValidatedNec}
-import cats.implicits.catsSyntaxValidatedIdBinCompat0
-import h8io.cfg.errors.Thrown
+import cats.data.ValidatedNec
+import cats.syntax.all.*
 import h8io.cfg.raw.Node
 
 import scala.util.control.NonFatal
@@ -15,10 +14,16 @@ trait Property[+T] extends (Node.Map => Property.Value[T]) {
 object Property {
   type Value[+T] = ValidatedNec[CfgError.Any, T]
 
+  trait Error extends CfgError[Node.Map] {
+    def property: Property[?]
+  }
+
+  final case class Thrown(node: Node.Map, property: Property[?], cause: Throwable) extends Error
+
   def decode[T](node: Node.Value)(implicit decoder: Decoder[T]): Decoder.Result[T] =
     try decoder(node)
     catch {
-      case NonFatal(e) => Thrown(node, e).invalidNec
+      case NonFatal(e) => Decoder.Thrown(node, e).invalidNec
     }
 
   implicit object Functor extends cats.Functor[Property] {
@@ -27,9 +32,9 @@ object Property {
         override def name: String = fa.name
         override def apply(cfg: Node.Map): Value[B] =
           fa(cfg).andThen { value =>
-            try Validated.Valid(f(value))
+            try f(value).valid
             catch {
-              case NonFatal(e) => Thrown(cfg, e).invalidNec
+              case NonFatal(e) => Thrown(cfg, fa, e).invalidNec
             }
           }
       }
@@ -39,7 +44,7 @@ object Property {
     def apply(cfg: Node.Map): Value[Option[T]] =
       cfg(name) match {
         case node: Node.Value => decode(node).map(Some(_))
-        case _: Node.None | _: Node.Null => Validated.Valid(None)
+        case _: Node.None | _: Node.Null => None.valid
       }
   }
 
