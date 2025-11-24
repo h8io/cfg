@@ -39,20 +39,4 @@ object Property {
           }
       }
   }
-
-  final case class Optional[+T: Decoder](name: String) extends Property[Option[T]] {
-    def apply(cfg: Node.Map): Value[Option[T]] =
-      cfg(name) match {
-        case node: Node.Value => decode(node).map(Some(_))
-        case _: Node.None | _: Node.Null => None.valid
-      }
-  }
-
-  final case class Mandatory[+T: Decoder](name: String) extends Property[T] {
-    def apply(cfg: Node.Map): Value[T] =
-      cfg(name) match {
-        case node: Node.Value => decode(node)
-        case node: CfgError.Any => node.invalidNec
-      }
-  }
 }
