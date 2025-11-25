@@ -6,7 +6,7 @@ import h8io.cfg.{BaseDecoder, Decoder}
 import h8io.reflect.typeOf
 
 trait collections {
-  def VectorDecoder[T: Decoder]: Decoder[Vector[T]] =
+  implicit def VectorDecoder[T: Decoder]: Decoder[Vector[T]] =
     new BaseDecoder[Vector[T]] {
       override def parse(seq: Node.Seq): Decoder.Result[Vector[T]] =
         seq.iterator.map {
@@ -15,7 +15,7 @@ trait collections {
         }.toVector.sequence
     }
 
-  def MapDecoder[T: Decoder]: Decoder[Map[String, T]] =
+  implicit def MapDecoder[T: Decoder]: Decoder[Map[String, T]] =
     new BaseDecoder[Map[String, T]] {
       override def parse(map: Node.Map): Decoder.Result[Map[String, T]] =
         map.iterator.map {
