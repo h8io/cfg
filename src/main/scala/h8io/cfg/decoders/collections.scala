@@ -18,9 +18,8 @@ trait collections {
   implicit def MapDecoder[T: Decoder]: Decoder[Map[String, T]] =
     new BaseDecoder[Map[String, T]] {
       override def parse(map: Node.Map): Decoder.Result[Map[String, T]] =
-        map.iterator.map {
+        map.iterator.collect {
           case entry: Node.Value => Decoder[T](entry).map(value => entry.id.key -> value)
-          case entry: Node.INull[Id.Key] => entry.invalidNec
         }.toVector.sequence.map(_.toMap)
     }
 }
