@@ -19,16 +19,16 @@ class DecoderMonadLawsTest extends AnyFunSuite with FunSuiteDiscipline with Chec
   private implicit def arbDecoder[T: Arbitrary]: Arbitrary[Decoder[T]] =
     Arbitrary {
       Gen.oneOf(
-        Arbitrary.arbitrary[T].map[Decoder[T]](value => (_: Node.Value[Id]) => value.valid),
-        Gen.const[Decoder[T]]((key: Node.Value[Id]) => MockCfgError(key).invalidNec)
+        Arbitrary.arbitrary[T].map[Decoder[T]](value => (_: Node.Value) => value.valid),
+        Gen.const[Decoder[T]]((key: Node.Value) => MockCfgError(key).invalidNec)
       )
     }
 
   private implicit def decoderEq[T]: Eq[Decoder[T]] = {
     def eq(id: Id, a: Decoder[T], b: Decoder[T]): Boolean = {
       val scalarNode = Node.Scalar(id, "scalar value", MockLocation(s"location for $id"))
-      val mapNode = mock[Node.Map[Id]]
-      val seqNode = mock[Node.Seq[Id]]
+      val mapNode = mock[Node.Map]
+      val seqNode = mock[Node.Seq]
       a.apply(scalarNode) == b.apply(scalarNode) &&
       a.apply(mapNode) == b.apply(mapNode) &&
       a.apply(seqNode) == b.apply(seqNode)

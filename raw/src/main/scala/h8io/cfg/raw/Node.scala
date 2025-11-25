@@ -2,40 +2,71 @@ package h8io.cfg.raw
 
 import h8io.cfg.CfgError
 
-sealed trait Node[+I <: Id] {
+sealed trait INode[+I <: Id] {
   def id: I
 }
 
 object Node {
-  final case class None[+I <: Id](id: I, parent: Node.Container[Id, ?]) extends Node[I] with CfgError {
-    def node: Node.None[I] = this
+  final case class INone[+I <: Id](id: I, parent: Container[?]) extends INode[I] with CfgError {
+    def node: INone[I] = this
   }
 
-  sealed trait Some[+I <: Id] extends Node[I] {
+  type None = INone[Id]
+
+  object None {
+    def apply[I <: Id](id: I, parent: Container[?]): INone[I] = INone(id, parent)
+    def unapply(node: None): Option[(Id, IContainer[Id, ?])] = Some((node.id, node.parent))
+  }
+
+  sealed trait ISome[+I <: Id] extends INode[I] {
     def location: Location
   }
 
-  final case class Null[+I <: Id](id: I, location: Location) extends Some[I] with CfgError {
-    def node: Node.Null[I] = this
+  type Some = ISome[Id]
+
+  final case class INull[+I <: Id](id: I, location: Location) extends ISome[I] with CfgError {
+    def node: INull[I] = this
   }
 
-  sealed trait Value[+I <: Id] extends Some[I]
+  type Null = INull[Id]
 
-  final case class Scalar[+I <: Id](id: I, value: String, location: Location) extends Value[I]
+  object Null {
+    def apply[I <: Id](id: I, location: Location): INull[I] = INull(id, location)
+    def unapply(node: Null): Option[(Id, Location)] = Some((node.id, node.location))
+  }
 
-  sealed trait Container[+I <: Id, CI <: Id] extends Value[I] with (CI => Node[CI]) {
-    def iterator: Iterator[Some[CI]]
+  sealed trait IValue[+I <: Id] extends ISome[I]
+
+  type Value = IValue[Id]
+
+  final case class IScalar[+I <: Id](id: I, value: String, location: Location) extends IValue[I]
+
+  type Scalar = IScalar[Id]
+
+  object Scalar {
+    def apply[I <: Id](id: I, value: String, location: Location): IScalar[I] = IScalar(id, value, location)
+    def unapply(node: Scalar): Option[(Id, String, Location)] = Some((node.id, node.value, node.location))
+  }
+
+  sealed trait IContainer[+I <: Id, CI <: Id] extends IValue[I] with (CI => INode[CI]) {
+    def iterator: Iterator[ISome[CI]]
     def size: Int
     final def isEmpty: Boolean = size == 0
   }
 
-  trait Map[+I <: Id] extends Container[I, Id.Key] {
-    def apply(key: Id.Key): Node[Id.Key]
-    final def apply(key: String): Node[Id.Key] = apply(Id.Key(key, id))
+  type Container[CI <: Id] = IContainer[Id, CI]
+
+  trait IMap[+I <: Id] extends IContainer[I, Id.Key] {
+    def apply(key: Id.Key): INode[Id.Key]
+    final def apply(key: String): INode[Id.Key] = apply(Id.Key(key, id))
   }
 
-  trait Seq[+I <: Id] extends Container[I, Id.Index] {
-    def apply(index: Id.Index): Node[Id.Index]
-    final def apply(index: Int): Node[Id.Index] = apply(Id.Index(index, id))
+  type Map = IMap[Id]
+
+  trait ISeq[+I <: Id] extends IContainer[I, Id.Index] {
+    def apply(index: Id.Index): INode[Id.Index]
+    final def apply(index: Int): INode[Id.Index] = apply(Id.Index(index, id))
   }
+
+  type Seq = ISeq[Id]
 }

@@ -13,8 +13,8 @@ import org.scalatest.matchers.should.Matchers
 
 class BaseDecoderTest extends AnyFlatSpec with Matchers with Inside with MockFactory {
   "BaseDecoder" should "parse scalar if scalar parse method is overridden" in {
-    val decoder = new BaseDecoder[Node.Scalar[Id]] {
-      override protected def parse(scalar: Node.Scalar[Id]): Result[Node.Scalar[Id]] = scalar.valid
+    val decoder = new BaseDecoder[Node.Scalar] {
+      override protected def parse(scalar: Node.Scalar): Result[Node.Scalar] = scalar.valid
     }
     val scalar = Node.Scalar(Id.Root, "test scalar", mock[Location])
     inside(decoder(scalar)) { case Validated.Valid(result) => result should be theSameInstanceAs scalar }
@@ -27,30 +27,30 @@ class BaseDecoderTest extends AnyFlatSpec with Matchers with Inside with MockFac
   }
 
   it should "parse map if map parse method is overridden" in {
-    val decoder = new BaseDecoder[Node.Map[Id]] {
-      override protected def parse(map: Node.Map[Id]): Result[Node.Map[Id]] = map.valid
+    val decoder = new BaseDecoder[Node.Map] {
+      override protected def parse(map: Node.Map): Result[Node.Map] = map.valid
     }
-    val map = mock[Node.Map[Id]]
+    val map = mock[Node.Map]
     inside(decoder(map)) { case Validated.Valid(result) => result should be theSameInstanceAs map }
   }
 
   it should "not parse map if map parse method is not overridden" in {
     val decoder = new BaseDecoder[Any] {}
-    val map = mock[Node.Map[Id]]
+    val map = mock[Node.Map]
     decoder(map) shouldBe UnexpectedNode(map, typeOf[Any]).invalidNec
   }
 
   it should "parse seq if seq parse method is overridden" in {
-    val decoder = new BaseDecoder[Node.Seq[Id]] {
-      override protected def parse(seq: Node.Seq[Id]): Result[Node.Seq[Id]] = seq.valid
+    val decoder = new BaseDecoder[Node.Seq] {
+      override protected def parse(seq: Node.Seq): Result[Node.Seq] = seq.valid
     }
-    val map = mock[Node.Seq[Id]]
+    val map = mock[Node.Seq]
     inside(decoder(map)) { case Validated.Valid(result) => result should be theSameInstanceAs map }
   }
 
   it should "not parse seq if seq parse method is not overridden" in {
     val decoder = new BaseDecoder[Any] {}
-    val map = mock[Node.Seq[Id]]
+    val map = mock[Node.Seq]
     decoder(map) shouldBe UnexpectedNode(map, typeOf[Any]).invalidNec
   }
 }

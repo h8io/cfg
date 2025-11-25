@@ -14,7 +14,7 @@ class MandatoryPropertyTest extends AnyFlatSpec with Matchers with MockFactory w
   "mandatory" should "create a property from a decoder and return the decoder result" in
     forAll(Gen.zip(Gen.alphaStr, Gen.alphaNumStr, Gen.alphaNumStr, Gen.alphaNumStr)) {
       case (name, value, result, description) =>
-        val root = mock[Node.Map[Id]]("node")
+        val root = mock[Node.Map]("node")
         implicit val decoder: Decoder[String] = mock[Decoder[String]]("decoder")
         val property = MandatoryProperty(name)
         inSequence {
@@ -33,7 +33,7 @@ class MandatoryPropertyTest extends AnyFlatSpec with Matchers with MockFactory w
           property(root) shouldBe error.invalidNec
         }
         inSequence {
-          val node = Node.Null(Id.Key(name, Id.Root), MockLocation(description))
+          val node = Node.INull(Id.Key(name, Id.Root), MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           property(root) shouldBe node.invalidNec
@@ -49,7 +49,7 @@ class MandatoryPropertyTest extends AnyFlatSpec with Matchers with MockFactory w
   it should "create a property from a decoder and return the Thrown error with decoder exception" in
     forAll(Gen.zip(Gen.alphaStr, Gen.alphaNumStr, Gen.alphaNumStr)) {
       case (name, value, description) =>
-        val root = mock[Node.Map[Id]]("node")
+        val root = mock[Node.Map]("node")
         implicit val decoder: Decoder[String] = mock[Decoder[String]]("decoder")
         val property = MandatoryProperty(name)
         inSequence {

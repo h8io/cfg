@@ -8,19 +8,19 @@ import h8io.reflect.typeOf
 trait collections {
   def VectorDecoder[T: Decoder]: Decoder[Vector[T]] =
     new BaseDecoder[Vector[T]] {
-      override def parse(seq: Node.Seq[Id]): Decoder.Result[Vector[T]] =
+      override def parse(seq: Node.Seq): Decoder.Result[Vector[T]] =
         seq.iterator.map {
-          case item: Node.Value[Id.Index] => Decoder[T](item)
-          case item: Node.Null[Id.Index] => item.invalidNec
+          case item: Node.Value => Decoder[T](item)
+          case item: Node.INull[Id.Index] => item.invalidNec
         }.toVector.sequence
     }
 
   def MapDecoder[T: Decoder]: Decoder[Map[String, T]] =
     new BaseDecoder[Map[String, T]] {
-      override def parse(map: Node.Map[Id]): Decoder.Result[Map[String, T]] =
+      override def parse(map: Node.Map): Decoder.Result[Map[String, T]] =
         map.iterator.map {
-          case entry: Node.Value[Id.Key] => Decoder[T](entry).map(value => entry.id.key -> value)
-          case entry: Node.Null[Id.Key] => entry.invalidNec
+          case entry: Node.Value => Decoder[T](entry).map(value => entry.id.key -> value)
+          case entry: Node.INull[Id.Key] => entry.invalidNec
         }.toVector.sequence.map(_.toMap)
     }
 }
