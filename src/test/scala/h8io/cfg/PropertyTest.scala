@@ -1,7 +1,7 @@
 package h8io.cfg
 
 import cats.syntax.all.*
-import h8io.cfg.raw.Node
+import h8io.cfg.raw.{Id, Node}
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -11,7 +11,7 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
   ">=>" should "pass a successful property into the function" in {
     val property = mock[Property[Long]]
     val f = mockFunction[Long, Property.Value[String]]
-    val node = mock[Node.Map]
+    val node = mock[Node.Map[Id]]
     val composition = property >=> f
     inSequence {
       (property.apply _).expects(node).returning(42L.valid)
@@ -23,7 +23,7 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
   it should "return the property error without calling the next function when the property fails" in {
     val property = mock[Property[Long]]
     val f = mockFunction[Long, Property.Value[String]]
-    val node = mock[Node.Map]
+    val node = mock[Node.Map[Id]]
     val composition = property >=> f
     val propertyError = mock[CfgError].invalidNec
     (property.apply _).expects(node).returning(propertyError)
@@ -33,7 +33,7 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
   it should "return the function's error when the property succeeds but the function fails" in {
     val property = mock[Property[Long]]
     val f = mockFunction[Long, Property.Value[String]]
-    val node = mock[Node.Map]
+    val node = mock[Node.Map[Id]]
     val composition = property >=> f
     val fError = mock[CfgError].invalidNec
     inSequence {
@@ -46,7 +46,7 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
   it should "return a Thrown error if the function throws an exception" in {
     val property = mock[Property[Long]]
     val f = mockFunction[Long, Property.Value[String]]
-    val node = mock[Node.Map]
+    val node = mock[Node.Map[Id]]
     val composition = property >=> f
     val exception = new RuntimeException("function exception")
     inSequence {

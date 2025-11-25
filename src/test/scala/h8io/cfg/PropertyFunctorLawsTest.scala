@@ -4,7 +4,7 @@ import cats.Eq
 import cats.laws.discipline.FunctorTests
 import cats.syntax.all.*
 import h8io.cfg.Property.Value
-import h8io.cfg.raw.Node
+import h8io.cfg.raw.{Id, Node}
 import h8io.cfg.testutil.MockCfgError
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalamock.scalatest.MockFactory
@@ -22,19 +22,19 @@ class PropertyFunctorLawsTest extends AnyFunSuite with FunSuiteDiscipline with C
           Arbitrary.arbitrary[T].map[Property[T]](value =>
             new Property[T] {
               def name: String = nm
-              def apply(cfg: Node.Map): Value[T] = value.valid
+              def apply(cfg: Node.Map[Id]): Value[T] = value.valid
             }),
           Gen.const[Property[T]](
             new Property[T] {
               def name: String = nm
-              def apply(cfg: Node.Map): Value[T] = MockCfgError(cfg).invalidNec
+              def apply(cfg: Node.Map[Id]): Value[T] = MockCfgError(cfg).invalidNec
             })
         )
       }
     }
 
   private implicit def propertyEq[T]: Eq[Property[T]] = {
-    val cfg = mock[Node.Map]
+    val cfg = mock[Node.Map[Id]]
     Eq.instance[Property[T]]((a, b) => a.name == b.name && a.apply(cfg) == b.apply(cfg))
   }
 

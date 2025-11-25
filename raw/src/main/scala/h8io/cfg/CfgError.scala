@@ -1,7 +1,7 @@
 package h8io.cfg
 
-import h8io.cfg.raw.Node
+import h8io.cfg.raw.{Id, Node}
 
 trait CfgError {
-  def node: Node
+  def node: Node[Id]
 }

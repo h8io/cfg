@@ -14,7 +14,7 @@ class OptionalPropertyTest extends AnyFlatSpec with Matchers with MockFactory wi
   "OptionalProperty" should "create a property from a decoder and return the decoder result" in
     forAll(Gen.zip(Gen.alphaStr, Gen.alphaNumStr, Gen.alphaNumStr, Gen.alphaNumStr)) {
       case (name, value, result, description) =>
-        val root = mock[Node.Map]("node")
+        val root = mock[Node.Map[Id]]("node")
         implicit val decoder: Decoder[String] = mock[Decoder[String]]("decoder")
         val property = OptionalProperty(name)
         inSequence {
@@ -49,7 +49,7 @@ class OptionalPropertyTest extends AnyFlatSpec with Matchers with MockFactory wi
   it should "create a property from a decoder and return the Thrown error with decoder exception" in
     forAll(Gen.zip(Gen.alphaStr, Gen.alphaNumStr, Gen.alphaNumStr)) {
       case (name, value, description) =>
-        val root = mock[Node.Map]("node")
+        val root = mock[Node.Map[Id]]("node")
         implicit val decoder: Decoder[String] = mock[Decoder[String]]("decoder")
         val property = OptionalProperty(name)
         inSequence {

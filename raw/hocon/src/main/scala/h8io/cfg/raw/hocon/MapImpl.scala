@@ -5,12 +5,12 @@ import h8io.cfg.raw.{Id, Location, Node}
 
 import scala.jdk.CollectionConverters.*
 
-private[hocon] final case class MapImpl(id: Id, underlying: ConfigObject) extends Node.Map {
-  def apply(key: Id.Key): Node =
+private[hocon] final case class MapImpl[+I <: Id](id: I, underlying: ConfigObject) extends Node.Map[I] {
+  def apply(key: Id.Key): Node[Id.Key] =
     if (underlying.containsKey(key.key)) wrap(key, underlying.get(key.key))
     else Node.None(key, this)
 
-  def iterator: Iterator[Node.Some] =
+  def iterator: Iterator[Node.Some[Id.Key]] =
     underlying.entrySet.iterator.asScala.map(e => wrap(Id.Key(e.getKey, id), e.getValue))
 
   def location: Location = LocationImpl(underlying.origin)

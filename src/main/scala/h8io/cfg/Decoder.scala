@@ -2,7 +2,7 @@ package h8io.cfg
 
 import cats.data.{Validated, ValidatedNec}
 import cats.syntax.all.*
-import h8io.cfg.raw.Node
+import h8io.cfg.raw.{Id, Node}
 
 import scala.annotation.tailrec
 import scala.util.control.NonFatal
@@ -10,9 +10,9 @@ import scala.util.control.NonFatal
 object Decoder {
   type Result[+T] = ValidatedNec[CfgError, T]
 
-  final case class Thrown(node: Node.Value, cause: Throwable) extends CfgError
+  final case class Thrown(node: Node.Value[Id], cause: Throwable) extends CfgError
 
-  def apply[T](node: Node.Value)(implicit decoder: Decoder[T]): Decoder.Result[T] =
+  def apply[T](node: Node.Value[Id])(implicit decoder: Decoder[T]): Decoder.Result[T] =
     try decoder(node)
     catch {
       case NonFatal(e) => Decoder.Thrown(node, e).invalidNec
