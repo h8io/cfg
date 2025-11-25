@@ -8,7 +8,7 @@ import scala.jdk.CollectionConverters.*
 private[hocon] final case class SeqImpl[+I <: Id](id: I, underlying: ConfigList) extends Node.ISeq[I] {
   def apply(index: Id.Index): INode[Id.Index] =
     if (index.fits(underlying.size)) wrap(index, underlying.get(index.index))
-    else Node.INone(index, this)
+    else Node.None(index, this)
 
   def iterator: Iterator[Node.ISome[Id.Index]] =
     underlying.iterator.asScala.zipWithIndex.map { case (value, i) => wrap(Id.Index(i, id), value) }

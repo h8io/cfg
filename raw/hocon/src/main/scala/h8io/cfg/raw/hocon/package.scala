@@ -18,8 +18,8 @@ package object hocon {
       case obj: ConfigObject => MapImpl(id, obj)
       case list: ConfigList => SeqImpl(id, list)
       case scalar: ConfigValue => scalar.valueType match {
-          case ConfigValueType.NULL => Node.INull(id, LocationImpl(scalar.origin))
-          case _ => Node.IScalar(id, scalar.unwrapped.toString, LocationImpl(scalar.origin))
+          case ConfigValueType.NULL => Node.Null(id, LocationImpl(scalar.origin))
+          case _ => Node.Scalar(id, scalar.unwrapped.toString, LocationImpl(scalar.origin))
         }
     }
 

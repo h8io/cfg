@@ -15,8 +15,8 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
     inside(wrap(rootId, mapValue)) { case map: Node.IMap[Id.Index] =>
       map.iterator.map {
         inside(_) {
-          case Node.IScalar(Id.Key(key, `rootId`), value, _) => key -> Some(value)
-          case Node.INull(Id.Key(key, `rootId`), _) => key -> None
+          case Node.Scalar(Id.Key(key, `rootId`), scalar, _) => key -> Some(scalar)
+          case Node.Null(Id.Key(key, `rootId`), _) => key -> None
         }
       }.toList should contain theSameElementsAs
         List("a" -> Some("x"), "b" -> Some("y"), "c" -> Some("z"), "d" -> None)
@@ -30,8 +30,8 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
       seq.iterator.zipWithIndex.map { case (node, i) =>
         val id = seq.id
         inside(node) {
-          case Node.IScalar(Id.Index(`i`, `id`), value, _) => Some(value)
-          case Node.INull(Id.Index(`i`, `id`), _) => None
+          case Node.Scalar(Id.Index(`i`, `id`), scalar, _) => Some(scalar)
+          case Node.Null(Id.Index(`i`, `id`), _) => None
         }
       }.toList should contain theSameElementsInOrderAs
         List(Some("1"), Some("2"), Some("3"), None)
@@ -41,14 +41,14 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
 
   it should "create a Node.Scalar object" in {
     val scalarValue = config.get("scalar")
-    inside(wrap(Id.Root, scalarValue)) { case Node.IScalar(Id.Root, "42", LocationImpl(scalarOrigin)) =>
+    inside(wrap(Id.Root, scalarValue)) { case Node.Scalar(Id.Root, "42", LocationImpl(scalarOrigin)) =>
       scalarOrigin should be theSameInstanceAs scalarValue.origin
     }
   }
 
   it should "create a Node.Null object" in {
     val nullValue = config.get("null")
-    inside(wrap(Id.Root, nullValue)) { case Node.INull(Id.Root, LocationImpl(origin)) =>
+    inside(wrap(Id.Root, nullValue)) { case Node.Null(Id.Root, LocationImpl(origin)) =>
       origin should be theSameInstanceAs nullValue.origin
     }
   }

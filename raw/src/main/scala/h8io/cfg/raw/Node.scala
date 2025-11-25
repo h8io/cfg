@@ -15,7 +15,7 @@ object Node {
 
   object None {
     def apply[I <: Id](id: I, parent: Container[?]): INone[I] = INone(id, parent)
-    def unapply(node: None): Option[(Id, IContainer[Id, ?])] = Some((node.id, node.parent))
+    def unapply[I <: Id](node: INone[I]): Option[(I, IContainer[Id, ?])] = Some((node.id, node.parent))
   }
 
   sealed trait ISome[+I <: Id] extends INode[I] {
@@ -32,7 +32,7 @@ object Node {
 
   object Null {
     def apply[I <: Id](id: I, location: Location): INull[I] = INull(id, location)
-    def unapply(node: Null): Option[(Id, Location)] = Some((node.id, node.location))
+    def unapply[I <: Id](node: INull[I]): Option[(I, Location)] = Some((node.id, node.location))
   }
 
   sealed trait IValue[+I <: Id] extends ISome[I]
@@ -45,7 +45,7 @@ object Node {
 
   object Scalar {
     def apply[I <: Id](id: I, value: String, location: Location): IScalar[I] = IScalar(id, value, location)
-    def unapply(node: Scalar): Option[(Id, String, Location)] = Some((node.id, node.value, node.location))
+    def unapply[I <: Id](node: IScalar[I]): Option[(I, String, Location)] = Some((node.id, node.value, node.location))
   }
 
   sealed trait IContainer[+I <: Id, CI <: Id] extends IValue[I] with (CI => INode[CI]) {
