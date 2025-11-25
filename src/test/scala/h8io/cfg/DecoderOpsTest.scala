@@ -25,7 +25,7 @@ class DecoderOpsTest extends AnyFlatSpec with Matchers with MockFactory with Sca
     val f = mockFunction[Long, Decoder.Result[String]]
     val node = mock[Node.Seq]
     val composition = decoder >=> f
-    val decoderError = mock[Decoder.Error].invalidNec
+    val decoderError = mock[CfgError].invalidNec
     (decoder.apply _).expects(node).returning(decoderError)
     composition(node) shouldBe decoderError
   }
@@ -35,7 +35,7 @@ class DecoderOpsTest extends AnyFlatSpec with Matchers with MockFactory with Sca
     val f = mockFunction[Long, Decoder.Result[String]]
     val node = mock[Node.Map]
     val composition = decoder >=> f
-    val fError = mock[Decoder.Error].invalidNec
+    val fError = mock[CfgError].invalidNec
     inSequence {
       (decoder.apply _).expects(node).returning(42L.valid)
       f.expects(42L).returning(fError)

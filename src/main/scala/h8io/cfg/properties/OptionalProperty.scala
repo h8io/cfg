@@ -8,7 +8,7 @@ import h8io.cfg.{Decoder, Property}
 final case class OptionalProperty[+T: Decoder](name: String) extends Property[Option[T]] {
   def apply(cfg: Node.Map): Value[Option[T]] =
     cfg(name) match {
-      case node: Node.Value => Property.decode(node).map(Some(_))
+      case node: Node.Value => Decoder(node).map(Some(_))
       case _: Node.None | _: Node.Null => None.valid
     }
 }

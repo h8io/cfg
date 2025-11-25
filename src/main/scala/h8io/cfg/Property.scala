@@ -26,19 +26,9 @@ trait Property[+T] extends (Node.Map => Property.Value[T]) {
 }
 
 object Property {
-  type Value[+T] = ValidatedNec[CfgError.Any, T]
+  type Value[+T] = ValidatedNec[CfgError, T]
 
-  trait Error extends CfgError[Node.Map] {
-    def property: Property[?]
-  }
-
-  final case class Thrown(node: Node.Map, property: Property[?], cause: Throwable) extends Error
-
-  def decode[T](node: Node.Value)(implicit decoder: Decoder[T]): Decoder.Result[T] =
-    try decoder(node)
-    catch {
-      case NonFatal(e) => Decoder.Thrown(node, e).invalidNec
-    }
+  final case class Thrown(node: Node.Map, property: Property[?], cause: Throwable) extends CfgError
 
   implicit object Functor extends cats.Functor[Property] {
     override def map[A, B](fa: Property[A])(f: A => B): Property[B] =

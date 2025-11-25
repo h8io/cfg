@@ -7,7 +7,7 @@ sealed trait Node {
 }
 
 object Node {
-  final case class None(id: Id, parent: Node.Container[?]) extends Node with CfgError[None] {
+  final case class None(id: Id, parent: Node.Container[?]) extends Node with CfgError {
     def node: Node.None = this
   }
 
@@ -15,7 +15,7 @@ object Node {
     def location: Location
   }
 
-  final case class Null(id: Id, location: Location) extends Some with CfgError[Null] {
+  final case class Null(id: Id, location: Location) extends Some with CfgError {
     def node: Node.Null = this
   }
 
