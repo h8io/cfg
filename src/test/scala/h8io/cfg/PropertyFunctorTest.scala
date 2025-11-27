@@ -1,7 +1,7 @@
 package h8io.cfg
 
-import h8io.cfg.raw.Node
 import cats.syntax.all.*
+import h8io.cfg.raw.Node
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

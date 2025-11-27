@@ -5,13 +5,18 @@ import cats.syntax.all.*
 import h8io.cfg.raw.Node
 
 import scala.annotation.tailrec
+import scala.util.control.NonFatal
 
 object Decoder {
-  type Result[+T] = ValidatedNec[Error, T]
+  type Result[+T] = ValidatedNec[CfgError, T]
 
-  type Error = CfgError[Node.Value]
+  final case class Thrown(node: Node.Value, cause: Throwable) extends CfgError
 
-  final case class Thrown(node: Node.Value, cause: Throwable) extends Error
+  def apply[T](node: Node.Value)(implicit decoder: Decoder[T]): Decoder.Result[T] =
+    try decoder(node)
+    catch {
+      case NonFatal(e) => Decoder.Thrown(node, e).invalidNec
+    }
 
   implicit object Monad extends cats.Monad[Decoder] {
     override def map[A, B](fa: Decoder[A])(f: A => B): Decoder[B] = fa.andThen(_.map(f))

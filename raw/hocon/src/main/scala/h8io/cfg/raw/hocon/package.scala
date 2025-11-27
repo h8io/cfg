@@ -5,7 +5,7 @@ import com.typesafe.config.*
 import java.net.URL
 
 package object hocon {
-  def apply(urls: URL*): Node.Map =
+  def apply(urls: URL*): Node.IMap[Id.Root] =
     MapImpl(Id.Root,
       urls.iterator
         .map(ConfigFactory.parseURL)
@@ -13,7 +13,7 @@ package object hocon {
         .map(ConfigFactory.load)
         .getOrElse(ConfigFactory.load).root())
 
-  @inline private[hocon] def wrap(id: Id, value: ConfigValue): Node.Some =
+  @inline private[hocon] def wrap[I <: Id](id: I, value: ConfigValue): Node.ISome[I] =
     value match {
       case obj: ConfigObject => MapImpl(id, obj)
       case list: ConfigList => SeqImpl(id, list)

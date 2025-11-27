@@ -5,7 +5,7 @@ import cats.laws.discipline.FunctorTests
 import cats.syntax.all.*
 import h8io.cfg.Property.Value
 import h8io.cfg.raw.Node
-import h8io.cfg.testutil.MockPropertyError
+import h8io.cfg.testutil.MockCfgError
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.funsuite.AnyFunSuite
@@ -27,7 +27,7 @@ class PropertyFunctorLawsTest extends AnyFunSuite with FunSuiteDiscipline with C
           Gen.const[Property[T]](
             new Property[T] {
               def name: String = nm
-              def apply(cfg: Node.Map): Value[T] = MockPropertyError(cfg).invalidNec
+              def apply(cfg: Node.Map): Value[T] = MockCfgError(cfg).invalidNec
             })
         )
       }

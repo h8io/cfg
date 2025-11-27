@@ -12,10 +12,10 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
   "wrap" should "create a Node.Map object" in {
     val mapValue = config.get("map")
     val rootId = Id.Index(42, Id.Root)
-    inside(wrap(rootId, mapValue)) { case map: Node.Map =>
+    inside(wrap(rootId, mapValue)) { case map: Node.IMap[Id.Index] =>
       map.iterator.map {
         inside(_) {
-          case Node.Scalar(Id.Key(key, `rootId`), value, _) => key -> Some(value)
+          case Node.Scalar(Id.Key(key, `rootId`), scalar, _) => key -> Some(scalar)
           case Node.Null(Id.Key(key, `rootId`), _) => key -> None
         }
       }.toList should contain theSameElementsAs
@@ -26,11 +26,11 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
 
   it should "create a Node.Seq object" in {
     val seqValue = config.get("seq")
-    inside(wrap(Id.Root, seqValue)) { case seq: Node.Seq =>
+    inside(wrap(Id.Root, seqValue)) { case seq: Node.ISeq[Id.Root] =>
       seq.iterator.zipWithIndex.map { case (node, i) =>
         val id = seq.id
         inside(node) {
-          case Node.Scalar(Id.Index(`i`, `id`), value, _) => Some(value)
+          case Node.Scalar(Id.Index(`i`, `id`), scalar, _) => Some(scalar)
           case Node.Null(Id.Index(`i`, `id`), _) => None
         }
       }.toList should contain theSameElementsInOrderAs

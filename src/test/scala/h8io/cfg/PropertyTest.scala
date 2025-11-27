@@ -8,29 +8,6 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with ScalaCheckPropertyChecks {
-  "decode" should "return a valid result returned by decoder" in {
-    implicit val decoder: Decoder[String] = mock[Decoder[String]]
-    val node = mock[Node.Map]
-    (decoder.apply _).expects(node).returning("test result".valid)
-    Property.decode[String](node) shouldBe "test result".valid
-  }
-
-  it should "return an invalid result returned by decoder" in {
-    implicit val decoder: Decoder[String] = mock[Decoder[String]]
-    val node = mock[Node.Seq]
-    val error = mock[Decoder.Error].invalidNec
-    (decoder.apply _).expects(node).returning(error)
-    Property.decode[String](node) shouldBe error
-  }
-
-  it should "return a Thrown result if decoder throws an exception" in {
-    implicit val decoder: Decoder[String] = mock[Decoder[String]]
-    val node = mock[Node.Map]
-    val exception = new RuntimeException("decoder exception")
-    (decoder.apply _).expects(node).throws(exception)
-    Property.decode[String](node) shouldBe Decoder.Thrown(node, exception).invalidNec
-  }
-
   ">=>" should "pass a successful property into the function" in {
     val property = mock[Property[Long]]
     val f = mockFunction[Long, Property.Value[String]]
@@ -48,7 +25,7 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
     val f = mockFunction[Long, Property.Value[String]]
     val node = mock[Node.Map]
     val composition = property >=> f
-    val propertyError = mock[Property.Error].invalidNec
+    val propertyError = mock[CfgError].invalidNec
     (property.apply _).expects(node).returning(propertyError)
     composition(node) shouldBe propertyError
   }
@@ -58,7 +35,7 @@ class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with Scala
     val f = mockFunction[Long, Property.Value[String]]
     val node = mock[Node.Map]
     val composition = property >=> f
-    val fError = mock[Decoder.Error].invalidNec
+    val fError = mock[CfgError].invalidNec
     inSequence {
       (property.apply _).expects(node).returning(42L.valid)
       f.expects(42L).returning(fError)

@@ -6,7 +6,7 @@ import cats.laws.discipline.SemigroupalTests.Isomorphisms
 import cats.syntax.all.*
 import h8io.cfg.Decoder.Monad
 import h8io.cfg.raw.{Id, Node}
-import h8io.cfg.testutil.{MockDecoderError, MockLocation}
+import h8io.cfg.testutil.{MockCfgError, MockLocation}
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.funsuite.AnyFunSuite
@@ -20,7 +20,7 @@ class DecoderMonadLawsTest extends AnyFunSuite with FunSuiteDiscipline with Chec
     Arbitrary {
       Gen.oneOf(
         Arbitrary.arbitrary[T].map[Decoder[T]](value => (_: Node.Value) => value.valid),
-        Gen.const[Decoder[T]]((key: Node.Value) => MockDecoderError(key).invalidNec)
+        Gen.const[Decoder[T]]((key: Node.Value) => MockCfgError(key).invalidNec)
       )
     }
 

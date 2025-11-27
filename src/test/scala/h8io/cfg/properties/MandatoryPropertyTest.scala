@@ -1,9 +1,9 @@
 package h8io.cfg.properties
 
 import cats.syntax.all.*
-import h8io.cfg.Decoder
 import h8io.cfg.raw.{Id, Node}
 import h8io.cfg.testutil.MockLocation
+import h8io.cfg.{CfgError, Decoder}
 import org.scalacheck.Gen
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.flatspec.AnyFlatSpec
@@ -26,14 +26,14 @@ class MandatoryPropertyTest extends AnyFlatSpec with Matchers with MockFactory w
         }
         inSequence {
           val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
-          val error = mock[Decoder.Error]
+          val error = mock[CfgError]
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           (decoder.apply _).expects(node).returning(error.invalidNec)
           property(root) shouldBe error.invalidNec
         }
         inSequence {
-          val node = Node.Null(Id.Key(name, Id.Root), MockLocation(description))
+          val node = Node.INull(Id.Key(name, Id.Root), MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           property(root) shouldBe node.invalidNec
