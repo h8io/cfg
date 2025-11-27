@@ -20,7 +20,7 @@ class MapDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
       } ++ List(Node.Null(Id.Key("jkl", Id.Root), MockLocation("null location (qpo)"))))
     def decoder: Decoder[String] = {
       case Node.Scalar(_, v, _) => s"decoded $v".valid
-      case node: Node => UnexpectedNode(node, typeOf[String]).invalidNec
+      case node: Node => UnexpectedNode[String](node).invalidNec
     }
     MapDecoder[String](decoder)(map) shouldBe
       Map("abc" -> "decoded zyx", "def" -> "decoded wvu", "ghi" -> "decoded tsr").valid
@@ -42,9 +42,9 @@ class MapDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
       ))
     def decoder: Decoder[String] = {
       case Node.Scalar(_, v, _) => s"decoded $v".valid
-      case node: Node => UnexpectedNode(node, typeOf[String]).invalidNec
+      case node: Node => UnexpectedNode[String](node).invalidNec
     }
     MapDecoder[String](decoder)(map) shouldBe
-      NonEmptyChain(UnexpectedNode(mapItem, typeOf[String]), UnexpectedNode(seqItem, typeOf[String])).invalid
+      NonEmptyChain(UnexpectedNode[String](mapItem), UnexpectedNode[String](seqItem)).invalid
   }
 }
