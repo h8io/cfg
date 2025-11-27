@@ -2,6 +2,7 @@ package h8io.cfg
 
 import cats.data.{Validated, ValidatedNec}
 import cats.syntax.all.*
+import cats.{Monad, SemigroupK}
 import h8io.cfg.raw.Node
 
 import scala.annotation.tailrec
@@ -18,7 +19,7 @@ object Decoder {
       case NonFatal(e) => Decoder.Thrown(node, e).invalidNec
     }
 
-  implicit object Monad extends cats.Monad[Decoder] {
+  implicit val monad: Monad[Decoder] = new Monad[Decoder] {
     override def map[A, B](fa: Decoder[A])(f: A => B): Decoder[B] = fa.andThen(_.map(f))
 
     override def pure[A](x: A): Decoder[A] = _ => x.valid
@@ -39,5 +40,17 @@ object Decoder {
         }
       loop(a)
     }
+  }
+
+  implicit val semigroupK: SemigroupK[Decoder] = new SemigroupK[Decoder] {
+    override def combineK[A](x: Decoder[A], y: Decoder[A]): Decoder[A] =
+      node =>
+        x(node) match {
+          case v @ Validated.Valid(_) => v
+          case Validated.Invalid(xe) => y(node) match {
+              case v @ Validated.Valid(_) => v
+              case Validated.Invalid(ye) => Validated.Invalid(xe ++ ye)
+            }
+        }
   }
 }

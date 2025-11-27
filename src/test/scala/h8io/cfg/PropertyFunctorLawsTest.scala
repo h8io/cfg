@@ -38,5 +38,5 @@ class PropertyFunctorLawsTest extends AnyFunSuite with FunSuiteDiscipline with C
     Eq.instance[Property[T]]((a, b) => a.name == b.name && a.apply(cfg) == b.apply(cfg))
   }
 
-  checkAll("PropertyFunctor", FunctorTests[Property].functor[ZoneId, ZonedDateTime, Long])
+  checkAll("Property functor", FunctorTests[Property].functor[ZoneId, ZonedDateTime, Long])
 }
