@@ -23,7 +23,7 @@ class BaseDecoderTest extends AnyFlatSpec with Matchers with Inside with MockFac
   it should "not parse scalar if scalar parse method is not overridden" in {
     val decoder = new BaseDecoder[Any] {}
     val scalar = Node.Scalar(Id.Root, "test scalar", mock[Location])
-    decoder(scalar) shouldBe UnexpectedNode(scalar, typeOf[Any]).invalidNec
+    decoder(scalar) shouldBe UnexpectedNode[Any](scalar).invalidNec
   }
 
   it should "parse map if map parse method is overridden" in {
@@ -37,7 +37,7 @@ class BaseDecoderTest extends AnyFlatSpec with Matchers with Inside with MockFac
   it should "not parse map if map parse method is not overridden" in {
     val decoder = new BaseDecoder[Any] {}
     val map = mock[Node.Map]
-    decoder(map) shouldBe UnexpectedNode(map, typeOf[Any]).invalidNec
+    decoder(map) shouldBe UnexpectedNode[Any](map).invalidNec
   }
 
   it should "parse seq if seq parse method is overridden" in {
@@ -51,6 +51,6 @@ class BaseDecoderTest extends AnyFlatSpec with Matchers with Inside with MockFac
   it should "not parse seq if seq parse method is not overridden" in {
     val decoder = new BaseDecoder[Any] {}
     val map = mock[Node.Seq]
-    decoder(map) shouldBe UnexpectedNode(map, typeOf[Any]).invalidNec
+    decoder(map) shouldBe UnexpectedNode[Any](map).invalidNec
   }
 }

@@ -20,7 +20,7 @@ class VectorDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
       })
     def decoder: Decoder[String] = {
       case Node.Scalar(_, v, _) => s"decoded $v".valid
-      case node: Node => UnexpectedNode(node, typeOf[String]).invalidNec
+      case node: Node => UnexpectedNode[String](node).invalidNec
     }
     VectorDecoder[String](decoder)(seq) shouldBe Vector("decoded abc", "decoded def", "decoded ghi").valid
   }
@@ -42,9 +42,9 @@ class VectorDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
       ))
     def decoder: Decoder[String] = {
       case Node.Scalar(_, v, _) => s"decoded $v".valid
-      case node: Node => UnexpectedNode(node, typeOf[String]).invalidNec
+      case node: Node => UnexpectedNode[String](node).invalidNec
     }
     VectorDecoder[String](decoder)(seq) shouldBe
-      NonEmptyChain(UnexpectedNode(mapItem, typeOf[String]), UnexpectedNode(seqItem, typeOf[String]), nullItem).invalid
+      NonEmptyChain(UnexpectedNode[String](mapItem), UnexpectedNode[String](seqItem), nullItem).invalid
   }
 }
