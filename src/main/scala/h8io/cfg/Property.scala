@@ -1,5 +1,6 @@
 package h8io.cfg
 
+import cats.Functor
 import cats.data.ValidatedNec
 import cats.syntax.all.*
 import h8io.cfg.raw.Node
@@ -30,7 +31,7 @@ object Property {
 
   final case class Thrown(node: Node.Map, property: Property[?], cause: Throwable) extends CfgError
 
-  implicit object Functor extends cats.Functor[Property] {
+  implicit val functor: Functor[Property] = new Functor[Property] {
     override def map[A, B](fa: Property[A])(f: A => B): Property[B] =
       new Property[B] {
         override def name: String = fa.name
