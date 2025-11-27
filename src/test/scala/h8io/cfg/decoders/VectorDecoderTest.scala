@@ -25,7 +25,7 @@ class VectorDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
     VectorDecoder[String](decoder)(seq) shouldBe Vector("decoded abc", "decoded def", "decoded ghi").valid
   }
 
-  it should "return a vector of all errors if some values are not decoded successfully" in {
+  it should "return a list of all errors if some values are not decoded successfully" in {
     val seq = mock[Node.Seq]
     val mapItem = mock[Node.IMap[Id.Index]]
     val seqItem = mock[Node.ISeq[Id.Index]]
