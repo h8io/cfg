@@ -26,7 +26,7 @@ package object cfg {
   }
 
   implicit class ValuesOps[T](private val self: Iterator[CfgValue[T]]) extends AnyVal {
-    def build[C, B <: mutable.Builder[T, C]](builder: B): CfgValue[C] =
+    def collectInto[C, B <: mutable.Builder[T, C]](builder: B): CfgValue[C] =
       (self foldLeft (Validated.valid(builder): CfgValue[B])) { (acc, value) =>
         (acc, value) match {
           case (Validated.Valid(values), Validated.Valid(value)) =>

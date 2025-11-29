@@ -14,7 +14,7 @@ trait collections {
         seq.iterator.map {
           case item: Node.Value => Decoder[T](item)
           case item: Node.INull[Id.Index] => item.invalid
-        }.build[Vector[T], mutable.Builder[T, Vector[T]]](Vector.newBuilder[T])
+        }.collectInto[Vector[T], mutable.Builder[T, Vector[T]]](Vector.newBuilder[T])
     }
 
   implicit def MapDecoder[T: Decoder]: Decoder[Map[String, T]] =
@@ -22,6 +22,6 @@ trait collections {
       override def parse(map: Node.Map): CfgValue[Map[String, T]] =
         map.iterator.collect {
           case entry: Node.Value => Decoder[T](entry).map(value => entry.id.key -> value)
-        }.build[Map[String, T], mutable.Builder[(String, T), Map[String, T]]](Map.newBuilder[String, T])
+        }.collectInto[Map[String, T], mutable.Builder[(String, T), Map[String, T]]](Map.newBuilder[String, T])
     }
 }
