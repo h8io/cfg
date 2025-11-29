@@ -1,9 +1,8 @@
 package h8io.cfg.decoders
 
-import cats.data.NonEmptyChain
 import cats.syntax.all.*
 import h8io.cfg.Decoder
-import h8io.cfg.errors.UnexpectedNode
+import h8io.cfg.errors.{CfgErrorOps, UnexpectedNode}
 import h8io.cfg.raw.{Id, Node}
 import h8io.cfg.testutil.MockLocation
 import h8io.reflect.typeOf
@@ -20,7 +19,7 @@ class MapDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
       } ++ List(Node.Null(Id.Key("jkl", Id.Root), MockLocation("null location (qpo)"))))
     def decoder: Decoder[String] = {
       case Node.Scalar(_, v, _) => s"decoded $v".valid
-      case node: Node => UnexpectedNode[String](node).invalidNec
+      case node: Node => UnexpectedNode[String](node).invalid
     }
     MapDecoder[String](decoder)(map) shouldBe
       Map("abc" -> "decoded zyx", "def" -> "decoded wvu", "ghi" -> "decoded tsr").valid
@@ -42,9 +41,9 @@ class MapDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
       ))
     def decoder: Decoder[String] = {
       case Node.Scalar(_, v, _) => s"decoded $v".valid
-      case node: Node => UnexpectedNode[String](node).invalidNec
+      case node: Node => UnexpectedNode[String](node).invalid
     }
     MapDecoder[String](decoder)(map) shouldBe
-      NonEmptyChain(UnexpectedNode[String](mapItem), UnexpectedNode[String](seqItem)).invalid
+      (UnexpectedNode[String](mapItem) & UnexpectedNode[String](seqItem)).invalid
   }
 }

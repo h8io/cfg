@@ -3,7 +3,7 @@ package h8io.cfg
 import cats.Eq
 import cats.syntax.all.*
 import h8io.cfg.raw.{Id, Node}
-import h8io.cfg.testutil.{MockCfgError, MockLocation}
+import h8io.cfg.testutil.{MockLocation, MockNodeError}
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.TestSuite
@@ -15,7 +15,7 @@ trait DecoderLawsTest extends MockFactory {
     Arbitrary {
       Gen.oneOf(
         Arbitrary.arbitrary[T].map[Decoder[T]](value => (_: Node.Value) => value.valid),
-        Gen.const[Decoder[T]]((key: Node.Value) => MockCfgError(key).invalidNec)
+        Gen.const[Decoder[T]]((key: Node.Value) => MockNodeError(key).invalid)
       )
     }
 
