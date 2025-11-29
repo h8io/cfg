@@ -26,8 +26,8 @@ package object cfg {
   }
 
   implicit class ValuesOps[T](private val self: Iterator[CfgValue[T]]) extends AnyVal {
-    def sequence: CfgValue[Vector[T]] =
-      (self foldLeft (Validated.valid(Vector.newBuilder[T]): CfgValue[mutable.Builder[T, Vector[T]]])) { (acc, value) =>
+    def build[C, B <: mutable.Builder[T, C]](builder: B): CfgValue[C] =
+      (self foldLeft (Validated.valid(builder): CfgValue[B])) { (acc, value) =>
         (acc, value) match {
           case (Validated.Valid(values), Validated.Valid(value)) =>
             values += value
