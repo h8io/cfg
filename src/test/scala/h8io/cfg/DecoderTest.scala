@@ -17,7 +17,7 @@ class DecoderTest extends AnyFlatSpec with Matchers with MockFactory {
   it should "return an invalid result returned by decoder" in {
     implicit val decoder: Decoder[String] = mock[Decoder[String]]
     val node = mock[Node.Seq]
-    val error = mock[CfgError].invalidNec
+    val error = mock[CfgError].invalid
     (decoder.apply _).expects(node).returning(error)
     Decoder(node) shouldBe error
   }
@@ -27,6 +27,6 @@ class DecoderTest extends AnyFlatSpec with Matchers with MockFactory {
     val node = mock[Node.Map]
     val exception = new RuntimeException("decoder exception")
     (decoder.apply _).expects(node).throws(exception)
-    Decoder(node) shouldBe Decoder.Thrown(node, exception).invalidNec
+    Decoder(node) shouldBe Decoder.Thrown(node, exception).invalid
   }
 }

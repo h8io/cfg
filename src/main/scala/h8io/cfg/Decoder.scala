@@ -1,6 +1,6 @@
 package h8io.cfg
 
-import cats.data.{Validated, ValidatedNec}
+import cats.data.Validated
 import cats.syntax.all.*
 import cats.{Monad, SemigroupK}
 import h8io.cfg.raw.Node
@@ -9,14 +9,12 @@ import scala.annotation.tailrec
 import scala.util.control.NonFatal
 
 object Decoder {
-  type Result[+T] = ValidatedNec[CfgError, T]
+  final case class Thrown(node: Node.Value, cause: Throwable) extends NodeError
 
-  final case class Thrown(node: Node.Value, cause: Throwable) extends CfgError
-
-  def apply[T](node: Node.Value)(implicit decoder: Decoder[T]): Decoder.Result[T] =
+  def apply[T](node: Node.Value)(implicit decoder: Decoder[T]): CfgValue[T] =
     try decoder(node)
     catch {
-      case NonFatal(e) => Decoder.Thrown(node, e).invalidNec
+      case NonFatal(e) => Decoder.Thrown(node, e).invalid
     }
 
   implicit val monad: Monad[Decoder] = new Monad[Decoder] {
@@ -32,7 +30,7 @@ object Decoder {
         }
 
     def tailRecM[A, B](a: A)(f: A => Decoder[Either[A, B]]): Decoder[B] = { node =>
-      @tailrec def loop(current: A): Result[B] =
+      @tailrec def loop(current: A): CfgValue[B] =
         f(current)(node) match {
           case Validated.Valid(Right(b)) => b.valid
           case Validated.Valid(Left(next)) => loop(next)

@@ -3,7 +3,7 @@ package h8io.cfg.properties
 import cats.syntax.all.*
 import h8io.cfg.raw.{Id, Node}
 import h8io.cfg.testutil.MockLocation
-import h8io.cfg.{CfgError, Decoder}
+import h8io.cfg.{Decoder, NodeError}
 import org.scalacheck.Gen
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.flatspec.AnyFlatSpec
@@ -26,11 +26,11 @@ class OptionalPropertyTest extends AnyFlatSpec with Matchers with MockFactory wi
         }
         inSequence {
           val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
-          val error = mock[CfgError]
+          val error = mock[NodeError]
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
-          (decoder.apply _).expects(node).returning(error.invalidNec)
-          property(root) shouldBe error.invalidNec
+          (decoder.apply _).expects(node).returning(error.invalid)
+          property(root) shouldBe error.invalid
         }
         inSequence {
           val node = Node.Null(Id.Key(name, Id.Root), MockLocation(description))
@@ -58,7 +58,7 @@ class OptionalPropertyTest extends AnyFlatSpec with Matchers with MockFactory wi
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           (decoder.apply _).expects(node).throws(exception)
-          property(root) shouldBe Decoder.Thrown(node, exception).invalidNec
+          property(root) shouldBe Decoder.Thrown(node, exception).invalid
         }
     }
 }

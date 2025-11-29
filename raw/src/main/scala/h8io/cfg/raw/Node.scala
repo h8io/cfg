@@ -1,13 +1,13 @@
 package h8io.cfg.raw
 
-import h8io.cfg.CfgError
+import h8io.cfg.NodeError
 
 sealed trait INode[+I <: Id] {
   def id: I
 }
 
 object Node {
-  final case class INone[+I <: Id](id: I, parent: Container[?]) extends INode[I] with CfgError {
+  final case class INone[+I <: Id](id: I, parent: Container[?]) extends INode[I] with NodeError {
     def node: INone[I] = this
   }
 
@@ -24,7 +24,7 @@ object Node {
 
   type Some = ISome[Id]
 
-  final case class INull[+I <: Id](id: I, location: Location) extends ISome[I] with CfgError {
+  final case class INull[+I <: Id](id: I, location: Location) extends ISome[I] with NodeError {
     def node: INull[I] = this
   }
 
