@@ -5,11 +5,11 @@ import h8io.cfg.raw.Node
 import h8io.reflect.Type
 
 final class UnexpectedNode[T](val node: Node.Value, val tp: Type[T]) extends NodeError {
-  override def hashCode(): Int = node.hashCode() * 17 + tp.hashCode()
+  override def hashCode(): Int = node.hashCode() * 31 + tp.hashCode()
 
   override def equals(obj: Any): Boolean =
     obj match {
-      case that: UnexpectedNode[?] => node == that.node && tp == that.tp
+      case other: UnexpectedNode[?] => tp == other.tp && node == other.node
       case _ => false
     }
 }
