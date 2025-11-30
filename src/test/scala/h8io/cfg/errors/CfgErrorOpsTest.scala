@@ -1,0 +1,59 @@
+package h8io.cfg.errors
+
+import cats.data.NonEmptyChain
+import h8io.cfg.CfgError
+import org.scalacheck.Gen
+import org.scalamock.scalatest.MockFactory
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
+
+class CfgErrorOpsTest extends AnyFlatSpec with Matchers with MockFactory with ScalaCheckPropertyChecks {
+  private val genCfgError: Gen[CfgError] = Gen.delay(mock[CfgError])
+
+  private val genCfgErrors: Gen[NonEmptyChain[CfgError]] =
+    for {
+      head <- genCfgError
+      tail <- Gen.listOf(genCfgError)
+    } yield NonEmptyChain(head, tail*)
+
+  "|" should "combine OrError instances to OrError" in
+    forAll(Gen.zip(genCfgErrors, genCfgErrors)) { case (leftErrors, rightErrors) =>
+      OrError(leftErrors) | OrError(rightErrors) shouldBe OrError(leftErrors ++ rightErrors)
+    }
+
+  it should "combine OrError with another CfgError to OrError" in
+    forAll(Gen.zip(genCfgErrors, genCfgError)) { case (leftErrors, rightError) =>
+      OrError(leftErrors) | rightError shouldBe OrError(leftErrors :+ rightError)
+    }
+
+  it should "combine CfgError with OrError to OrError" in
+    forAll(Gen.zip(genCfgError, genCfgErrors)) { case (leftError, rightErrors) =>
+      leftError | OrError(rightErrors) shouldBe OrError(leftError +: rightErrors)
+    }
+
+  it should "combine CfgError instances to OrError" in
+    forAll(Gen.zip(genCfgError, genCfgError)) { case (leftError, rightError) =>
+      leftError | rightError shouldBe OrError(NonEmptyChain(leftError, rightError))
+    }
+
+  "&" should "combine AndError instances to AndError" in
+    forAll(Gen.zip(genCfgErrors, genCfgErrors)) { case (leftErrors, rightErrors) =>
+      AndError(leftErrors) & AndError(rightErrors) shouldBe AndError(leftErrors ++ rightErrors)
+    }
+
+  it should "combine AndError with another CfgError to AndError" in
+    forAll(Gen.zip(genCfgErrors, genCfgError)) { case (leftErrors, rightError) =>
+      AndError(leftErrors) & rightError shouldBe AndError(leftErrors :+ rightError)
+    }
+
+  it should "combine CfgError with AndError to AndError" in
+    forAll(Gen.zip(genCfgError, genCfgErrors)) { case (leftError, rightErrors) =>
+      leftError & AndError(rightErrors) shouldBe AndError(leftError +: rightErrors)
+    }
+
+  it should "combine CfgError instances to AndError" in
+    forAll(Gen.zip(genCfgError, genCfgError)) { case (leftError, rightError) =>
+      leftError & rightError shouldBe AndError(NonEmptyChain(leftError, rightError))
+    }
+}
