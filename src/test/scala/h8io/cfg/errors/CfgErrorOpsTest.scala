@@ -3,13 +3,12 @@ package h8io.cfg.errors
 import cats.data.NonEmptyChain
 import h8io.cfg.CfgError
 import org.scalacheck.Gen
-import org.scalamock.scalatest.MockFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-class CfgErrorOpsTest extends AnyFlatSpec with Matchers with MockFactory with ScalaCheckPropertyChecks {
-  private val genCfgError: Gen[CfgError] = Gen.delay(mock[CfgError])
+class CfgErrorOpsTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks {
+  private val genCfgError: Gen[CfgError] = Gen.delay(new DummyError)
 
   private val genCfgErrors: Gen[NonEmptyChain[CfgError]] =
     for {

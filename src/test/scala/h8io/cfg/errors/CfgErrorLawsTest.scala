@@ -5,13 +5,12 @@ import cats.kernel.Eq
 import cats.kernel.laws.discipline.SemigroupTests
 import h8io.cfg.CfgError
 import org.scalacheck.{Arbitrary, Gen}
-import org.scalamock.scalatest.MockFactory
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatestplus.scalacheck.Checkers
 import org.typelevel.discipline.scalatest.FunSuiteDiscipline
 
-class CfgErrorSemigroupLawsTest extends AnyFunSuite with FunSuiteDiscipline with Checkers with MockFactory {
-  private val genPlainError: Gen[CfgError] = Gen.delay(mock[CfgError])
+class CfgErrorLawsTest extends AnyFunSuite with FunSuiteDiscipline with Checkers {
+  private val genPlainError: Gen[CfgError] = Gen.delay(new DummyError)
 
   private val genCfgErrors: Gen[NonEmptyChain[CfgError]] =
     for {
@@ -21,13 +20,13 @@ class CfgErrorSemigroupLawsTest extends AnyFunSuite with FunSuiteDiscipline with
 
   private val genAndError: Gen[AndError] = genCfgErrors.map(AndError(_))
 
-  private val genOrError: Gen[AndError] = genCfgErrors.map(AndError(_))
+  private val genOrError: Gen[OrError] = genCfgErrors.map(OrError(_))
 
   protected implicit def arbError: Arbitrary[CfgError] = Arbitrary(Gen.oneOf(genPlainError, genAndError, genOrError))
 
   protected implicit def eqError: Eq[CfgError] = Eq.fromUniversalEquals
 
-  checkAll("Cfg error `AND` semigroup", SemigroupTests[CfgError].semigroup)
+  checkAll("CfgError AND semigroup", SemigroupTests[CfgError].semigroup)
 
-  checkAll("Cfg error `OR` semigroup", SemigroupTests[CfgError](_ | _).semigroup)
+  checkAll("CfgError OR semigroup", SemigroupTests[CfgError](_ | _).semigroup)
 }
