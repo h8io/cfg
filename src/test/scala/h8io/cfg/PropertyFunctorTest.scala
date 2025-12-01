@@ -14,6 +14,6 @@ class PropertyFunctorTest extends AnyFlatSpec with Matchers with MockFactory {
     val exception = new RuntimeException("map exception")
     val f = mock[String => Int]
     (f.apply _).expects("test value").throws(exception)
-    Property.functor.map(property)(f)(cfg) shouldBe Property.Thrown(cfg, property, exception).invalidNec
+    Property.functor.map(property)(f)(cfg) shouldBe Property.Thrown(cfg, property, exception).invalid
   }
 }

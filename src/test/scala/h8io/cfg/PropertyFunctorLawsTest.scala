@@ -3,9 +3,8 @@ package h8io.cfg
 import cats.Eq
 import cats.laws.discipline.FunctorTests
 import cats.syntax.all.*
-import h8io.cfg.Property.Value
 import h8io.cfg.raw.Node
-import h8io.cfg.testutil.MockCfgError
+import h8io.cfg.testutil.MockNodeError
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.funsuite.AnyFunSuite
@@ -22,12 +21,12 @@ class PropertyFunctorLawsTest extends AnyFunSuite with FunSuiteDiscipline with C
           Arbitrary.arbitrary[T].map[Property[T]](value =>
             new Property[T] {
               def name: String = nm
-              def apply(cfg: Node.Map): Value[T] = value.valid
+              def apply(cfg: Node.Map): CfgValue[T] = value.valid
             }),
           Gen.const[Property[T]](
             new Property[T] {
               def name: String = nm
-              def apply(cfg: Node.Map): Value[T] = MockCfgError(cfg).invalidNec
+              def apply(cfg: Node.Map): CfgValue[T] = MockNodeError(cfg).invalid
             })
         )
       }
