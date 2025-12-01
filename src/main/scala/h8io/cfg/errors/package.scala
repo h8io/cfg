@@ -1,6 +1,7 @@
 package h8io.cfg
 
 import cats.data.NonEmptyChain
+import cats.kernel.Semigroup
 
 package object errors {
   implicit class CfgErrorOps(val self: CfgError) extends AnyVal {
@@ -20,4 +21,6 @@ package object errors {
         case _ => AndError(NonEmptyChain(self, other))
       }
   }
+
+  implicit val cfgErrorAndSemigroup: Semigroup[CfgError] = _ & _
 }
