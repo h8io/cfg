@@ -21,7 +21,7 @@ class MapDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
       case Node.Scalar(_, v, _) => s"decoded $v".valid
       case node: Node => UnexpectedNode[String](node).invalid
     }
-    MapDecoder[String](decoder)(map) shouldBe
+    mapDecoder[String](decoder)(map) shouldBe
       Map("abc" -> "decoded zyx", "def" -> "decoded wvu", "ghi" -> "decoded tsr").valid
   }
 
@@ -43,7 +43,7 @@ class MapDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
       case Node.Scalar(_, v, _) => s"decoded $v".valid
       case node: Node => UnexpectedNode[String](node).invalid
     }
-    MapDecoder[String](decoder)(map) shouldBe
+    mapDecoder[String](decoder)(map) shouldBe
       (UnexpectedNode[String](mapItem) & UnexpectedNode[String](seqItem)).invalid
   }
 }

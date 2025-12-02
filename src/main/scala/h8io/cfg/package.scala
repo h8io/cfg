@@ -12,7 +12,7 @@ package object cfg {
   type Decoder[+T] = Node.Value => CfgValue[T]
 
   implicit class DecoderOps[T](private val self: Decoder[T]) extends AnyVal {
-    def >=>[U](f: T => CfgValue[U]): Decoder[U] = self(_).andThen(f)
+    def >=>[U](f: T => Decoder[U]): Decoder[U] = node => self(node).andThen(f(_)(node))
 
     def ||(other: Decoder[T]): Decoder[T] =
       node =>

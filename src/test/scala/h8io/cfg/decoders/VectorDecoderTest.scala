@@ -21,7 +21,7 @@ class VectorDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
       case Node.Scalar(_, v, _) => s"decoded $v".valid
       case node: Node => UnexpectedNode[String](node).invalid
     }
-    VectorDecoder[String](decoder)(seq) shouldBe Vector("decoded abc", "decoded def", "decoded ghi").valid
+    vectorDecoder[String](decoder)(seq) shouldBe Vector("decoded abc", "decoded def", "decoded ghi").valid
   }
 
   it should "return a list of all errors if some values are not decoded successfully" in {
@@ -43,7 +43,7 @@ class VectorDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
       case Node.Scalar(_, v, _) => s"decoded $v".valid
       case node: Node => UnexpectedNode[String](node).invalid
     }
-    VectorDecoder[String](decoder)(seq) shouldBe
+    vectorDecoder[String](decoder)(seq) shouldBe
       (UnexpectedNode[String](mapItem) & UnexpectedNode[String](seqItem) & nullItem).invalid
   }
 }
