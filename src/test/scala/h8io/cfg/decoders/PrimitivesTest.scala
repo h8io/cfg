@@ -108,7 +108,7 @@ class PrimitivesTest extends AnyFlatSpec with Matchers with MockFactory {
     longDecoder(Node.Scalar(Id.Root, Long.MinValue.toString, mock[Location])) shouldBe Long.MinValue.valid
   }
 
-  val BigIntOne = BigInt(1)
+  private val BigIntOne = BigInt(1)
 
   it should "return an error for out of bounds values" in {
     val positiveNode = Node.Scalar(Id.Root, (BigInt(Long.MaxValue) + BigIntOne).toString, mock[Location])
@@ -119,5 +119,27 @@ class PrimitivesTest extends AnyFlatSpec with Matchers with MockFactory {
     Decoder[Long](negativeNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`negativeNode`, _: NumberFormatException)) =>
     }
+  }
+
+  "floatDecoder" should "return a floating point value from scalar" in {
+    floatDecoder(Node.Scalar(Id.Root, "0", mock[Location])) shouldBe 0f.valid
+    floatDecoder(Node.Scalar(Id.Root, Float.MaxValue.toString, mock[Location])) shouldBe Float.MaxValue.valid
+    floatDecoder(Node.Scalar(Id.Root, Float.MinValue.toString, mock[Location])) shouldBe Float.MinValue.valid
+    floatDecoder(Node.Scalar(Id.Root, Double.MaxValue.toString, mock[Location])) shouldBe Float.PositiveInfinity.valid
+    floatDecoder(Node.Scalar(Id.Root, Double.MinValue.toString, mock[Location])) shouldBe Float.NegativeInfinity.valid
+  }
+
+  private val BigDecimalTwo = BigDecimal(2)
+
+  "doubleDecoder" should "return a double precision floating point value from scalar" in {
+    doubleDecoder(Node.Scalar(Id.Root, "0", mock[Location])) shouldBe 0d.valid
+    doubleDecoder(Node.Scalar(Id.Root, Double.MaxValue.toString, mock[Location])) shouldBe Double.MaxValue.valid
+    doubleDecoder(Node.Scalar(Id.Root, Double.MinValue.toString, mock[Location])) shouldBe Double.MinValue.valid
+    doubleDecoder(
+      Node.Scalar(Id.Root, (BigDecimal(Double.MaxValue) * BigDecimalTwo).toString,
+        mock[Location])) shouldBe Double.PositiveInfinity.valid
+    doubleDecoder(
+      Node.Scalar(Id.Root, (BigDecimal(Double.MinValue) * BigDecimalTwo).toString,
+        mock[Location])) shouldBe Double.NegativeInfinity.valid
   }
 }
