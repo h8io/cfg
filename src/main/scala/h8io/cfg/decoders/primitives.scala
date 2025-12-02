@@ -21,7 +21,7 @@ trait primitives {
   }
 
   implicit val byteDecoder: Decoder[Byte] = stringDecoder.map(_.toByte)
-  implicit val shortDecoder: Decoder[Int] = stringDecoder.map(_.toShort)
+  implicit val shortDecoder: Decoder[Short] = stringDecoder.map(_.toShort)
   implicit val intDecoder: Decoder[Int] = stringDecoder.map(_.toInt)
   implicit val longDecoder: Decoder[Long] = stringDecoder.map(_.toLong)
 
