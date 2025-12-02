@@ -8,7 +8,7 @@ import h8io.reflect.typeOf
 import scala.collection.mutable
 
 trait collections {
-  implicit def VectorDecoder[T: Decoder]: Decoder[Vector[T]] =
+  implicit def vectorDecoder[T: Decoder]: Decoder[Vector[T]] =
     new BaseDecoder[Vector[T]] {
       override def parse(seq: Node.Seq): CfgValue[Vector[T]] =
         seq.iterator.map {
@@ -17,7 +17,7 @@ trait collections {
         }.collectInto[Vector[T], mutable.Builder[T, Vector[T]]](Vector.newBuilder[T])
     }
 
-  implicit def MapDecoder[T: Decoder]: Decoder[Map[String, T]] =
+  implicit def mapDecoder[T: Decoder]: Decoder[Map[String, T]] =
     new BaseDecoder[Map[String, T]] {
       override def parse(map: Node.Map): CfgValue[Map[String, T]] =
         map.iterator.collect {

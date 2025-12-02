@@ -22,12 +22,7 @@ object Decoder {
 
     def pure[A](x: A): Decoder[A] = _ => x.valid
 
-    def flatMap[A, B](fa: Decoder[A])(f: A => Decoder[B]): Decoder[B] =
-      node =>
-        fa(node) match {
-          case Validated.Valid(a) => f(a)(node)
-          case invalid @ Validated.Invalid(_) => invalid
-        }
+    def flatMap[A, B](fa: Decoder[A])(f: A => Decoder[B]): Decoder[B] = fa >=> f
 
     def tailRecM[A, B](a: A)(f: A => Decoder[Either[A, B]]): Decoder[B] = { node =>
       @tailrec def loop(current: A): CfgValue[B] =
