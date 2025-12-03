@@ -1,17 +1,12 @@
 package h8io.cfg.decoders
 
 import cats.syntax.all.*
+import h8io.cfg.Decoder
 import h8io.cfg.Decoder.*
 import h8io.cfg.errors.UnexpectedNode
-import h8io.cfg.raw.Node.Scalar
-import h8io.cfg.{BaseDecoder, CfgValue, Decoder, DecoderOps}
 import h8io.reflect.typeOf
 
 trait primitives {
-  implicit val stringDecoder: Decoder[String] = new BaseDecoder[String] {
-    override protected def parse(scalar: Scalar): CfgValue[String] = scalar.value.valid
-  }
-
   implicit val booleanDecoder: Decoder[Boolean] = stringDecoder >=> {
     _.toLowerCase match {
       case "true" | "on" | "yes" => _ => true.valid
