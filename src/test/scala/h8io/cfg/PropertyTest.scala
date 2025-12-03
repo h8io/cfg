@@ -5,9 +5,8 @@ import h8io.cfg.raw.Node
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-class PropertyTest extends AnyFlatSpec with Matchers with MockFactory with ScalaCheckPropertyChecks {
+class PropertyTest extends AnyFlatSpec with Matchers with MockFactory {
   ">=>" should "pass a successful property into the function" in {
     val property = mock[Property[Long]]
     val f = mockFunction[Long, CfgValue[String]]
