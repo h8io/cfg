@@ -4,7 +4,8 @@ import cats.syntax.all.*
 import h8io.cfg.Decoder
 import h8io.cfg.Decoder.*
 
-import scala.concurrent.duration.Duration
+import java.util.concurrent.TimeUnit
+import scala.concurrent.duration.{Duration, TimeUnit}
 
 trait time {
   implicit val durationDecoder: Decoder[Duration] = stringDecoder.map(Duration(_))
@@ -23,4 +24,7 @@ trait time {
   implicit val yearDecoder: Decoder[java.time.Year] = stringDecoder.map(java.time.Year.parse)
   implicit val yearMonthDecoder: Decoder[java.time.YearMonth] = stringDecoder.map(java.time.YearMonth.parse)
   implicit val zonedDateTimeDecoder: Decoder[java.time.ZonedDateTime] = stringDecoder.map(java.time.ZonedDateTime.parse)
+
+  implicit val dateTimeFormatter: Decoder[java.time.format.DateTimeFormatter] =
+    stringDecoder.map(java.time.format.DateTimeFormatter.ofPattern)
 }
