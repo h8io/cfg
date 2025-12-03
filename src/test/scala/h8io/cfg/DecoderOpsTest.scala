@@ -2,6 +2,7 @@ package h8io.cfg
 
 import cats.data.Validated
 import cats.syntax.all.*
+import h8io.cfg.Decoder.*
 import h8io.cfg.errors.{CfgErrorOps, DummyError, DummyNodeError}
 import h8io.cfg.raw.Node
 import org.scalamock.scalatest.MockFactory

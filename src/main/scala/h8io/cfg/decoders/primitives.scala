@@ -1,9 +1,9 @@
 package h8io.cfg.decoders
 
 import cats.syntax.all.*
+import h8io.cfg.Decoder
 import h8io.cfg.Decoder.*
 import h8io.cfg.errors.UnexpectedNode
-import h8io.cfg.{Decoder, DecoderOps}
 import h8io.reflect.typeOf
 
 trait primitives {

@@ -11,20 +11,6 @@ package object cfg {
 
   type Decoder[+T] = Node.Value => CfgValue[T]
 
-  implicit class DecoderOps[T](private val self: Decoder[T]) extends AnyVal {
-    def >=>[U](f: T => Decoder[U]): Decoder[U] = node => self(node).andThen(f(_)(node))
-
-    def ||(other: Decoder[T]): Decoder[T] =
-      node =>
-        self(node) match {
-          case v @ Validated.Valid(_) => v
-          case Validated.Invalid(leftError) => other(node) match {
-              case v @ Validated.Valid(_) => v
-              case Validated.Invalid(rightError) => Validated.Invalid(leftError | rightError)
-            }
-        }
-  }
-
   implicit class ValuesOps[T](private val self: Iterator[CfgValue[T]]) extends AnyVal {
     def collectInto[C, B <: mutable.Builder[T, C]](builder: B): CfgValue[C] =
       (self foldLeft (Validated.valid(builder): CfgValue[B])) { (acc, value) =>

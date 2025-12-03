@@ -3,6 +3,7 @@ package h8io.cfg
 import cats.data.Validated
 import cats.syntax.all.*
 import cats.{Monad, SemigroupK}
+import h8io.cfg.errors.CfgErrorOps
 import h8io.cfg.raw.Node
 
 import scala.annotation.tailrec
@@ -16,6 +17,20 @@ object Decoder {
     catch {
       case NonFatal(e) => Decoder.Thrown(node, e).invalid
     }
+
+  implicit class Ops[T](private val self: Decoder[T]) extends AnyVal {
+    def >=>[U](f: T => Decoder[U]): Decoder[U] = node => self(node).andThen(f(_)(node))
+
+    def ||(other: Decoder[T]): Decoder[T] =
+      node =>
+        self(node) match {
+          case v @ Validated.Valid(_) => v
+          case Validated.Invalid(leftError) => other(node) match {
+              case v @ Validated.Valid(_) => v
+              case Validated.Invalid(rightError) => Validated.Invalid(leftError | rightError)
+            }
+        }
+  }
 
   implicit val monad: Monad[Decoder] = new Monad[Decoder] {
     override def map[A, B](fa: Decoder[A])(f: A => B): Decoder[B] = fa.andThen(_.map(f))
