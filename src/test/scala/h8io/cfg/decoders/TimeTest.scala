@@ -1,19 +1,23 @@
 package h8io.cfg.decoders
 
+import cats.data.Validated
 import cats.syntax.all.*
 import h8io.cfg.errors.UnexpectedNode
 import h8io.cfg.raw.{Id, Location, Node}
 import h8io.reflect.typeOf
 import org.scalacheck.Gen
 import org.scalamock.scalatest.MockFactory
+import org.scalatest.Inside
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import java.text.SimpleDateFormat
 import java.time.*
+import java.time.format.DateTimeFormatter
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
-class TimeTest extends AnyFlatSpec with Matchers with MockFactory with ScalaCheckPropertyChecks {
+class TimeTest extends AnyFlatSpec with Matchers with MockFactory with Inside with ScalaCheckPropertyChecks {
   "durationDecoder" should "return a finite duration value from scalar" in
     forAll { (value: FiniteDuration) =>
       durationDecoder(Node.Scalar(Id.Root, value.toString, mock[Location])) shouldBe value.valid
@@ -108,4 +112,52 @@ class TimeTest extends AnyFlatSpec with Matchers with MockFactory with ScalaChec
     forAll { (value: ZonedDateTime) =>
       zonedDateTimeDecoder(Node.Scalar(Id.Root, value.toString, mock[Location])) shouldBe value.valid
     }
+
+  "simpleDateFormatDecoder" should "return a formatter for parsing date time" in {
+    for (value <- List(
+        "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+        "dd.MM.yyyy HH:mm",
+        "EEEE, d MMMM yyyy",
+        "yyyy-MM-dd HH:mm:ss.SSS",
+        "HH:mm:ss",
+        "hh:mm a",
+        "yyyyMMdd'T'HHmmss",
+        "yyyy-MM-dd HH:mm:ss Z",
+        "d MMM yyyy, HH:mm 'UTC'",
+        "dd/MM/yyyy",
+        "yyyy-MM-dd'T'HH:mm:ssXXX",
+        "HH:mm:ss.SSS 'ms'",
+        "YYYY-'W'ww-u",
+        "G yyyy-MM-dd",
+        "MMM yyyy",
+        "yyyy-MM-dd HH:mm:ss.SSSZ"
+      )) simpleDateFormatDecoder(Node.Scalar(Id.Root, value, mock[Location])) shouldBe new SimpleDateFormat(value).valid
+  }
+
+  "dateTimeFormatterDecoder" should "return a formatter for parsing date time" in {
+    for (value <- List(
+        "uuuu-MM-dd'T'HH:mm:ss.SSSXXX",
+        "dd.MM.uuuu HH:mm",
+        "EEEE, d MMMM uuuu",
+        "uuuu-MM-dd HH:mm:ss.n",
+        "HH:mm:ss",
+        "hh:mm a",
+        "uuuuMMdd'T'HHmmss",
+        "uuuu-MM-dd HH:mm:ss VV",
+        "d MMM uuuu, HH:mm 'UTC'",
+        "dd/MM/uuuu",
+        "uuuu-MM-dd'T'HH:mm:ssXXX'['VV']'",
+        "HH:mm:ss.SSS 'ms'",
+        "YYYY-'W'ww-u",
+        "G uuuu-MM-dd",
+        "MMM uuuu",
+        "uuuu-MM-dd HH:mm:ss.SSSXXX"
+      )) {
+      val actualFormatter = inside(dateTimeFormatterDecoder(Node.Scalar(Id.Root, value, mock[Location]))) {
+        case Validated.Valid(formatter) => formatter
+      }
+      val expectedFormatter = DateTimeFormatter.ofPattern(value)
+      forAll((dt: ZonedDateTime) => actualFormatter.format(dt) == expectedFormatter.format(dt))
+    }
+  }
 }

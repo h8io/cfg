@@ -6,6 +6,7 @@ import h8io.cfg.Decoder.*
 import h8io.cfg.errors.UnexpectedNode
 import h8io.reflect.typeOf
 
+import java.text.SimpleDateFormat
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
 trait time {
@@ -30,6 +31,7 @@ trait time {
   implicit val yearMonthDecoder: Decoder[java.time.YearMonth] = stringDecoder.map(java.time.YearMonth.parse)
   implicit val zonedDateTimeDecoder: Decoder[java.time.ZonedDateTime] = stringDecoder.map(java.time.ZonedDateTime.parse)
 
-  implicit val dateTimeFormatter: Decoder[java.time.format.DateTimeFormatter] =
+  implicit val simpleDateFormatDecoder: Decoder[SimpleDateFormat] = stringDecoder.map(new SimpleDateFormat(_))
+  implicit val dateTimeFormatterDecoder: Decoder[java.time.format.DateTimeFormatter] =
     stringDecoder.map(java.time.format.DateTimeFormatter.ofPattern)
 }
