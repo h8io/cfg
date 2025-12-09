@@ -1,7 +1,7 @@
 package h8io.cfg.raw.hocon
 
 import h8io.cfg.raw.hocon.context.CfgContext
-import h8io.cfg.raw.{Id, Node}
+import h8io.cfg.raw.{Id, Node, Tag}
 import org.scalatest.Inside
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -32,6 +32,7 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
   it should "create a Node.Seq object" in {
     val seqValue = config.get("seq")
     inside(wrap(Id.Root, seqValue)) { case seq: Node.ISeq[Id.Root] =>
+      seq.tag shouldBe Tag.None(LocationImpl(seqValue))
       seq.iterator.zipWithIndex.map { case (node, i) =>
         val id = seq.id
         inside(node) {

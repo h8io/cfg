@@ -129,4 +129,9 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     (list.render(_: ConfigRenderOptions)).expects(RenderOptions).returns(expected)
     SeqImpl(Id.Root, list).toString should be theSameInstanceAs expected
   }
+
+  "tag" should "always be None" in {
+    val list = hocon"""list: [a, b, c]""".toConfig.getList("list")
+    SeqImpl(Id.Root, list).tag shouldBe Tag.None(LocationImpl(list))
+  }
 }
