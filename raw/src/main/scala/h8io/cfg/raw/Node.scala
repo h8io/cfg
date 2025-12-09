@@ -36,19 +36,19 @@ object Node {
   }
 
   sealed trait IValue[+I <: Id] extends ISome[I] {
-    def tag: Option[String]
+    def tag: Tag
   }
 
   type Value = IValue[Id]
 
-  final case class IScalar[+I <: Id](id: I, value: String, tag: Option[String], location: Location) extends IValue[I]
+  final case class IScalar[+I <: Id](id: I, value: String, tag: Tag, location: Location) extends IValue[I]
 
   type Scalar = IScalar[Id]
 
   object Scalar {
-    def apply[I <: Id](id: I, value: String, tag: Option[String], location: Location): IScalar[I] =
+    def apply[I <: Id](id: I, value: String, tag: Tag, location: Location): IScalar[I] =
       IScalar(id, value, tag, location)
-    def unapply[I <: Id](node: IScalar[I]): Option[(I, String, Option[String], Location)] =
+    def unapply[I <: Id](node: IScalar[I]): Option[(I, String, Tag, Location)] =
       Some((node.id, node.value, node.tag, node.location))
   }
 
@@ -58,7 +58,7 @@ object Node {
     final def isEmpty: Boolean = size == 0
   }
 
-  type Container[CI <: Id] = IContainer[Id, CI]
+  private type Container[CI <: Id] = IContainer[Id, CI]
 
   trait IMap[+I <: Id] extends IContainer[I, Id.Key] {
     def apply(key: Id.Key): INode[Id.Key]
