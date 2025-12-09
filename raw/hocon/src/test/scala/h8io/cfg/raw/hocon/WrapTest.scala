@@ -7,7 +7,12 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class WrapTest extends AnyFlatSpec with Matchers with Inside {
-  private val config = hocon"map { a: x, b: y, c: z, d: null }, seq: [1, 2, 3, null], scalar: 42, null: null"
+  private val config =
+    hocon"""map { a: x, b: y, c: z, d: null }
+            seq: [1, 2, 3, null]
+            scalar: 42
+            scalar-with-tag: "int::42"
+            null: null"""
 
   "wrap" should "create a Node.Map object" in {
     val mapValue = config.get("map")
@@ -15,7 +20,7 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
     inside(wrap(rootId, mapValue)) { case map: Node.IMap[Id.Index] =>
       map.iterator.map {
         inside(_) {
-          case Node.Scalar(Id.Key(key, `rootId`), scalar, _) => key -> Some(scalar)
+          case Node.Scalar(Id.Key(key, `rootId`), scalar, _, _) => key -> Some(scalar)
           case Node.Null(Id.Key(key, `rootId`), _) => key -> None
         }
       }.toList should contain theSameElementsAs
@@ -30,7 +35,7 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
       seq.iterator.zipWithIndex.map { case (node, i) =>
         val id = seq.id
         inside(node) {
-          case Node.Scalar(Id.Index(`i`, `id`), scalar, _) => Some(scalar)
+          case Node.Scalar(Id.Index(`i`, `id`), scalar, _, _) => Some(scalar)
           case Node.Null(Id.Index(`i`, `id`), _) => None
         }
       }.toList should contain theSameElementsInOrderAs
@@ -41,7 +46,7 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
 
   it should "create a Node.Scalar object" in {
     val scalarValue = config.get("scalar")
-    inside(wrap(Id.Root, scalarValue)) { case Node.Scalar(Id.Root, "42", LocationImpl(scalarOrigin)) =>
+    inside(wrap(Id.Root, scalarValue)) { case Node.Scalar(Id.Root, "42", _, LocationImpl(scalarOrigin)) =>
       scalarOrigin should be theSameInstanceAs scalarValue.origin
     }
   }

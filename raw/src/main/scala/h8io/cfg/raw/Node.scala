@@ -46,8 +46,10 @@ object Node {
   type Scalar = IScalar[Id]
 
   object Scalar {
-    def apply[I <: Id](id: I, value: String, tag: Option[String], location: Location): IScalar[I] = IScalar(id, value, tag, location)
-    def unapply[I <: Id](node: IScalar[I]): Option[(I, String, Option[String], Location)] = Some((node.id, node.value, node.tag, node.location))
+    def apply[I <: Id](id: I, value: String, tag: Option[String], location: Location): IScalar[I] =
+      IScalar(id, value, tag, location)
+    def unapply[I <: Id](node: IScalar[I]): Option[(I, String, Option[String], Location)] =
+      Some((node.id, node.value, node.tag, node.location))
   }
 
   sealed trait IContainer[+I <: Id, CI <: Id] extends IValue[I] with (CI => INode[CI]) {
