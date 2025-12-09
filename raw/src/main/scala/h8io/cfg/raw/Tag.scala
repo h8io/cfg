@@ -7,7 +7,7 @@ sealed trait Tag {
 }
 
 object Tag {
-  final case class None(location: Location) extends Tag with CfgError
+  final case class None(location: Location) extends Tag
   final case class Some(tag: String, location: Location) extends Tag
   trait Error extends Tag with CfgError
 }
