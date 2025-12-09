@@ -32,15 +32,18 @@ class NodeTest extends AnyFlatSpec with Matchers with MockFactory {
   "Scalar" should "be created successfully" in {
     val key = Id.Key("great-one", Id.Root)
     val value = "Cthulhu"
+    val tag = None
     val location = mock[Location]
-    Node.Scalar(key, value, location) shouldBe Node.IScalar(key, value, location)
+    Node.Scalar(key, value, tag, location) shouldBe Node.IScalar(key, value, tag, location)
   }
 
-  it should "be correctly extracted" in {
+  it should "be correctly deconstructed" in {
     val key = Id.Key("great-one", Id.Root)
     val value = "Cthulhu"
+    val tag = Some("Great One")
     val location = mock[Location]
-    Node.IScalar(key, value, location) should matchPattern { case Node.Scalar(`key`, `value`, `location`) => }
+    Node.IScalar(key, value, tag, location) should
+      matchPattern { case Node.Scalar(`key`, `value`, `tag`, `location`) => }
   }
 
   "Map" should "be mocked successfully" in {
