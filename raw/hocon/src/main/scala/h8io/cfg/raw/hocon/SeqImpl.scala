@@ -1,7 +1,7 @@
 package h8io.cfg.raw.hocon
 
 import com.typesafe.config.ConfigList
-import h8io.cfg.raw.{INode, Id, Location, Node}
+import h8io.cfg.raw.*
 
 import scala.jdk.CollectionConverters.*
 
@@ -10,12 +10,12 @@ private[hocon] final case class SeqImpl[+I <: Id](id: I, underlying: ConfigList)
     if (index.fits(underlying.size)) wrap(index, underlying.get(index.index))
     else Node.None(index, this)
 
-  def tag: Option[String] = None
+  def tag: Tag = Tag.None(location)
 
   def iterator: Iterator[Node.ISome[Id.Index]] =
     underlying.iterator.asScala.zipWithIndex.map { case (value, i) => wrap(Id.Index(i, id), value) }
 
-  def location: Location = LocationImpl(underlying.origin)
+  def location: Location = LocationImpl(underlying)
 
   override def size: Int = underlying.size()
 
