@@ -1,7 +1,7 @@
 package h8io.cfg.properties
 
 import cats.syntax.all.*
-import h8io.cfg.raw.{Id, Node}
+import h8io.cfg.raw.{Id, Node, Tag}
 import h8io.cfg.testutil.MockLocation
 import h8io.cfg.{Decoder, NodeError}
 import org.scalacheck.Gen
@@ -11,6 +11,8 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 class MandatoryPropertyTest extends AnyFlatSpec with Matchers with MockFactory with ScalaCheckPropertyChecks {
+  val tag = Tag.None(MockLocation("tag location"))
+
   "mandatory" should "create a property from a decoder and return the decoder result" in
     forAll(Gen.zip(Gen.alphaStr, Gen.alphaNumStr, Gen.alphaNumStr, Gen.alphaNumStr)) {
       case (name, value, result, description) =>
@@ -18,14 +20,14 @@ class MandatoryPropertyTest extends AnyFlatSpec with Matchers with MockFactory w
         implicit val decoder: Decoder[String] = mock[Decoder[String]]("decoder")
         val property = MandatoryProperty(name)
         inSequence {
-          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
+          val node = Node.Scalar(Id.Key(name, Id.Root), value, tag, MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           (decoder.apply _).expects(node).returning(result.valid)
           property(root) shouldBe result.valid
         }
         inSequence {
-          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
+          val node = Node.Scalar(Id.Key(name, Id.Root), value, tag, MockLocation(description))
           val error = mock[NodeError]
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
@@ -53,7 +55,7 @@ class MandatoryPropertyTest extends AnyFlatSpec with Matchers with MockFactory w
         implicit val decoder: Decoder[String] = mock[Decoder[String]]("decoder")
         val property = MandatoryProperty(name)
         inSequence {
-          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
+          val node = Node.Scalar(Id.Key(name, Id.Root), value, tag, MockLocation(description))
           val exception = new RuntimeException("decoder exception")
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)

@@ -1,11 +1,11 @@
 package h8io.cfg.raw.hocon
 
 import com.typesafe.config.ConfigObject
-import h8io.cfg.raw.{INode, Id, Location, Node}
+import h8io.cfg.raw.*
 
 import scala.jdk.CollectionConverters.*
 
-private[hocon] final case class MapImpl[+I <: Id](id: I, underlying: ConfigObject) extends Node.IMap[I] {
+private[hocon] final case class MapImpl[+I <: Id](id: I, underlying: ConfigObject, tag: Tag) extends Node.IMap[I] {
   def apply(key: Id.Key): INode[Id.Key] =
     if (underlying.containsKey(key.key)) wrap(key, underlying.get(key.key))
     else Node.None(key, this)
@@ -13,7 +13,7 @@ private[hocon] final case class MapImpl[+I <: Id](id: I, underlying: ConfigObjec
   def iterator: Iterator[Node.ISome[Id.Key]] =
     underlying.entrySet.iterator.asScala.map(e => wrap(Id.Key(e.getKey, id), e.getValue))
 
-  def location: Location = LocationImpl(underlying.origin)
+  def location: Location = LocationImpl(underlying)
 
   override def size: Int = underlying.size()
 

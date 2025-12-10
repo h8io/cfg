@@ -1,7 +1,7 @@
 package h8io.cfg.errors
 
 import h8io.cfg.CfgError
-import h8io.cfg.raw.{Id, Location, Node}
+import h8io.cfg.raw.{Id, Location, Node, Tag}
 import h8io.reflect.typeOf
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.flatspec.AnyFlatSpec
@@ -10,8 +10,8 @@ import org.scalatest.matchers.should.Matchers
 class UnexpectedNodeTest extends AnyFlatSpec with Matchers with MockFactory {
   "hashCode" should "be the same for equal UnexpectedNode objects" in {
     val location = mock[Location]
-    val node1 = Node.Scalar(Id.Root, "Cthulhu", location)
-    val node2 = Node.Scalar(Id.Root, "Cthulhu", location)
+    val node1 = Node.Scalar(Id.Root, "Cthulhu", Tag.None(location), location)
+    val node2 = Node.Scalar(Id.Root, "Cthulhu", Tag.None(location), location)
     UnexpectedNode[String](node1).hashCode() shouldEqual UnexpectedNode[String](node2).hashCode()
   }
 

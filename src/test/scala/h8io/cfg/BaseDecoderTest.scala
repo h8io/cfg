@@ -3,7 +3,7 @@ package h8io.cfg
 import cats.data.Validated
 import cats.syntax.all.*
 import h8io.cfg.errors.UnexpectedNode
-import h8io.cfg.raw.{Id, Location, Node}
+import h8io.cfg.raw.{Id, Location, Node, Tag}
 import h8io.reflect.typeOf
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.Inside
@@ -15,13 +15,13 @@ class BaseDecoderTest extends AnyFlatSpec with Matchers with Inside with MockFac
     val decoder = new BaseDecoder[Node.Scalar] {
       override protected def parse(scalar: Node.Scalar): CfgValue[Node.Scalar] = scalar.valid
     }
-    val scalar = Node.Scalar(Id.Root, "test scalar", mock[Location])
+    val scalar = Node.Scalar(Id.Root, "test scalar", Tag.None(mock[Location]), mock[Location])
     inside(decoder(scalar)) { case Validated.Valid(result) => result should be theSameInstanceAs scalar }
   }
 
   it should "not parse scalar if scalar parse method is not overridden" in {
     val decoder = new BaseDecoder[Any] {}
-    val scalar = Node.Scalar(Id.Root, "test scalar", mock[Location])
+    val scalar = Node.Scalar(Id.Root, "test scalar", Tag.None(mock[Location]), mock[Location])
     decoder(scalar) shouldBe UnexpectedNode[Any](scalar).invalid
   }
 
