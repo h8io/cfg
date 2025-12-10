@@ -29,7 +29,7 @@ package object hocon {
         }
     }
 
-  @inline private def TagKey = "_"
+  @inline private[hocon] def TagKey = "_"
 
   @inline private def wrap[I <: Id](id: I, obj: ConfigObject): Node.IMap[I] =
     MapImpl(

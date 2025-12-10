@@ -1,26 +1,38 @@
 package h8io.cfg.raw.hocon
 
-import h8io.cfg.raw.hocon.context.CfgContext
+import com.typesafe.config.{ConfigFactory, ConfigObject, ConfigValue}
 import h8io.cfg.raw.{Id, Node, Tag}
 import org.scalatest.Inside
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class WrapTest extends AnyFlatSpec with Matchers with Inside {
-  private val config =
-    hocon"""map { a: x, b: y, c: z, d: null }
-            seq: [1, 2, 3, null]
-            scalar: 42
-            scalar-with-tag: "int::42"
-            null: null"""
+  private val config = ConfigFactory.load("wrap-test.conf").root()
 
-  "wrap" should "create a Node.Map object" in {
-    val mapValue = config.get("map")
+  "wrap" should "create a Node.Map object" in testMap("map", v => Tag.None(LocationImpl(v)))
+
+  it should "create a Node.Map object with null tag" in testMap("map-with-null-tag", v => Tag.None(LocationImpl(v)))
+
+  it should "create a Node.Map object with empty tag" in testMap("map-with-empty-tag", v => Tag.None(LocationImpl(v)))
+
+  it should "create a Node.Map object with scalar tag" in
+    testMap("map-with-scalar-tag", v => Tag.Some("map-tag", LocationImpl(v)))
+
+  it should "create a Node.Map object with map tag" in testMap("map-with-map-tag", UnsupportedTag(_))
+
+  it should "create a Node.Map object with seq tag" in testMap("map-with-seq-tag", UnsupportedTag(_))
+
+  def testMap(dataKey: String, tag: ConfigValue => Tag): Unit = {
+    val mapValue = config.get(dataKey)
+    val expectedTag = tag(Option(mapValue.asInstanceOf[ConfigObject].get(TagKey)).getOrElse(mapValue))
     val rootId = Id.Index(42, Id.Root)
     inside(wrap(rootId, mapValue)) { case map: Node.IMap[Id.Index] =>
+      map.tag shouldBe expectedTag
       map.iterator.map {
         inside(_) {
-          case Node.Scalar(Id.Key(key, `rootId`), scalar, _, _) => key -> Some(scalar)
+          case Node.Scalar(Id.Key(key, `rootId`), scalar, Tag.None(tagLocation), location) =>
+            tagLocation shouldBe location
+            key -> Some(scalar)
           case Node.Null(Id.Key(key, `rootId`), _) => key -> None
         }
       }.toList should contain theSameElementsAs
@@ -36,7 +48,9 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
       seq.iterator.zipWithIndex.map { case (node, i) =>
         val id = seq.id
         inside(node) {
-          case Node.Scalar(Id.Index(`i`, `id`), scalar, _, _) => Some(scalar)
+          case Node.Scalar(Id.Index(`i`, `id`), scalar, Tag.None(tagLocation), location) =>
+            tagLocation shouldBe location
+            Some(scalar)
           case Node.Null(Id.Index(`i`, `id`), _) => None
         }
       }.toList should contain theSameElementsInOrderAs
@@ -47,8 +61,28 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
 
   it should "create a Node.Scalar object" in {
     val scalarValue = config.get("scalar")
-    inside(wrap(Id.Root, scalarValue)) { case Node.Scalar(Id.Root, "42", _, LocationImpl(scalarOrigin)) =>
-      scalarOrigin should be theSameInstanceAs scalarValue.origin
+    inside(wrap(Id.Root, scalarValue)) {
+      case Node.Scalar(Id.Root, "42", Tag.None(LocationImpl(tagOrigin)), LocationImpl(origin)) =>
+        origin should be theSameInstanceAs scalarValue.origin
+        tagOrigin should be theSameInstanceAs scalarValue.origin
+    }
+  }
+
+  it should "create a Node.Scalar object with empty tag" in {
+    val scalarValue = config.get("scalar-with-empty-tag")
+    inside(wrap(Id.Root, scalarValue)) {
+      case Node.Scalar(Id.Root, "Cthulhu::The Great", Tag.None(LocationImpl(tagOrigin)), LocationImpl(origin)) =>
+        origin should be theSameInstanceAs scalarValue.origin
+        tagOrigin should be theSameInstanceAs scalarValue.origin
+    }
+  }
+
+  it should "create a Node.Scalar object with tag" in {
+    val scalarValue = config.get("scalar-with-tag")
+    inside(wrap(Id.Root, scalarValue)) {
+      case Node.Scalar(Id.Root, "42", Tag.Some("int", LocationImpl(tagOrigin)), LocationImpl(origin)) =>
+        origin should be theSameInstanceAs scalarValue.origin
+        tagOrigin should be theSameInstanceAs scalarValue.origin
     }
   }
 

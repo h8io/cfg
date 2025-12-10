@@ -91,6 +91,12 @@ class TimeTest extends AnyFlatSpec with Matchers with MockFactory with Inside wi
         value.valid
     }
 
+  "localTimeDecoder" should "return a local time value from scalar" in
+    forAll { (value: LocalTime) =>
+      localTimeDecoder(Node.Scalar(Id.Root, value.toString, Tag.None(mock[Location]), mock[Location])) shouldBe
+        value.valid
+    }
+
   "monthDayDecoder" should "return a month and day value from scalar" in
     forAll { (value: MonthDay) =>
       monthDayDecoder(Node.Scalar(Id.Root, value.toString, Tag.None(mock[Location]), mock[Location])) shouldBe
