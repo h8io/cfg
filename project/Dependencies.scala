@@ -9,7 +9,7 @@ object Dependencies {
 
   val ScalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.14.0"
 
-  val H8IOReflect = "io.h8" %% "reflect" % "0.0.3"
+  val H8IOReflect = "io.h8" %% "reflect" % "0.0.5"
 
   val TestBundle: Seq[ModuleID] =
     Seq(
