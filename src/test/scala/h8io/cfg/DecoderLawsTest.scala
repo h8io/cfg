@@ -5,7 +5,7 @@ import cats.laws.discipline.SemigroupalTests.Isomorphisms
 import cats.laws.discipline.{MonadTests, SemigroupKTests}
 import cats.syntax.all.*
 import h8io.cfg.Decoder.{monad, semigroupK}
-import h8io.cfg.raw.{Id, Node, Tag}
+import h8io.cfg.raw.{Id, Node}
 import h8io.cfg.testutil.{MockLocation, MockNodeError}
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalamock.scalatest.MockFactory
@@ -28,7 +28,7 @@ class DecoderLawsTest extends AnyFunSuite with FunSuiteDiscipline with Checkers 
   protected implicit def decoderEq[T]: Eq[Decoder[T]] = {
     def eq(id: Id, a: Decoder[T], b: Decoder[T]): Boolean = {
       val location = MockLocation(s"location for $id")
-      val scalarNode = Node.Scalar(id, "scalar value", Tag.None(location), location)
+      val scalarNode = Node.Scalar(id, "scalar value", location)
       val mapNode = mock[Node.Map]
       val seqNode = mock[Node.Seq]
       a.apply(scalarNode) == b.apply(scalarNode) &&

@@ -5,7 +5,7 @@ import h8io.cfg.raw.*
 
 import scala.jdk.CollectionConverters.*
 
-private[hocon] final case class MapImpl[+I <: Id](id: I, underlying: ConfigObject, tag: Tag) extends Node.IMap[I] {
+private[hocon] final case class MapImpl[+I <: Id](id: I, underlying: ConfigObject) extends Node.IMap[I] {
   def apply(key: Id.Key): INode[Id.Key] =
     if (underlying.containsKey(key.key)) wrap(key, underlying.get(key.key))
     else Node.None(key, this)
