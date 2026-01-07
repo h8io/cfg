@@ -19,34 +19,11 @@ package object hocon {
       case list: ConfigList => SeqImpl(id, list)
       case scalar: ConfigValue => scalar.valueType match {
           case ConfigValueType.NULL => Node.Null(id, LocationImpl(scalar))
-          case _ =>
-            val raw = scalar.unwrapped.toString
-            val (tag, value) = raw.split("::", 2) match {
-              case Array(tag, value) if tag.nonEmpty => (Tag.Some(tag, LocationImpl(scalar)), value)
-              case noTag => (Tag.None(LocationImpl(scalar)), noTag.last)
-            }
-            Node.Scalar(id, value, tag, LocationImpl(scalar))
+          case _ => Node.Scalar(id, scalar.unwrapped.toString, LocationImpl(scalar))
         }
     }
 
-  @inline private[hocon] def TagKey = "_"
-
-  @inline private def wrap[I <: Id](id: I, obj: ConfigObject): Node.IMap[I] =
-    MapImpl(
-      id,
-      obj.withoutKey(TagKey),
-      if (obj.containsKey(TagKey)) {
-        obj.get(TagKey) match {
-          case unsupported @ (_: ConfigObject | _: ConfigList) => UnsupportedTag(unsupported)
-          case scalar: ConfigValue => scalar.valueType match {
-              case ConfigValueType.NULL => Tag.None(LocationImpl(scalar))
-              case _ =>
-                val tag = scalar.unwrapped.toString
-                if (tag.isEmpty) Tag.None(LocationImpl(scalar)) else Tag.Some(tag, LocationImpl(scalar))
-            }
-        }
-      } else Tag.None(LocationImpl(obj))
-    )
+  @inline private def wrap[I <: Id](id: I, obj: ConfigObject): Node.IMap[I] = MapImpl(id, obj)
 
   private[hocon] val RenderOptions: ConfigRenderOptions = ConfigRenderOptions.defaults().setJson(false)
 }
