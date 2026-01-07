@@ -101,6 +101,27 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     }
   }
 
+  "operator -" should "return a map without a specified key" in {
+    val obj = MapImpl(Id.Key("", Id.Root), hocon"scalar: 1, seq: [c, d, e], map { x: 12, y: 17, z: 25 }")
+    inside(obj - "scalar") { case result: MapImpl[?] =>
+      result.location shouldBe obj.location
+      result.iterator.toList should contain theSameElementsAs List(obj("seq"), obj("map"))
+    }
+    inside(obj - "seq") { case result: MapImpl[?] =>
+      result.location shouldBe obj.location
+      result.iterator.toList should contain theSameElementsAs List(obj("scalar"), obj("map"))
+    }
+    inside(obj - "map") { case result: MapImpl[?] =>
+      result.location shouldBe obj.location
+      result.iterator.toList should contain theSameElementsAs List(obj("scalar"), obj("seq"))
+    }
+  }
+
+  it should "return the existent node if key does not exist" in {
+    val obj = MapImpl(Id.Key("", Id.Root), hocon"scalar: 1, seq: [c, d, e], map { x: 12, y: 17, z: 25 }")
+    obj - "unexistent" should be theSameInstanceAs obj
+  }
+
   "toString" should "delegate call to underlying.render" in {
     val obj = mock[ConfigObject]
     val expected = Random.nextString(16)

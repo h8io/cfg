@@ -59,6 +59,7 @@ object Node {
   trait IMap[+I <: Id] extends IContainer[I, Id.Key] {
     def apply(key: Id.Key): INode[Id.Key]
     final def apply(key: String): INode[Id.Key] = apply(Id.Key(key, id))
+    def -(key: String): IMap[I]
   }
 
   type Map = IMap[Id]
