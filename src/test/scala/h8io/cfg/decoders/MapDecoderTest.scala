@@ -11,7 +11,6 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class MapDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
-
   "MapDecoder" should "return a map of decoded values if all values are decoded successfully" in {
     val map = mock[Node.Map]
     (() => map.iterator).expects().returns(

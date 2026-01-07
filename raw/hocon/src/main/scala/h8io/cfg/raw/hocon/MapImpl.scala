@@ -17,5 +17,7 @@ private[hocon] final case class MapImpl[+I <: Id](id: I, underlying: ConfigObjec
 
   override def size: Int = underlying.size()
 
+  def -(key: String): MapImpl[I] = MapImpl(id, underlying.withoutKey(key))
+
   override def toString: String = underlying.render(RenderOptions)
 }
