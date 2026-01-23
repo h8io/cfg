@@ -14,17 +14,16 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import scala.annotation.tailrec
 
 class PrimitivesTest extends AnyFlatSpec with Matchers with MockFactory with ScalaCheckPropertyChecks {
-  private def caseIterator(s: String): Iterator[String] =
-    (0 until (1 << s.length)).iterator.map { i =>
-      val chars = s.toCharArray
-      @tailrec def loop(j: Int, i: Int): Unit =
-        if (j < chars.length && i > 0) {
-          if (i % 2 == 1) chars(j) = chars(j).toUpper
-          loop(j + 1, i >> 1)
-        }
-      loop(0, i)
-      new String(chars)
-    }
+  private def caseIterator(s: String): Iterator[String] = (0 until (1 << s.length)).iterator.map { i =>
+    val chars = s.toCharArray
+    @tailrec def loop(j: Int, i: Int): Unit =
+      if (j < chars.length && i > 0) {
+        if (i % 2 == 1) chars(j) = chars(j).toUpper
+        loop(j + 1, i >> 1)
+      }
+    loop(0, i)
+    new String(chars)
+  }
 
   "caseIterator" should "return all possible cases for a lower case string" in {
     caseIterator("abc").toSet shouldBe Set("abc", "Abc", "aBc", "ABc", "abC", "AbC", "aBC", "ABC")
