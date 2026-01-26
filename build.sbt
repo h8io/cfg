@@ -55,10 +55,11 @@ ThisBuild / scalaVersion := "2.13.18"
 ThisBuild / crossScalaVersions += "2.12.21"
 
 ThisBuild / libraryDependencies ++= TestBundle % Test
-ThisBuild / libraryDependencies ++= (CrossVersion.partialVersion(scalaVersion.value) match {
-  case Some((2, 12)) => Seq(ScalaCollectionCompat)
-  case _ => Nil
-})
+ThisBuild / libraryDependencies ++=
+  (CrossVersion.partialVersion(scalaVersion.value) match {
+    case Some((2, 12)) => Seq(ScalaCollectionCompat)
+    case _ => Nil
+  })
 
 val raw = (project in file("raw")).settings(name := "cfg-raw")
 
