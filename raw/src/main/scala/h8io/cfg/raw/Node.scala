@@ -48,10 +48,14 @@ object Node {
     def unapply[I <: Id](node: IScalar[I]): Option[(I, String, Location)] = Some((node.id, node.value, node.location))
   }
 
-  sealed trait IContainer[+I <: Id, CI <: Id] extends IValue[I] with (CI => INode[CI]) {
-    def iterator: Iterator[ISome[CI]]
-    def size: Int
-    final def isEmpty: Boolean = size == 0
+  // TODO Drop it when we drop Scala 2.12 support
+  private[Node] trait Iterable[+A] extends scala.Iterable[A] {
+    def knownSize: Int
+  }
+
+  sealed trait IContainer[+I <: Id, CI <: Id] extends IValue[I] with (CI => INode[CI]) with Iterable[ISome[CI]] {
+    override final def isEmpty: Boolean = size == 0
+    override final def knownSize: Int = size
   }
 
   private type Container[CI <: Id] = IContainer[Id, CI]
