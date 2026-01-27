@@ -17,16 +17,16 @@ import java.time.Instant
 import java.util.UUID
 
 class DecoderLawsTest extends AnyFunSuite with FunSuiteDiscipline with Checkers with MockFactory {
-  protected implicit def arbDecoder[T: Arbitrary]: Arbitrary[Decoder[T]] =
+  protected implicit def arbDecoder[DT: Arbitrary]: Arbitrary[Decoder[DT]] =
     Arbitrary {
       Gen.oneOf(
-        Arbitrary.arbitrary[T].map[Decoder[T]](value => (_: Node.Value) => value.valid),
-        Gen.const[Decoder[T]]((key: Node.Value) => MockNodeError(key).invalid)
+        Arbitrary.arbitrary[DT].map[Decoder[DT]](value => (_: Node.Value) => value.valid),
+        Gen.const[Decoder[DT]]((key: Node.Value) => MockNodeError(key).invalid)
       )
     }
 
-  protected implicit def decoderEq[T]: Eq[Decoder[T]] = {
-    def eq(id: Id, a: Decoder[T], b: Decoder[T]): Boolean = {
+  protected implicit def decoderEq[DT]: Eq[Decoder[DT]] = {
+    def eq(id: Id, a: Decoder[DT], b: Decoder[DT]): Boolean = {
       val location = MockLocation(s"location for $id")
       val scalarNode = Node.Scalar(id, "scalar value", location)
       val mapNode = mock[Node.Map]
@@ -35,7 +35,7 @@ class DecoderLawsTest extends AnyFunSuite with FunSuiteDiscipline with Checkers 
       a.apply(mapNode) == b.apply(mapNode) &&
       a.apply(seqNode) == b.apply(seqNode)
     }
-    Eq.instance[Decoder[T]] { (a, b) =>
+    Eq.instance[Decoder[DT]] { (a, b) =>
       eq(Id.Root, a, b) && eq(Id.Key("input-key", Id.Root), a, b) && eq(Id.Index(42, Id.Root), a, b)
     }
   }
