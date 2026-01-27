@@ -44,10 +44,6 @@ class NodeTest extends AnyFlatSpec with Matchers with MockFactory {
       matchPattern { case Node.Scalar(`key`, `value`, `location`) => }
   }
 
-  "Map" should "be mocked successfully" in {
-    "mock[Node.Map]" should compile
-  }
-
   "Map.isEmpty" should "return true if size is 0" in {
     val map = mock[Node.IMap[Id]]
     (() => map.size).expects().returning(0)
@@ -60,8 +56,10 @@ class NodeTest extends AnyFlatSpec with Matchers with MockFactory {
     map.isEmpty shouldBe false
   }
 
-  "Seq" should "be mocked successfully" in {
-    "mock[Node.Seq]" should compile
+  "Map.knownSize" should "return the size of the map" in {
+    val map = mock[Node.Map]
+    (() => map.size).expects().returning(42)
+    map.knownSize shouldBe 42
   }
 
   "Seq.isEmpty" should "return true if size is 0" in {
@@ -74,5 +72,11 @@ class NodeTest extends AnyFlatSpec with Matchers with MockFactory {
     val seq = mock[Node.ISeq[Id]]
     (() => seq.size).expects().returning(42)
     seq.isEmpty shouldBe false
+  }
+
+  "Seq.knownSize" should "return the size of the seq" in {
+    val seq = mock[Node.Seq]
+    (() => seq.size).expects().returning(42)
+    seq.knownSize shouldBe 42
   }
 }
