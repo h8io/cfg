@@ -5,7 +5,7 @@ object Dependencies {
 
   val Cats = "org.typelevel" %% "cats-core" % CatsVersion
 
-  val Config = "com.typesafe" % "config" % "1.4.6"
+  val Config = "com.typesafe" % "config" % "1.4.7"
 
   val ScalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.14.0"
 
