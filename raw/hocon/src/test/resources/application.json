@@ -1,0 +1,5 @@
+{
+  "yaml-config": false,
+  "hocon-config": false,
+  "json-config": true
+}

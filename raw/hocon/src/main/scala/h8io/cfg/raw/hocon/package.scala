@@ -1,18 +1,20 @@
 package h8io.cfg.raw
 
-import com.typesafe.config.{ConfigList, ConfigObject, ConfigRenderOptions, ConfigValue, ConfigValueType}
-import io.h8.config.yaml.ConfigFactory
+import com.typesafe.config.*
+import io.h8.config.yaml.{ConfigLoader, YamlConfigFactory}
 
 import java.net.URL
 
 package object hocon {
+  private val loader = ConfigLoader.builder().yamlFactory(YamlConfigFactory.builder().stringsOnly(true).build()).build()
+
   def apply(urls: URL*): Node.IMap[Id.Root] =
     wrap(Id.Root,
       urls.iterator
-        .map(ConfigFactory.parseURL)
+        .map(loader.parseURL)
         .reduceOption((p, n) => n withFallback p)
         .map(ConfigFactory.load)
-        .getOrElse(ConfigFactory.load).root())
+        .getOrElse(loader.load).root())
 
   @inline private[hocon] def wrap[I <: Id](id: I, value: ConfigValue): Node.ISome[I] =
     value match {
