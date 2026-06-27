@@ -1,1 +1,3 @@
+-batch
+-Dsbt.supershell=false
 -J-Dsbt.color=always
