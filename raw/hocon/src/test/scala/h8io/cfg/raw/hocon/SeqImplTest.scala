@@ -84,6 +84,10 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     }
   }
 
+  "tag" should "always return None" in {
+    SeqImpl(Id.Root, mock[ConfigList]).tag shouldBe None
+  }
+
   "iterator" should "return a correct sequence of nodes" in {
     val list = hocon"""list: [a, null, b, c, null, "null"]""".toConfig.getList("list")
     SeqImpl(Id.Root, list).iterator.zipWithIndex.map { case (node, i) =>

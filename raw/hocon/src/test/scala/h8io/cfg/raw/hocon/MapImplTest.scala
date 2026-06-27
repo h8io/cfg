@@ -74,6 +74,10 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     }
   }
 
+  "tag" should "always return None" in {
+    MapImpl(Id.Root, mock[ConfigObject]).tag shouldBe None
+  }
+
   "iterator" should "return a correct sequence of nodes" in {
     val obj = hocon"""a: null, b: c, null: "null""""
     MapImpl(Id.Root, obj).iterator.map { node =>
