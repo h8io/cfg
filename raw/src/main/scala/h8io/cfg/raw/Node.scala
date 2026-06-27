@@ -19,33 +19,37 @@ object Node {
   }
 
   sealed trait ISome[+I <: Id] extends INode[I] {
+    def tag: Option[String]
     def location: Location
   }
 
   type Some = ISome[Id]
 
-  final case class INull[+I <: Id](id: I, location: Location) extends ISome[I] with NodeError {
+  final case class INull[+I <: Id](id: I, tag: Option[String], location: Location) extends ISome[I] with NodeError {
     def node: INull[I] = this
   }
 
   type Null = INull[Id]
 
   object Null {
-    def apply[I <: Id](id: I, location: Location): INull[I] = INull(id, location)
-    def unapply[I <: Id](node: INull[I]): Option[(I, Location)] = Some((node.id, node.location))
+    def apply[I <: Id](id: I, tag: Option[String], location: Location): INull[I] = INull(id, tag, location)
+    def unapply[I <: Id](node: INull[I]): Option[(I, Option[String], Location)] =
+      Some((node.id, node.tag, node.location))
   }
 
   sealed trait IValue[+I <: Id] extends ISome[I]
 
   type Value = IValue[Id]
 
-  final case class IScalar[+I <: Id](id: I, value: String, location: Location) extends IValue[I]
+  final case class IScalar[+I <: Id](id: I, tag: Option[String], value: String, location: Location) extends IValue[I]
 
   type Scalar = IScalar[Id]
 
   object Scalar {
-    def apply[I <: Id](id: I, value: String, location: Location): IScalar[I] = IScalar(id, value, location)
-    def unapply[I <: Id](node: IScalar[I]): Option[(I, String, Location)] = Some((node.id, node.value, node.location))
+    def apply[I <: Id](id: I, tag: Option[String], value: String, location: Location): IScalar[I] =
+      IScalar(id, tag, value, location)
+    def unapply[I <: Id](node: IScalar[I]): Option[(I, Option[String], String, Location)] =
+      Some((node.id, node.tag, node.value, node.location))
   }
 
   // TODO Drop it when we drop Scala 2.12 support
