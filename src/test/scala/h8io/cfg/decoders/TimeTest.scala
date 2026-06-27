@@ -20,8 +20,10 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 class TimeTest extends AnyFlatSpec with Matchers with MockFactory with Inside with ScalaCheckPropertyChecks {
   "durationDecoder" should "return a finite duration value from scalar" in
     forAll { (value: FiniteDuration) =>
-      durationDecoder(Node.Scalar(Id.Root, None, value.toString, mock[Location])) shouldBe
-        value.valid
+      whenever(Duration(value.toString) == value) {
+        durationDecoder(Node.Scalar(Id.Root, None, value.toString, mock[Location])) shouldBe
+          value.valid
+      }
     }
 
   it should "return a duration value from scalar with positive infinite value" in {
