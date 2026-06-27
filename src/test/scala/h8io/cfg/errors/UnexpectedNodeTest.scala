@@ -10,8 +10,8 @@ import org.scalatest.matchers.should.Matchers
 class UnexpectedNodeTest extends AnyFlatSpec with Matchers with MockFactory {
   "hashCode" should "be the same for equal UnexpectedNode objects" in {
     val location = mock[Location]
-    val node1 = Node.Scalar(Id.Root, "Cthulhu", location)
-    val node2 = Node.Scalar(Id.Root, "Cthulhu", location)
+    val node1 = Node.Scalar(Id.Root, None, "Cthulhu", location)
+    val node2 = Node.Scalar(Id.Root, None, "Cthulhu", location)
     UnexpectedNode[String](node1).hashCode() shouldEqual UnexpectedNode[String](node2).hashCode()
   }
 
