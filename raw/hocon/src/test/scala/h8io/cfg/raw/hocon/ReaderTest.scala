@@ -20,6 +20,11 @@ class ReaderTest extends AnyFlatSpec with Matchers {
     cfg("src") should matchPattern { case Node.Scalar(Id.Key("src", Id.Root), "reference", _) => }
     cfg("property") should matchPattern { case Node.None(Id.Key("property", Id.Root), _) => }
     cfg("nullable") should matchPattern { case Node.None(Id.Key("nullable", Id.Root), _) => }
+    cfg("yaml-config") should matchPattern { case Node.Scalar(Id.Key("yaml-config", Id.Root), "true", _) => }
+    cfg("hocon-config") should matchPattern { case Node.Scalar(Id.Key("hocon-config", Id.Root), "true", _) => }
+    cfg("json-config") should matchPattern { case Node.Scalar(Id.Key("json-config", Id.Root), "true", _) => }
+    cfg("properties-config") should matchPattern { case Node.Scalar(Id.Key("properties-config", Id.Root), "true", _) =>
+    }
   }
 
   it should "read from a single URL" in {
