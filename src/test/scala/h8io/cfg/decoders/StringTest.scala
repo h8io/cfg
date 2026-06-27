@@ -10,6 +10,6 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 class StringTest extends AnyFlatSpec with Matchers with MockFactory with ScalaCheckPropertyChecks {
   "stringDecoder" should "return a string value from scalar" in
     forAll { (value: String) =>
-      stringDecoder(Node.Scalar(Id.Root, value, mock[Location])) shouldBe value.valid
+      stringDecoder(Node.Scalar(Id.Root, None, value, mock[Location])) shouldBe value.valid
     }
 }

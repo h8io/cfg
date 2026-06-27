@@ -18,14 +18,14 @@ class OptionalPropertyTest extends AnyFlatSpec with Matchers with MockFactory wi
         implicit val decoder: Decoder[String] = mock[Decoder[String]]("decoder")
         val property = OptionalProperty(name)
         inSequence {
-          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
+          val node = Node.Scalar(Id.Key(name, Id.Root), None, value, MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           (decoder.apply _).expects(node).returning(result.valid)
           property(root) shouldBe Some(result).valid
         }
         inSequence {
-          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
+          val node = Node.Scalar(Id.Key(name, Id.Root), None, value, MockLocation(description))
           val error = mock[NodeError]
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
@@ -33,7 +33,7 @@ class OptionalPropertyTest extends AnyFlatSpec with Matchers with MockFactory wi
           property(root) shouldBe error.invalid
         }
         inSequence {
-          val node = Node.Null(Id.Key(name, Id.Root), MockLocation(description))
+          val node = Node.Null(Id.Key(name, Id.Root), None, MockLocation(description))
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)
           property(root) shouldBe None.valid
@@ -53,7 +53,7 @@ class OptionalPropertyTest extends AnyFlatSpec with Matchers with MockFactory wi
         implicit val decoder: Decoder[String] = mock[Decoder[String]]("decoder")
         val property = OptionalProperty(name)
         inSequence {
-          val node = Node.Scalar(Id.Key(name, Id.Root), value, MockLocation(description))
+          val node = Node.Scalar(Id.Key(name, Id.Root), None, value, MockLocation(description))
           val exception = new RuntimeException("decoder exception")
           (() => root.id).expects().returning(Id.Root)
           (root.apply(_: Id.Key)).expects(Id.Key(name, Id.Root)).returning(node)

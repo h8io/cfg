@@ -15,10 +15,10 @@ class VectorDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
     val seq = mock[Node.Seq]
     (() => seq.iterator).expects().returns(
       Iterator("abc", "def", "ghi").zipWithIndex.map { case (v, i) =>
-        Node.Scalar(Id.Index(i, Id.Root), v, MockLocation(s"$v location ($i)"))
+        Node.Scalar(Id.Index(i, Id.Root), None, v, MockLocation(s"$v location ($i)"))
       })
     def decoder: Decoder[String] = {
-      case Node.Scalar(_, v, _) => s"decoded $v".valid
+      case Node.Scalar(_, _, v, _) => s"decoded $v".valid
       case node: Node => UnexpectedNode[String](node).invalid
     }
     vectorDecoder[String](decoder)(seq) shouldBe Vector("decoded abc", "decoded def", "decoded ghi").valid
@@ -28,19 +28,19 @@ class VectorDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
     val seq = mock[Node.Seq]
     val mapItem = mock[Node.IMap[Id.Index]]
     val seqItem = mock[Node.ISeq[Id.Index]]
-    val nullItem = Node.Null(Id.Index(6, Id.Root), MockLocation(s"null location (6)"))
+    val nullItem = Node.Null(Id.Index(6, Id.Root), None, MockLocation(s"null location (6)"))
     (() => seq.iterator).expects().returns(
       Iterator(
-        Node.Scalar(Id.Index(0, Id.Root), "first", MockLocation(s"first location (0)")),
+        Node.Scalar(Id.Index(0, Id.Root), None, "first", MockLocation(s"first location (0)")),
         mapItem,
-        Node.Scalar(Id.Index(2, Id.Root), "third", MockLocation(s"third location (2)")),
+        Node.Scalar(Id.Index(2, Id.Root), None, "third", MockLocation(s"third location (2)")),
         seqItem,
-        Node.Scalar(Id.Index(4, Id.Root), "fifth", MockLocation(s"fifth location (4)")),
-        Node.Scalar(Id.Index(5, Id.Root), "sixth", MockLocation(s"sixth location (5)")),
+        Node.Scalar(Id.Index(4, Id.Root), None, "fifth", MockLocation(s"fifth location (4)")),
+        Node.Scalar(Id.Index(5, Id.Root), None, "sixth", MockLocation(s"sixth location (5)")),
         nullItem
       ))
     def decoder: Decoder[String] = {
-      case Node.Scalar(_, v, _) => s"decoded $v".valid
+      case Node.Scalar(_, _, v, _) => s"decoded $v".valid
       case node: Node => UnexpectedNode[String](node).invalid
     }
     vectorDecoder[String](decoder)(seq) shouldBe

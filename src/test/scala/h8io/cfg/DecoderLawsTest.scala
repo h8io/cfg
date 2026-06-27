@@ -28,7 +28,7 @@ class DecoderLawsTest extends AnyFunSuite with FunSuiteDiscipline with Checkers 
   protected implicit def decoderEq[DT]: Eq[Decoder[DT]] = {
     def eq(id: Id, a: Decoder[DT], b: Decoder[DT]): Boolean = {
       val location = MockLocation(s"location for $id")
-      val scalarNode = Node.Scalar(id, "scalar value", location)
+      val scalarNode = Node.Scalar(id, None, "scalar value", location)
       val mapNode = mock[Node.Map]
       val seqNode = mock[Node.Seq]
       a.apply(scalarNode) == b.apply(scalarNode) &&
