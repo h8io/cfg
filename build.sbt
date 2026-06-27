@@ -61,13 +61,18 @@ ThisBuild / libraryDependencies ++=
     case _ => Nil
   })
 
-val raw = (project in file("raw")).settings(name := "cfg-raw")
+val cfg = (project in file("cfg"))
+  .settings(name := ProjectName)
 
-val hocon = (project in file("raw/hocon"))
-  .settings(name := "cfg-raw-hocon", libraryDependencies += Config)
-  .dependsOn(raw)
+val fluent = (project in file("fluent"))
+  .settings(name := "cfg-fluent", libraryDependencies ++= Seq(Cats, H8IOReflect))
+  .dependsOn(cfg)
 
-val root = (project in file(".")).enablePlugins(ScoverageSummaryPlugin).settings(
-  name := ProjectName,
-  libraryDependencies ++= Seq(Cats, H8IOReflect)
-).dependsOn(raw).aggregate(raw, hocon)
+val hocon = (project in file("impl/hocon"))
+  .settings(name := "cfg-hocon", libraryDependencies += Config)
+  .dependsOn(cfg)
+
+val root = (project in file("."))
+  .enablePlugins(ScoverageSummaryPlugin)
+  .settings(name := "cfg-all", publish / skip := true)
+  .aggregate(cfg, hocon, fluent)
