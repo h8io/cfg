@@ -64,8 +64,8 @@ ThisBuild / libraryDependencies ++=
 val cfg = (project in file("cfg"))
   .settings(name := ProjectName)
 
-val fluent = (project in file("fluent"))
-  .settings(name := "cfg-fluent", libraryDependencies ++= Seq(Cats, H8IOReflect))
+val schema = (project in file("schema"))
+  .settings(name := "cfg-schema", libraryDependencies ++= Seq(Cats, H8IOReflect))
   .dependsOn(cfg)
 
 val hocon = (project in file("impl/hocon"))
@@ -75,4 +75,4 @@ val hocon = (project in file("impl/hocon"))
 val root = (project in file("."))
   .enablePlugins(ScoverageSummaryPlugin)
   .settings(name := "cfg-all", publish / skip := true)
-  .aggregate(cfg, hocon, fluent)
+  .aggregate(cfg, hocon, schema)
