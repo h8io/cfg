@@ -13,11 +13,11 @@ sbt +test
 
 # Run tests for a single module
 sbt cfg/test
-sbt fluent/test
+sbt schema/test
 sbt hocon/test
 
 # Run a single test class
-sbt "fluent/testOnly h8io.cfg.fluent.DecoderTest"
+sbt "schema/testOnly h8io.cfg.schema.DecoderTest"
 
 # Format source
 sbt scalafmt
@@ -31,13 +31,13 @@ sbt scalafmtSbtCheck scalafmtCheckAll
 
 ## Architecture
 
-The library provides a format-agnostic configuration tree, a typed decoding layer, and a HOCON/YAML loader.
+Two-layer design: `cfg` is the low-level protocol (a format-agnostic ADT for config trees); `schema` is the high-level API where direct ADT manipulation is hidden behind decoders and properties.
 
 ### Module layout
 
-- **`cfg`** — core AST and error types. No external dependencies.
-- **`fluent`** — decoder typeclass and property API. Depends on `cfg` + Cats + `io.h8:reflect`.
-- **`impl/hocon`** (artifact `cfg-hocon`) — loads HOCON and YAML into the AST using `typesafe-config` + `typesafe-config-yaml`.
+- **`cfg`** — low-level protocol: core AST and error types. No external dependencies.
+- **`schema`** (artifact `cfg-schema`) — high-level API: `Decoder` and `Property` abstractions that hide ADT manipulation. Depends on `cfg` + Cats + `io.h8:reflect`.
+- **`impl/hocon`** (artifact `cfg-hocon`) — loads HOCON and YAML into the `cfg` AST using `typesafe-config` + `typesafe-config-yaml`.
 - **root** (artifact `cfg-all`) — aggregate; not published.
 
 ### Core AST (`h8io.cfg`)
@@ -57,7 +57,7 @@ The library provides a format-agnostic configuration tree, a typed decoding laye
 
 `CfgError` / `NodeError` are traits for all error types; nodes that represent errors implement them directly.
 
-### Decoding layer (`h8io.cfg.fluent`)
+### Decoding layer (`h8io.cfg.schema`)
 
 `Decoder[+T]` is a type alias for `Node.Value => Validated[CfgError, T]`. The `Decoder` companion provides:
 - `Decoder[T](node)` — summons the implicit decoder and catches non-fatal exceptions as `Decoder.Thrown`
@@ -71,7 +71,7 @@ The library provides a format-agnostic configuration tree, a typed decoding laye
 - `MandatoryProperty[T]` — looks up `name` and decodes; `INone` and `INull` are errors
 - `OptionalProperty[T]` — same but `INone` returns `None` and wraps result in `Option`
 
-Error algebra in `h8io.cfg.fluent.errors`:
+Error algebra in `h8io.cfg.schema.errors`:
 - `&` on `CfgError` builds an `AndError` (collect-all, used when decoding multiple fields in parallel via `Applicative`)
 - `|` builds an `OrError` (tried-alternatives)
 
