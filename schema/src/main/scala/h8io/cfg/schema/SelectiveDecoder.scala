@@ -3,9 +3,9 @@ package h8io.cfg.schema
 import cats.syntax.all.*
 import h8io.cfg.schema.errors.UnexpectedNode
 import h8io.cfg.Node
-import h8io.reflect.Type
+import izumi.reflect.Tag
 
-abstract class BaseDecoder[+T: Type] extends Decoder[T] {
+abstract class SelectiveDecoder[+T: Tag] extends Decoder[T] {
   final def apply(node: Node.Value): CfgValue[T] =
     node match {
       case scalar: Node.Scalar => parse(scalar)

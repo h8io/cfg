@@ -4,7 +4,6 @@ import cats.data.Validated
 import cats.syntax.all.*
 import h8io.cfg.schema.errors.UnexpectedNode
 import h8io.cfg.{Id, Location, Node}
-import h8io.reflect.typeOf
 import org.scalacheck.Gen
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.Inside
