@@ -1,9 +1,10 @@
 package h8io.cfg.schema.errors
 
 import h8io.cfg.{Node, NodeError}
-import h8io.reflect.Type
+import izumi.reflect.Tag
+import izumi.reflect.macrortti.LightTypeTag
 
-final class UnexpectedNode[T](val node: Node.Value, val tp: Type[T]) extends NodeError {
+final class UnexpectedNode[T](val node: Node.Value, val tp: LightTypeTag) extends NodeError {
   override def hashCode(): Int = node.hashCode() * 31 + tp.hashCode()
 
   override def equals(obj: Any): Boolean =
@@ -14,5 +15,5 @@ final class UnexpectedNode[T](val node: Node.Value, val tp: Type[T]) extends Nod
 }
 
 object UnexpectedNode {
-  def apply[T](node: Node.Value)(implicit tp: Type[T]): UnexpectedNode[T] = new UnexpectedNode[T](node, tp)
+  def apply[T: Tag](node: Node.Value): UnexpectedNode[T] = new UnexpectedNode[T](node, Tag[T].tag)
 }

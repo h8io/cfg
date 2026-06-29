@@ -5,7 +5,7 @@ import h8io.cfg.schema.Decoder
 import h8io.cfg.schema.errors.{CfgErrorOps, UnexpectedNode}
 import h8io.cfg.schema.testutil.MockLocation
 import h8io.cfg.{Id, Node}
-import h8io.reflect.typeOf
+import izumi.reflect.Tag
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -21,7 +21,7 @@ class MapDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
       case Node.Scalar(_, _, v, _) => s"decoded $v".valid
       case node: Node => UnexpectedNode[String](node).invalid
     }
-    mapDecoder[String](decoder)(map) shouldBe
+    mapDecoder[String](decoder, Tag[String])(map) shouldBe
       Map("abc" -> "decoded zyx", "def" -> "decoded wvu", "ghi" -> "decoded tsr").valid
   }
 
@@ -43,7 +43,13 @@ class MapDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
       case Node.Scalar(_, _, v, _) => s"decoded $v".valid
       case node: Node => UnexpectedNode[String](node).invalid
     }
-    mapDecoder[String](decoder)(map) shouldBe
+    mapDecoder[String](decoder, Tag[String])(map) shouldBe
       (UnexpectedNode[String](mapItem) & UnexpectedNode[String](seqItem)).invalid
+  }
+
+  it should "return UnexpectedNode[Map[String, String]] if node is not a Map" in {
+    val scalar = Node.Scalar(Id.Root, None, "value", MockLocation("loc"))
+    def decoder: Decoder[String] = { case node: Node => UnexpectedNode[String](node).invalid }
+    mapDecoder[String](decoder, Tag[String])(scalar) shouldBe UnexpectedNode[Map[String, String]](scalar).invalid
   }
 }

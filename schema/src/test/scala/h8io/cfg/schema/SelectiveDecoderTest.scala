@@ -4,15 +4,14 @@ import cats.data.Validated
 import cats.syntax.all.*
 import h8io.cfg.schema.errors.UnexpectedNode
 import h8io.cfg.{Id, Location, Node}
-import h8io.reflect.typeOf
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.Inside
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-class BaseDecoderTest extends AnyFlatSpec with Matchers with Inside with MockFactory {
-  "BaseDecoder" should "parse scalar if scalar parse method is overridden" in {
-    val decoder = new BaseDecoder[Node.Scalar] {
+class SelectiveDecoderTest extends AnyFlatSpec with Matchers with Inside with MockFactory {
+  "SelectiveDecoder" should "parse scalar if scalar parse method is overridden" in {
+    val decoder = new SelectiveDecoder[Node.Scalar] {
       override protected def parse(scalar: Node.Scalar): CfgValue[Node.Scalar] = scalar.valid
     }
     val scalar = Node.Scalar(Id.Root, None, "test scalar", mock[Location])
@@ -20,13 +19,13 @@ class BaseDecoderTest extends AnyFlatSpec with Matchers with Inside with MockFac
   }
 
   it should "not parse scalar if scalar parse method is not overridden" in {
-    val decoder = new BaseDecoder[Any] {}
+    val decoder = new SelectiveDecoder[Any] {}
     val scalar = Node.Scalar(Id.Root, None, "test scalar", mock[Location])
     decoder(scalar) shouldBe UnexpectedNode[Any](scalar).invalid
   }
 
   it should "parse map if map parse method is overridden" in {
-    val decoder = new BaseDecoder[Node.Map] {
+    val decoder = new SelectiveDecoder[Node.Map] {
       override protected def parse(map: Node.Map): CfgValue[Node.Map] = map.valid
     }
     val map = mock[Node.Map]
@@ -34,13 +33,13 @@ class BaseDecoderTest extends AnyFlatSpec with Matchers with Inside with MockFac
   }
 
   it should "not parse map if map parse method is not overridden" in {
-    val decoder = new BaseDecoder[Any] {}
+    val decoder = new SelectiveDecoder[Any] {}
     val map = mock[Node.Map]
     decoder(map) shouldBe UnexpectedNode[Any](map).invalid
   }
 
   it should "parse seq if seq parse method is overridden" in {
-    val decoder = new BaseDecoder[Node.Seq] {
+    val decoder = new SelectiveDecoder[Node.Seq] {
       override protected def parse(seq: Node.Seq): CfgValue[Node.Seq] = seq.valid
     }
     val map = mock[Node.Seq]
@@ -48,7 +47,7 @@ class BaseDecoderTest extends AnyFlatSpec with Matchers with Inside with MockFac
   }
 
   it should "not parse seq if seq parse method is not overridden" in {
-    val decoder = new BaseDecoder[Any] {}
+    val decoder = new SelectiveDecoder[Any] {}
     val map = mock[Node.Seq]
     decoder(map) shouldBe UnexpectedNode[Any](map).invalid
   }

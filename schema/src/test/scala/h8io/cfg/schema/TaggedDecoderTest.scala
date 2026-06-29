@@ -4,7 +4,6 @@ import cats.syntax.all.*
 import h8io.cfg.schema.errors.{AmbiguousMap, NonScalarTag, UnexpectedNode}
 import h8io.cfg.schema.testutil.MockLocation
 import h8io.cfg.{Id, Node}
-import h8io.reflect.typeOf
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

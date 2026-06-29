@@ -65,7 +65,7 @@ val cfg = (project in file("cfg"))
   .settings(name := ProjectName)
 
 val schema = (project in file("schema"))
-  .settings(name := "cfg-schema", libraryDependencies ++= Seq(Cats, H8IOReflect))
+  .settings(name := "cfg-schema", libraryDependencies ++= Seq(Cats, IzumiReflect))
   .dependsOn(cfg)
 
 val hocon = (project in file("impl/hocon"))

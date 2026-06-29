@@ -5,7 +5,6 @@ import cats.syntax.all.*
 import h8io.cfg.schema.errors.UnexpectedNode
 import h8io.cfg.schema.{errors, Decoder}
 import h8io.cfg.{Id, Location, Node}
-import h8io.reflect.typeOf
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
