@@ -3,12 +3,11 @@ package h8io.cfg.schema
 import cats.syntax.all.*
 import h8io.cfg.Node
 import h8io.cfg.schema.errors.{AmbiguousMap, NonScalarTag}
-import h8io.reflect.typeOf
 
 final case class Tagged(tag: String, node: Node.Some)
 
 object Tagged {
-  val decoder: Decoder[Tagged] = new BaseDecoder[Tagged] {
+  val decoder: Decoder[Tagged] = new SelectiveDecoder[Tagged] {
     override def parse(map: Node.Map): CfgValue[Tagged] =
       map.tag match {
         case Some(tag) => Tagged(tag, map).valid

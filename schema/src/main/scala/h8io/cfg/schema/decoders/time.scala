@@ -4,7 +4,6 @@ import cats.syntax.all.*
 import h8io.cfg.schema.Decoder
 import h8io.cfg.schema.Decoder.*
 import h8io.cfg.schema.errors.UnexpectedNode
-import h8io.reflect.typeOf
 
 import java.text.SimpleDateFormat
 import scala.concurrent.duration.{Duration, FiniteDuration}

@@ -1,7 +1,6 @@
 package h8io.cfg.schema.errors
 
 import h8io.cfg.{CfgError, Id, Location, Node}
-import h8io.reflect.typeOf
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
