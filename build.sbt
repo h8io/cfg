@@ -3,6 +3,7 @@ import h8io.sbt.dependencies.*
 import sbt.*
 
 val ProjectName = "cfg"
+val SiteRoot = s"https://cfg.h8.io/"
 
 ThisBuild / organization := "io.h8"
 ThisBuild / organizationName := "H8IO"
@@ -76,3 +77,16 @@ val root = (project in file("."))
   .enablePlugins(ScoverageSummaryPlugin)
   .settings(name := "cfg-all", publish / skip := true)
   .aggregate(cfg, hocon, schema)
+
+val pages = (project in file("pages"))
+  .settings(
+    name := "cfg-pages",
+    publish / skip := true,
+    publishLocal / skip := true,
+    TestScalaUnidoc / unidoc / unidocProjectFilter := inAnyProject -- inProjects(root),
+    tlSiteApiUrl := Some(url(s"${SiteRoot}api/scala-2.13/")),
+    tlSiteHelium ~= { _.site.mainNavigation(depth = 3) }
+  )
+  .dependsOn(root)
+  .aggregate(cfg, hocon, schema)
+  .enablePlugins(ScalaUnidocPlugin, TypelevelSitePlugin)
