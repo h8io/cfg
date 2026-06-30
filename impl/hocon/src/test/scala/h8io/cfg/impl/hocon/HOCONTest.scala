@@ -6,9 +6,9 @@ import org.scalatest.matchers.should.Matchers
 
 import java.net.URL
 
-class ReaderTest extends AnyFlatSpec with Matchers {
-  "package apply method" should "read application.conf with a empty URL list" in {
-    val cfg = apply()
+class HOCONTest extends AnyFlatSpec with Matchers {
+  "HOCON" should "read application.conf with a empty URL list" in {
+    val cfg = HOCON()
     cfg("application-config") should matchPattern {
       case Node.Scalar(Id.Key("application-config", Id.Root), None, "true", _) =>
     }
@@ -29,7 +29,7 @@ class ReaderTest extends AnyFlatSpec with Matchers {
   }
 
   it should "read from a single URL" in {
-    val cfg = apply(resource("base.conf"))
+    val cfg = HOCON(resource("base.conf"))
     cfg("application-config") should matchPattern { case Node.None(Id.Key("application-config", Id.Root), _) => }
     cfg("base-config") should matchPattern { case Node.Scalar(Id.Key("base-config", Id.Root), None, "true", _) => }
     cfg("override-config") should matchPattern { case Node.None(Id.Key("override-config", Id.Root), _) => }
@@ -42,7 +42,7 @@ class ReaderTest extends AnyFlatSpec with Matchers {
   }
 
   it should "read from two URLs" in {
-    val cfg = apply(resource("base.conf"), resource("override.conf"))
+    val cfg = HOCON(resource("base.conf"), resource("override.conf"))
     cfg("application-config") should matchPattern { case Node.None(Id.Key("application-config", Id.Root), _) => }
     cfg("base-config") should matchPattern { case Node.Scalar(Id.Key("base-config", Id.Root), None, "true", _) => }
     cfg("override-config") should matchPattern {
