@@ -8,6 +8,12 @@ final case class Tagged(tag: String, node: Node.Some)
 
 object Tagged {
   val decoder: Decoder[Tagged] = new SelectiveDecoder[Tagged] {
+    override def parse(scalar: Node.Scalar): CfgValue[Tagged] =
+      scalar.tag match {
+        case Some(tag) => Tagged(tag, scalar).valid
+        case None => Tagged(scalar.value, Node.Null(scalar.id, None, scalar.location)).valid
+      }
+
     override def parse(map: Node.Map): CfgValue[Tagged] =
       map.tag match {
         case Some(tag) => Tagged(tag, map).valid
