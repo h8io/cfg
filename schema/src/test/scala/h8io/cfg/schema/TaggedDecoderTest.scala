@@ -1,7 +1,7 @@
 package h8io.cfg.schema
 
 import cats.syntax.all.*
-import h8io.cfg.schema.errors.{AmbiguousMap, NonScalarTag, UnexpectedNode}
+import h8io.cfg.schema.errors.{AmbiguousMap, NonScalarTag}
 import h8io.cfg.schema.testutil.MockLocation
 import h8io.cfg.{Id, Node}
 import org.scalamock.scalatest.MockFactory
@@ -66,8 +66,13 @@ class TaggedDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
     Tagged.decoder(map) shouldBe AmbiguousMap(map).invalid
   }
 
-  it should "return UnexpectedNode for a scalar input" in {
-    val scalar = Node.Scalar(Id.Root, None, "x", loc)
-    Tagged.decoder(scalar) shouldBe UnexpectedNode[Tagged](scalar).invalid
+  it should "return the scalar as-is when it already has a tag" in {
+    val scalar = Node.Scalar(Id.Root, Some("existing"), "x", loc)
+    Tagged.decoder(scalar) shouldBe Tagged("existing", scalar).valid
+  }
+
+  it should "use the scalar value as tag and Node.Null as node when the scalar has no tag" in {
+    val scalar = Node.Scalar(Id.Root, None, "myTag", loc)
+    Tagged.decoder(scalar) shouldBe Tagged("myTag", Node.Null(Id.Root, None, loc)).valid
   }
 }
