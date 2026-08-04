@@ -25,6 +25,11 @@ ThisBuild / developers := List(
 
 ThisBuild / versionScheme := Some("semver-spec")
 
+ThisBuild / coverageSummaryStmtLowThreshold := 100
+ThisBuild / coverageSummaryStmtHighThreshold := 100
+ThisBuild / coverageSummaryBranchLowThreshold := 100
+ThisBuild / coverageSummaryBranchHighThreshold := 100
+
 ThisBuild / dynverSonatypeSnapshots := true
 ThisBuild / dynverSeparator := "-"
 
