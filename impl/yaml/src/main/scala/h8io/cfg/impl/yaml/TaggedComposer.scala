@@ -5,10 +5,10 @@ import org.snakeyaml.engine.v2.comments.CommentLine
 import org.snakeyaml.engine.v2.common.Anchor
 import org.snakeyaml.engine.v2.composer.Composer
 import org.snakeyaml.engine.v2.events.{CollectionStartEvent, ScalarEvent}
-import org.snakeyaml.engine.v2.nodes.{Node => YamlNode, SequenceNode}
+import org.snakeyaml.engine.v2.nodes.{Node as YamlNode, SequenceNode}
 import org.snakeyaml.engine.v2.parser.Parser
 
-import java.util.{List => JList, Optional}
+import java.util.{List as JList, Optional}
 
 /** A [[Composer]] that remembers which tags were actually written in the source.
   *
