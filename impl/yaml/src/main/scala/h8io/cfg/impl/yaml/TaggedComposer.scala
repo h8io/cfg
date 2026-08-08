@@ -9,6 +9,7 @@ import org.snakeyaml.engine.v2.nodes.{Node as YamlNode, SequenceNode}
 import org.snakeyaml.engine.v2.parser.Parser
 
 import java.util.{List as JList, Optional}
+import scala.jdk.OptionConverters.*
 
 /** A [[Composer]] that remembers which tags were actually written in the source.
   *
@@ -33,9 +34,7 @@ private[yaml] final class TaggedComposer(settings: LoadSettings, source: Parser)
   }
 
   private def tagged[N <: YamlNode](node: N, tag: Optional[String]): N = {
-    Option(tag.orElse(null))
-      .filter(_ != NonSpecificTag)
-      .foreach(value => node.setProperty(TagProperty, value))
+    tag.toScala.filter(_ != NonSpecificTag).foreach(value => node.setProperty(TagProperty, value))
     node
   }
 }
