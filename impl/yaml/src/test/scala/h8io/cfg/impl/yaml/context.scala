@@ -1,6 +1,6 @@
 package h8io.cfg.impl.yaml
 
-import org.snakeyaml.engine.v2.nodes.{MappingNode, Node => YamlNode, SequenceNode}
+import org.snakeyaml.engine.v2.nodes.{MappingNode, Node as YamlNode, SequenceNode}
 
 import java.io.StringReader
 import java.net.URL

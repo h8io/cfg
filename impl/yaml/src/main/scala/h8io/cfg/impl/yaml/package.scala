@@ -5,13 +5,13 @@ import org.snakeyaml.engine.v2.api.lowlevel.{Present, Serialize}
 import org.snakeyaml.engine.v2.api.{DumpSettings, LoadSettings}
 import org.snakeyaml.engine.v2.common.FlowStyle
 import org.snakeyaml.engine.v2.exceptions.{Mark, YamlEngineException}
-import org.snakeyaml.engine.v2.nodes.{MappingNode, Node => YamlNode, NodeTuple, ScalarNode, SequenceNode, Tag}
+import org.snakeyaml.engine.v2.nodes.{MappingNode, Node as YamlNode, NodeTuple, ScalarNode, SequenceNode, Tag}
 import org.snakeyaml.engine.v2.parser.ParserImpl
 import org.snakeyaml.engine.v2.scanner.StreamReader
 import org.snakeyaml.engine.v2.schema.{CoreSchema, Schema}
 
 import java.io.Reader
-import java.util.{Collections, List => JList, Optional}
+import java.util.{Collections, List as JList, Optional}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 

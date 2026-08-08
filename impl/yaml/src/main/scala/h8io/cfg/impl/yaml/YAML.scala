@@ -3,7 +3,7 @@ package h8io.cfg.impl.yaml
 import h8io.cfg.{Id, Node}
 import org.snakeyaml.engine.v2.api.YamlUnicodeReader
 import org.snakeyaml.engine.v2.exceptions.YamlEngineException
-import org.snakeyaml.engine.v2.nodes.{MappingNode, Node => YamlNode}
+import org.snakeyaml.engine.v2.nodes.{MappingNode, Node as YamlNode}
 
 import java.net.URL
 

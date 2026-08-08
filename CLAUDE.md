@@ -93,7 +93,8 @@ Unlike the HOCON loader this one sets `tag` — but only when the tag was *writt
 ## Conventions
 
 - Scala 2.13 is the primary version; 2.12 is cross-compiled. Use `+` prefix in sbt for cross-compilation.
-- Scalafmt dialect is `scala213source3` (Scala 3 syntax allowed in 2.13). Max line length 120.
+- Write Scala 3 syntax. The scalafmt dialect is `scala213source3` and scalac runs with `-Xsource:3`, so use
+  `import a.b.*` for wildcards and `import a.b.{C as D}` for renames — never `._` or `{C => D}`. Max line length 120.
 - Scalac options include `-Xfatal-warnings`; all warnings are errors.
 - Use `def` not `val` for implicit/constant definitions.
 - Explicit `None` for HOCON tags (never omit or infer).

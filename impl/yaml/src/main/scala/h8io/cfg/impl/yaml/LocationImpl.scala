@@ -2,7 +2,7 @@ package h8io.cfg.impl.yaml
 
 import h8io.cfg.Location
 import org.snakeyaml.engine.v2.exceptions.Mark
-import org.snakeyaml.engine.v2.nodes.{Node => YamlNode}
+import org.snakeyaml.engine.v2.nodes.Node as YamlNode
 
 private[yaml] final case class LocationImpl(mark: Option[Mark]) extends Location {
   override def description: String =
