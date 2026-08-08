@@ -78,10 +78,14 @@ val hocon = (project in file("impl/hocon"))
   .settings(name := "cfg-hocon", libraryDependencies += Config)
   .dependsOn(cfg)
 
+val yaml = (project in file("impl/yaml"))
+  .settings(name := "cfg-yaml", libraryDependencies += SnakeYaml)
+  .dependsOn(cfg)
+
 val root = (project in file("."))
   .enablePlugins(ScoverageSummaryPlugin)
   .settings(name := "cfg-all", publish / skip := true)
-  .aggregate(cfg, hocon, schema)
+  .aggregate(cfg, hocon, schema, yaml)
 
 val pages = (project in file("pages"))
   .settings(
@@ -93,5 +97,5 @@ val pages = (project in file("pages"))
     tlSiteHelium ~= { _.site.mainNavigation(depth = 3) }
   )
   .dependsOn(root)
-  .aggregate(cfg, hocon, schema)
+  .aggregate(cfg, hocon, schema, yaml)
   .enablePlugins(ScalaUnidocPlugin, TypelevelSitePlugin)

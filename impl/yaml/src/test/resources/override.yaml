@@ -1,0 +1,7 @@
+override-config: true
+source: overridden
+nullable: non-null
+server:
+  port: 9090
+  secure: true
+hosts: [x]

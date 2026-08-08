@@ -1,0 +1,8 @@
+base-config: true
+source: base
+property: 12
+nullable: ~
+server:
+  host: localhost
+  port: 8080
+hosts: [a, b, c]

@@ -1,0 +1,6 @@
+plain: 42
+tagged: !!int 42
+non-specific: ! "42"
+storage: !postgres
+  host: localhost
+ids: !identifiers [1, 2, 3]
