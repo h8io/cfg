@@ -7,6 +7,8 @@ object Dependencies {
 
   val Config = "io.h8" % "typesafe-config-yaml" % "1.2.1"
 
+  val SnakeYaml = "org.snakeyaml" % "snakeyaml-engine" % "3.0.1"
+
   val ScalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.14.0"
 
   val IzumiReflect = "dev.zio" %% "izumi-reflect" % "3.0.9"
