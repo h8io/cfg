@@ -15,6 +15,7 @@ sbt +test
 sbt cfg/test
 sbt schema/test
 sbt hocon/test
+sbt yaml/test
 
 # Run a single test class
 sbt "schema/testOnly h8io.cfg.schema.DecoderTest"
@@ -38,6 +39,7 @@ Two-layer design: `cfg` is the low-level protocol (a format-agnostic ADT for con
 - **`cfg`** — low-level protocol: core AST and error types. No external dependencies.
 - **`schema`** (artifact `cfg-schema`) — high-level API: `Decoder` and `Property` abstractions that hide ADT manipulation. Depends on `cfg` + Cats + `io.h8:reflect`.
 - **`impl/hocon`** (artifact `cfg-hocon`) — loads HOCON and YAML into the `cfg` AST using `typesafe-config` + `typesafe-config-yaml`.
+- **`impl/yaml`** (artifact `cfg-yaml`) — loads YAML into the `cfg` AST using `snakeyaml-engine` directly, propagating tags.
 - **root** (artifact `cfg-all`) — aggregate; not published.
 
 ### Core AST (`h8io.cfg`)
@@ -82,10 +84,17 @@ Built-in decoders (all `implicit`, mixed in via `decoders` package object):
 
 `hocon.apply(urls: URL*)` parses and merges the given URLs (HOCON or YAML), loads the result through `ConfigFactory.load` (for substitution resolution), and wraps it as `Node.IMap[Id.Root]`. YAML support comes from `io.h8:typesafe-config-yaml` with `stringsOnly = true` (all scalars become strings). Tags are not set by the HOCON loader (`None` always).
 
+### YAML loader (`h8io.cfg.impl.yaml`)
+
+`YAML.apply(urls: URL*)` composes each URL with `snakeyaml-engine` (YAML 1.2 core schema, so `~`/`Null`/`NULL` are nulls and `<<` merge keys work), overlays them in order, and wraps the result as `Node.IMap[Id.Root]`. Mappings merge recursively; scalars and sequences are replaced outright. No substitution step. A root that is not a mapping is an error; duplicate keys in a mapping collapse onto the last one.
+
+Unlike the HOCON loader this one sets `tag` — but only when the tag was *written* in the source, expanded through the tag handles in effect (`!!int` → `tag:yaml.org,2002:int`, `!postgres` stays `!postgres`). A tag the resolver inferred, and the non-specific `!`, both give `None`. Since `Composer` resolves a tag for every node and exposes no `isResolved`, `TaggedComposer` peeks at the parser event before each node is built and stashes the source tag in a node property that `tagOf` reads back.
+
 ## Conventions
 
 - Scala 2.13 is the primary version; 2.12 is cross-compiled. Use `+` prefix in sbt for cross-compilation.
-- Scalafmt dialect is `scala213source3` (Scala 3 syntax allowed in 2.13). Max line length 120.
+- Write Scala 3 syntax. The scalafmt dialect is `scala213source3` and scalac runs with `-Xsource:3`, so use
+  `import a.b.*` for wildcards and `import a.b.{C as D}` for renames — never `._` or `{C => D}`. Max line length 120.
 - Scalac options include `-Xfatal-warnings`; all warnings are errors.
 - Use `def` not `val` for implicit/constant definitions.
 - Explicit `None` for HOCON tags (never omit or infer).
