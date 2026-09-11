@@ -57,7 +57,7 @@ ThisBuild / scalacOptions ++=
 
 ThisBuild / javacOptions ++= Seq("--release", "11")
 
-ThisBuild / scalaVersion := "2.13.18"
+ThisBuild / scalaVersion := "3.9.0"
 ThisBuild / crossScalaVersions += "2.12.21"
 
 ThisBuild / libraryDependencies ++= TestBundle % Test
