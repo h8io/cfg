@@ -62,10 +62,14 @@ loader path.
   The two rules together buy a property worth keeping: the output of `Id.path` is itself valid
   source. `server."odd key"[0]` renders from a node and parses back to the same address. Any change
   to `Id.quote` has to be mirrored here, and vice versa.
-- **Unquoted scalars** run to the end of the line, or to the first `,`, `}`, `]` or `#`, with
-  surrounding whitespace trimmed. What is left becomes `IScalar.value` verbatim — `1e5` stays
+- **Unquoted scalars** contain no whitespace. One runs to the first whitespace, `,`, `}`, `]` or `#`;
+  after it only a separator, a comment or the end of the block may follow, so `a = foo bar` is an
+  error that says to quote the value. What was read becomes `IScalar.value` verbatim — `1e5` stays
   `"1e5"`, `true` stays `"true"`, `007` stays `"007"`. There is no type inference anywhere in the
-  parser.
+  parser. A value with spaces is written quoted: `greeting = "Hello, world"`.
+
+  The rule also frees `- ` (dash, space) at the start of an indented line for the sequence element
+  marker (§13): `- 5` can never be a scalar, `-5` and `"- 5"` always are.
 - **`null`** — the one reserved word. An unquoted scalar whose trimmed text is exactly `null`
   becomes `Node.INull`; `"null"` in quotes stays a scalar. A tag is kept: `!secret null` is an
   `INull` with `tag = Some("secret")`. `true`, `false` and every other word remain plain scalars.
@@ -286,6 +290,11 @@ mistake is worse than stopping.
    - A tab in indentation is an error.
    - A dedent must land exactly on a width in the stack. Recovery (§11): every line is reported as an
      error until one lands on a width from the stack again.
+   - **Sequences use a `- ` element marker.** Unquoted scalars contain no whitespace (§3), so a line
+     starting with `- ` is always an element: `- 5` is an element holding `5`, while `-5` and
+     `"- 5"` are scalars. Bare keys cannot start with `-` either, so the marker is never a key.
+     Whether a block opened by indentation is a map or a sequence is decided by its first line;
+     mixing fields and `- ` elements in one block is an error.
 
    Proposed, not confirmed:
    - A key at the end of a line followed by a deeper-indented line opens a block. No `:` — it would
@@ -308,9 +317,9 @@ mistake is worse than stopping.
    - **Silently shifted lines.** A line moved by exactly one level is still valid and changes parent.
      Braces make that mistake loud; the stack rule catches only misaligned lines. Accept, or find a
      mitigation (fixed width above is one).
-   - **Sequences without brackets.** v1 sequences are `[…]` only, where indentation is insignificant.
-     A YAML-like `-` element marker collides with scalars such as `-5`; a sequence of maps is the case
-     that actually needs an answer.
+   - **Maps as `- ` elements.** How a map element is written: fields continuing on the marker's line
+     (`- host = a`, next field aligned under `host`, as in YAML), or `-` alone with the map indented
+     below it, or both.
    - **Opt-in.** Enabled everywhere automatically, or per file (a directive, or a separate extension).
 
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
@@ -382,3 +391,8 @@ alternative listed here should not be re-proposed without new information.
   indentation are an error, and a misaligned dedent is reported on every line until indentation
   matches the stack again.
 
+- **Unquoted scalars contain no whitespace; a value with spaces is quoted.** The user's rule, and it
+  applies to v1, not only to indentation: it replaces "unquoted scalars run to the end of the line".
+  Since every value is a string anyway, nothing is lost but the quotes. It is what makes the
+  indentation sequence marker unambiguous — `- 5` is an element, `-5` and `"- 5"` are scalars —
+  and it turns a stray second word on a line into an error instead of part of the value.
