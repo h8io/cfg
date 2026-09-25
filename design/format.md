@@ -89,7 +89,9 @@ tag        = "!" identifier
 scalar     = null | bare-scalar | quoted-scalar | multiline-scalar
 ```
 
-Fields are separated by a newline or a `,`. `key { … }` needs no `=`. A dotted key
+Fields are separated by a newline or a `,`. `key { … }` needs no `=`, and the `{` must be on the
+same line as the key: `key` followed by `{` on the next line is an error. That keeps a key at the end
+of a line free for the indentation syntax (§13). A dotted key
 (`server.tls.enabled = true`) is sugar for nested blocks.
 
 ## 5. Values
@@ -295,6 +297,16 @@ mistake is worse than stopping.
      `"- 5"` are scalars. Bare keys cannot start with `-` either, so the marker is never a key.
      Whether a block opened by indentation is a map or a sequence is decided by its first line;
      mixing fields and `- ` elements in one block is an error.
+   - **A map element is written as in YAML:** its first field on the marker's line, the rest aligned
+     under that field's key. The column after `- ` becomes the element's indentation baseline.
+
+     ```
+     servers
+       - host = a
+         port = 1
+       - host = b
+         port = 2
+     ```
 
    Proposed, not confirmed:
    - A key at the end of a line followed by a deeper-indented line opens a block. No `:` — it would
@@ -308,18 +320,12 @@ mistake is worse than stopping.
      dedent rule would reject it. The alternative: indentation is significant only inside a block
      that was *opened* by indentation, and an explicit `{` switches it off until its `}`. Then no v1
      file changes meaning, but a braced block cannot contain an indented one.
-   - **Opening brace on the next line** (`key` ⏎ `{`). If v1 allows it, a key at the end of a line is
-     ambiguous with the indentation opener. Decide for v1 before it ships: forbidding it keeps the
-     door open.
    - **Mixing styles** in one file, and in one block.
    - **Indent width** — any deeper indent opens a block, or one step fixed per file (which would also
      catch some shifted lines).
    - **Silently shifted lines.** A line moved by exactly one level is still valid and changes parent.
      Braces make that mistake loud; the stack rule catches only misaligned lines. Accept, or find a
      mitigation (fixed width above is one).
-   - **Maps as `- ` elements.** How a map element is written: fields continuing on the marker's line
-     (`- host = a`, next field aligned under `host`, as in YAML), or `-` alone with the map indented
-     below it, or both.
    - **Opt-in.** Enabled everywhere automatically, or per file (a directive, or a separate extension).
 
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
@@ -396,3 +402,8 @@ alternative listed here should not be re-proposed without new information.
   Since every value is a string anyway, nothing is lost but the quotes. It is what makes the
   indentation sequence marker unambiguous — `- 5` is an element, `-5` and `"- 5"` are scalars —
   and it turns a stray second word on a line into an error instead of part of the value.
+- **`{` must be on the key's line.** Forbidden in v1 so that a key at the end of a line stays free to
+  open an indentation block later (§13). Rejected: allowing it, which would make that position
+  ambiguous the moment indentation is added.
+- **A map inside an indentation sequence is written as in YAML**: first field on the `- ` line, the
+  rest aligned under it. Rejected: `-` alone on a line with the map below it, and allowing both.
