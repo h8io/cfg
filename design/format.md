@@ -47,7 +47,7 @@ loader path.
 
 ## 3. Lexical structure
 
-- Encoding is UTF-8.
+- Encoding is UTF-8. A newline is LF or CRLF; a lone CR is an error.
 - `#` starts a comment that runs to the end of the line. There is deliberately no second comment
   form.
 - **Bare keys** match `Id.SafeKeyPattern` exactly — `^[\p{L}_][\p{L}\p{N}_-]*$`. Anything else is
@@ -67,6 +67,17 @@ loader path.
   error that says to quote the value. What was read becomes `IScalar.value` verbatim — `1e5` stays
   `"1e5"`, `true` stays `"true"`, `007` stays `"007"`. There is no type inference anywhere in the
   parser. A value with spaces is written quoted: `greeting: "Hello, world"`.
+
+  An unquoted scalar may not start with `'`: YAML's `a: 'x'` would otherwise parse silently to a
+  value with the quotes kept. `~` gets no rule — it is the string `~`, and `null` is written out.
+- **`:` after a key** must be followed by whitespace or the end of the line, so `a:b` in a block is an
+  error with a hint rather than a field. Inside a value `:` is ordinary: `url: http://host:8080`.
+- **Separators** are `,` and newline, nothing else — whitespace never separates, so `[foo bar]` and
+  `a: 1 b: 2` are errors, not two elements or two fields. After any value, scalar or container,
+  only a separator, a comment or the closing bracket may follow: `a { x: 1 } b: 2` needs a `,`.
+  A `,` followed by a newline is one separator, and blank lines separate nothing extra. An empty
+  element (`[a,,b]`, `[, a]`) is an error — there is no empty value, `null` is written out. A
+  trailing separator is allowed in sequences and blocks alike.
 
   The rule also frees `- ` (dash, space) at the start of an indented line for the sequence element
   marker (§13): `- 5` can never be a scalar, `-5` and `"- 5"` always are.
@@ -89,7 +100,7 @@ tag        = "!" identifier
 scalar     = null | bare-scalar | quoted-scalar | multiline-scalar
 ```
 
-Fields are separated by a newline or a `,`. `key { … }` needs no `:`, and the `{` must be on the
+Fields are separated by a newline or a `,` (§3). `key { … }` needs no `:`, and the `{` must be on the
 same line as the key: `key` followed by `{` on the next line is an error. That keeps a key at the end
 of a line free for the indentation syntax (§13). A dotted key
 (`server.tls.enabled: true`) is sugar for nested blocks.
@@ -135,6 +146,10 @@ and may appear in two positions:
 - **statement position**, inside any block or at the top of a file — it must produce a map, which is
   merged into the enclosing block at the point where it appears, so fields below it override it;
 - **value position**, on the right of `:` or as a sequence element — it produces a single node.
+
+Arguments are separated like everything else, by `,` or a newline, so a long directive can be split
+across lines. They keep `name = literal`, not `name: literal`: a directive is a call with named
+arguments, as in Scala, not a block of fields.
 
 Argument literals are strings, bare identifiers, `true`/`false` and integers. Arguments are
 **literal only — no substitutions**. This is not a simplification, it is forced by the phase order in
@@ -188,7 +203,8 @@ from a substitution.
 - `${path}` in place of a whole value grafts the referenced node, whatever it is — scalar, block or
   sequence.
 - `prefix${path}suffix` concatenates; the referenced node must then be a scalar, and the result is a
-  scalar.
+  scalar. The parts touch: `"a" ${b}` with a space between is an error, not a concatenation with a
+  space as in HOCON — whitespace never joins or separates values.
 - `${?path}` is optional: when it does not resolve, the field is omitted entirely, so a later lookup
   yields `Node.INone` rather than an error.
 - Lookup order is the merged tree, then system properties, then environment variables — the HOCON
@@ -332,12 +348,6 @@ mistake is worse than stopping.
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
    indentation can claim it later.
 
-3. **Details of `:`.** Whether whitespace (or end of line) is required after it, which would make
-   `a:b` in a block an error rather than a field; whether an unquoted value may start with `'`
-   (YAML's `a: 'x'` would otherwise silently keep the quotes), and whether `~` needs a rule; and
-   whether directive arguments stay `name = literal` (Scala named-argument style) or follow fields
-   to `name: literal`.
-
 ## 14. Decision log
 
 Each entry records what was chosen, and — where it matters — what was rejected and why. A rejected
@@ -421,3 +431,12 @@ alternative listed here should not be re-proposed without new information.
   something else (§13). The gain: `key:` at the end of a line becomes a natural indentation opener,
   as in Scala 3, and the proposal in §13 now uses it. Rejected: allowing both `:` and `=` as HOCON
   does — two spellings for one thing.
+- **Details of `:`.** Whitespace or end of line is required after it. An unquoted value may not
+  start with `'`, which closes the silent YAML difference for `a: 'x'`; `~` gets no rule, being one
+  character with `null` spelled out. Directive arguments keep `name = literal`: a call with named
+  arguments, as in Scala, distinct from fields.
+- **Separators: `,` and newline only.** Whitespace never separates — `[foo bar]` with forgotten
+  quotes would otherwise silently become two elements, the same failure `a: foo bar` was made an
+  error to prevent; for the same reason concatenation parts must touch. After any value comes a
+  separator, a comment or a closing bracket. Empty elements are errors; a trailing separator is
+  allowed in sequences and blocks. Directive arguments follow the same rule. Newline is LF or CRLF.
