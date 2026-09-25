@@ -278,21 +278,43 @@ mistake is worse than stopping.
 1. **Name.** Format name, module directory, artifact id, package, file extension and loader object
    name. Deferred by decision; still has to be settled before any code is written.
 2. **Indentation as an alternative to braces**, Scala 3 style — both forms allowed. Not in v1; v1 is
-   braces only. What was worked out so far, so the question does not start from zero:
+   braces only. **Parked until implementation of indentation starts** — do not reopen it before then.
+
+   Settled:
    - The lexer turns indentation into virtual `{` / `}` from a stack of widths; the grammar in §4 and
-     the parser stay unchanged, which is why it can be added later without breaking any file.
-   - A key at the end of a line followed by a deeper-indented line opens a block. No `:` — it would
-     invite `key: value`. A container tag goes after `=`: `routes = !ordered`, block on the next line.
-   - Indentation is significant at file level and inside `{…}` (a new region with its own baseline),
-     insignificant inside `[…]`, directive arguments `(…)` and `"""…"""`.
+     the parser stay unchanged, which is why it can be added later.
    - A tab in indentation is an error.
    - A dedent must land exactly on a width in the stack. Recovery (§11): every line is reported as an
      error until one lands on a width from the stack again.
-   - Sequences stay bracketed; a YAML-like `-` element marker collides with scalars such as `-5`.
-   - The known cost: a line shifted by exactly one level is still valid and silently moves to another
-     parent. Braces make that mistake loud; the stack rule catches only misaligned lines.
-   - v1 constraint: leading whitespace must carry no meaning anywhere else, so that indentation can
-     claim it later.
+
+   Proposed, not confirmed:
+   - A key at the end of a line followed by a deeper-indented line opens a block. No `:` — it would
+     invite `key: value`.
+   - A container tag goes after `=`: `routes = !ordered`, block on the next line.
+   - Blank lines and comment-only lines do not take part in indentation.
+
+   Open:
+   - **Backward compatibility with v1 files.** Session 2 sketched indentation as significant at file
+     level and inside `{…}`. That breaks any v1 file with sloppy indentation inside braces — the
+     dedent rule would reject it. The alternative: indentation is significant only inside a block
+     that was *opened* by indentation, and an explicit `{` switches it off until its `}`. Then no v1
+     file changes meaning, but a braced block cannot contain an indented one.
+   - **Opening brace on the next line** (`key` ⏎ `{`). If v1 allows it, a key at the end of a line is
+     ambiguous with the indentation opener. Decide for v1 before it ships: forbidding it keeps the
+     door open.
+   - **Mixing styles** in one file, and in one block.
+   - **Indent width** — any deeper indent opens a block, or one step fixed per file (which would also
+     catch some shifted lines).
+   - **Silently shifted lines.** A line moved by exactly one level is still valid and changes parent.
+     Braces make that mistake loud; the stack rule catches only misaligned lines. Accept, or find a
+     mitigation (fixed width above is one).
+   - **Sequences without brackets.** v1 sequences are `[…]` only, where indentation is insignificant.
+     A YAML-like `-` element marker collides with scalars such as `-5`; a sequence of maps is the case
+     that actually needs an answer.
+   - **Opt-in.** Enabled everywhere automatically, or per file (a directive, or a separate extension).
+
+   Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
+   indentation can claim it later.
 
 ## 14. Decision log
 
