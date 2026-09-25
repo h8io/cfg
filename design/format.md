@@ -277,6 +277,22 @@ mistake is worse than stopping.
 
 1. **Name.** Format name, module directory, artifact id, package, file extension and loader object
    name. Deferred by decision; still has to be settled before any code is written.
+2. **Indentation as an alternative to braces**, Scala 3 style — both forms allowed. Not in v1; v1 is
+   braces only. What was worked out so far, so the question does not start from zero:
+   - The lexer turns indentation into virtual `{` / `}` from a stack of widths; the grammar in §4 and
+     the parser stay unchanged, which is why it can be added later without breaking any file.
+   - A key at the end of a line followed by a deeper-indented line opens a block. No `:` — it would
+     invite `key: value`. A container tag goes after `=`: `routes = !ordered`, block on the next line.
+   - Indentation is significant at file level and inside `{…}` (a new region with its own baseline),
+     insignificant inside `[…]`, directive arguments `(…)` and `"""…"""`.
+   - A tab in indentation is an error.
+   - A dedent must land exactly on a width in the stack. Recovery (§11): every line is reported as an
+     error until one lands on a width from the stack again.
+   - Sequences stay bracketed; a YAML-like `-` element marker collides with scalars such as `-5`.
+   - The known cost: a line shifted by exactly one level is still valid and silently moves to another
+     parent. Braces make that mistake loud; the stack rule catches only misaligned lines.
+   - v1 constraint: leading whitespace must carry no meaning anywhere else, so that indentation can
+     claim it later.
 
 ## 14. Decision log
 
@@ -338,4 +354,9 @@ alternative listed here should not be re-proposed without new information.
 - **A concatenated scalar carries the list of its sources**, one `ReferenceLocation` per `${…}`.
   Rejected: a plain `SourceLocation` at the reference site, which forgets where the parts came from.
 - **`impl/hocon` stays**, alongside this module, rather than being retired by it.
+- **Indentation deferred, braces only in v1.** Raised by the user as Scala 3-style dual syntax, which
+  is new information against session 1's rejection (that rejected indentation *instead of* braces).
+  Kept as an open question (§13) with the mechanics recorded there; the user's rules so far: tabs in
+  indentation are an error, and a misaligned dedent is reported on every line until indentation
+  matches the stack again.
 
