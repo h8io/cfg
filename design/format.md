@@ -54,8 +54,8 @@ loader path.
   written as a quoted key.
 - **Quoted keys and quoted scalars** use `"…"` with the escape set `Id.quote` produces: `\"`, `\\`,
   `\b`, `\f`, `\n`, `\r`, `\t` and `\uXXXX`.
-- **Dotted keys** — `a.b.c = v` is sugar for `a { b { c = v } }`. The split happens only on dots
-  *between* key tokens: a quoted key is indivisible, so `"a.b" = v` is one key named `a.b`, and
+- **Dotted keys** — `a.b.c: v` is sugar for `a { b { c: v } }`. The split happens only on dots
+  *between* key tokens: a quoted key is indivisible, so `"a.b": v` is one key named `a.b`, and
   `x."a.b".c` is three levels. This is also what `Id.path` produces — a key containing a dot fails
   `SafeKeyPattern` and is rendered quoted — so the round-trip property holds.
 
@@ -63,10 +63,10 @@ loader path.
   source. `server."odd key"[0]` renders from a node and parses back to the same address. Any change
   to `Id.quote` has to be mirrored here, and vice versa.
 - **Unquoted scalars** contain no whitespace. One runs to the first whitespace, `,`, `}`, `]` or `#`;
-  after it only a separator, a comment or the end of the block may follow, so `a = foo bar` is an
+  after it only a separator, a comment or the end of the block may follow, so `a: foo bar` is an
   error that says to quote the value. What was read becomes `IScalar.value` verbatim — `1e5` stays
   `"1e5"`, `true` stays `"true"`, `007` stays `"007"`. There is no type inference anywhere in the
-  parser. A value with spaces is written quoted: `greeting = "Hello, world"`.
+  parser. A value with spaces is written quoted: `greeting: "Hello, world"`.
 
   The rule also frees `- ` (dash, space) at the start of an indented line for the sequence element
   marker (§13): `- 5` can never be a scalar, `-5` and `"- 5"` always are.
@@ -81,7 +81,7 @@ loader path.
 document   = block-body
 block      = "{" block-body "}"
 block-body = { field | directive } 
-field      = key { "." key } ( "=" value | block )
+field      = key { "." key } ( ":" value | block )
 value      = [ tag ] ( scalar | block | seq | directive | substitution-expr )
 seq        = "[" [ value { sep value } [ sep ] ] "]"
 sep        = "," | newline
@@ -89,10 +89,10 @@ tag        = "!" identifier
 scalar     = null | bare-scalar | quoted-scalar | multiline-scalar
 ```
 
-Fields are separated by a newline or a `,`. `key { … }` needs no `=`, and the `{` must be on the
+Fields are separated by a newline or a `,`. `key { … }` needs no `:`, and the `{` must be on the
 same line as the key: `key` followed by `{` on the next line is an error. That keeps a key at the end
 of a line free for the indentation syntax (§13). A dotted key
-(`server.tls.enabled = true`) is sugar for nested blocks.
+(`server.tls.enabled: true`) is sugar for nested blocks.
 
 ## 5. Values
 
@@ -104,7 +104,7 @@ longest common leading whitespace across the non-blank lines is stripped:
 
 ```
 server {
-  banner = """
+  banner: """
     Welcome.
       Indented line.
   """
@@ -115,8 +115,8 @@ server {
 **Tags** — `!name` before any value, including containers:
 
 ```
-timeout = !duration 5s
-routes  = !ordered { a = 1, b = 2 }
+timeout: !duration 5s
+routes: !ordered { a: 1, b: 2 }
 ```
 
 Only tags written in the source reach `ISome.tag`; nothing is ever inferred, and there is no
@@ -134,7 +134,7 @@ and may appear in two positions:
 
 - **statement position**, inside any block or at the top of a file — it must produce a map, which is
   merged into the enclosing block at the point where it appears, so fields below it override it;
-- **value position**, on the right of `=` or as a sequence element — it produces a single node.
+- **value position**, on the right of `:` or as a sequence element — it produces a single node.
 
 Argument literals are strings, bare identifiers, `true`/`false` and integers. Arguments are
 **literal only — no substitutions**. This is not a simplification, it is forced by the phase order in
@@ -193,9 +193,9 @@ from a substitution.
   yields `Node.INone` rather than an error.
 - Lookup order is the merged tree, then system properties, then environment variables — the HOCON
   behaviour, chosen deliberately over an explicit `${env:…}` form.
-- The graft keeps `null`: `b = ${a}` with `a = null` gives an `INull` at `b`, which is not the same
+- The graft keeps `null`: `b: ${a}` with `a: null` gives an `INull` at `b`, which is not the same
   as `${?a}` over a missing `a`.
-- Cycles are an error naming the path. Self-reference (`a = ${a}" x"` reading the pre-merge value) is
+- Cycles are an error naming the path. Self-reference (`a: ${a}" x"` reading the pre-merge value) is
   **not** supported in v1; it is reported as a cycle.
 
 ## 10. Locations
@@ -223,19 +223,19 @@ final case class EnvLocation(name: String) extends NcfLocation
 ```
 
 `origin` is a `Location`, not a `SourceLocation`, so chains fall out on their own: with
-`a = ${b}`, `b = ${c}`, `c = 1`, the node at `a` is `ReferenceLocation(a-site, "b",
+`a: ${b}`, `b: ${c}`, `c: 1`, the node at `a` is `ReferenceLocation(a-site, "b",
 ReferenceLocation(b-site, "c", SourceLocation(c-site)))`. The environment and system properties get
 a location of their own instead of a fake file position.
 
 `description` puts the reference site first, because that is where the reader has to go:
 `app.conf:12:9 (${db.url} from base.conf:3:7)`.
 
-**Grafted containers.** With `a = ${server}`, *every* node in the grafted subtree gets a
+**Grafted containers.** With `a: ${server}`, *every* node in the grafted subtree gets a
 `ReferenceLocation` — the reference site of `a`, the path it was taken by (`server.port`), and that
 node's own origin. Marking only the root would leave an error at `a.port` pointing at `server`'s
 line with no hint of how it ended up under `a`.
 
-**Concatenation.** `url = "jdbc:"${host}"/db"` is a new scalar written at the reference site, so its
+**Concatenation.** `url: "jdbc:"${host}"/db"` is a new scalar written at the reference site, so its
 primary coordinates are that site, and it carries one `ReferenceLocation` per `${…}` in the order
 written — every source the value was assembled from.
 
@@ -266,7 +266,7 @@ mistake is worse than stopping.
   batch was empty, as the next.
 - **Substitution errors report root causes only.** Every unresolved reference, cycle and
   concatenation of a non-scalar is reported, but a node that depends on an already failed node is
-  dropped silently: with `a = ${missing}` and `b = ${a}`, only `missing` is named.
+  dropped silently: with `a: ${missing}` and `b: ${a}`, only `missing` is named.
 
 ## 12. Implementation notes
 
@@ -301,17 +301,18 @@ mistake is worse than stopping.
      under that field's key. The column after `- ` becomes the element's indentation baseline.
 
      ```
-     servers
-       - host = a
-         port = 1
-       - host = b
-         port = 2
+     servers:
+       - host: a
+         port: 1
+       - host: b
+         port: 2
      ```
 
    Proposed, not confirmed:
-   - A key at the end of a line followed by a deeper-indented line opens a block. No `:` — it would
-     invite `key: value`.
-   - A container tag goes after `=`: `routes = !ordered`, block on the next line.
+   - `key:` at the end of a line, followed by a deeper-indented line, opens a block — the Scala 3
+     rule for `:` at the end of a line, and what `key:` would lead a reader to expect anyway. A bare
+     key alone on a line stays an error.
+   - A container tag goes after `:`: `routes: !ordered`, block on the next line.
    - Blank lines and comment-only lines do not take part in indentation.
 
    Open:
@@ -330,6 +331,11 @@ mistake is worse than stopping.
 
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
    indentation can claim it later.
+3. **Details of `:`.** Whether whitespace (or end of line) is required after it, which would make
+   `a:b` in a block an error rather than a field; whether an unquoted value may start with `'`
+   (YAML's `a: 'x'` would otherwise silently keep the quotes), and whether `~` needs a rule; and
+   whether directive arguments stay `name = literal` (Scala named-argument style) or follow fields
+   to `name: literal`.
 
 ## 14. Decision log
 
@@ -407,3 +413,10 @@ alternative listed here should not be re-proposed without new information.
   ambiguous the moment indentation is added.
 - **A map inside an indentation sequence is written as in YAML**: first field on the `- ` line, the
   rest aligned under it. Rejected: `-` alone on a line with the map below it, and allowing both.
+- **`:` between key and value, not `=`.** The user's preference, and close to Scala 3. `=` is as
+  common inside values as `:` (SQL, expressions), so neither frees values from quoting. The known
+  cost: a file with `:`, indentation and `- ` looks like YAML, and pasted YAML mostly fails loudly —
+  multi-word values, block scalars, anchors — but `a: 'x'` and `a: ~` would parse silently to
+  something else (§13). The gain: `key:` at the end of a line becomes a natural indentation opener,
+  as in Scala 3, and the proposal in §13 now uses it. Rejected: allowing both `:` and `=` as HOCON
+  does — two spellings for one thing.
