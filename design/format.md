@@ -4,9 +4,9 @@ Working document for the new loader module under `impl/`. The format name, the m
 the file extension are **not decided yet**; this document says `NCF` (native config format) as a
 placeholder and marks every place the name leaks into the code.
 
-**Status:** under discussion, expected to span several sessions. §2 lists what is settled, §12 what
-is still open, and §13 logs how each decision was reached so a later session does not reopen a
-question that was already argued through. Add to §13 rather than silently editing §2.
+**Status:** under discussion, expected to span several sessions. §2 lists what is settled, §13 what
+is still open, and §14 logs how each decision was reached so a later session does not reopen a
+question that was already argued through. Add to §14 rather than silently editing §2.
 
 ## 1. Why a format of our own
 
@@ -39,7 +39,11 @@ loader path.
 | Include placement | Anywhere in the tree, not just at file top level |
 | Include sources | Relative paths, classpath resources; optional variant that tolerates a missing file |
 | Multi-line strings | Triple quotes, raw, with the common leading indent stripped |
-| Special words | Avoided — `@`-prefixed directives instead, as an open, extensible set |
+| Special words | Avoided — `@`-prefixed directives instead, as an open, extensible set. `null` is the one exception |
+| Error model | `Either`, no Cats; as many errors per run as can be reported honestly (§11) |
+| Dotted keys | Sugar for nesting; a quoted key is indivisible, dots included |
+| Substitution location | Reference site, carrying the definition site with it (§10) |
+| `impl/hocon` | Stays, alongside this module |
 
 ## 3. Lexical structure
 
@@ -50,6 +54,10 @@ loader path.
   written as a quoted key.
 - **Quoted keys and quoted scalars** use `"…"` with the escape set `Id.quote` produces: `\"`, `\\`,
   `\b`, `\f`, `\n`, `\r`, `\t` and `\uXXXX`.
+- **Dotted keys** — `a.b.c = v` is sugar for `a { b { c = v } }`. The split happens only on dots
+  *between* key tokens: a quoted key is indivisible, so `"a.b" = v` is one key named `a.b`, and
+  `x."a.b".c` is three levels. This is also what `Id.path` produces — a key containing a dot fails
+  `SafeKeyPattern` and is rendered quoted — so the round-trip property holds.
 
   The two rules together buy a property worth keeping: the output of `Id.path` is itself valid
   source. `server."odd key"[0]` renders from a node and parses back to the same address. Any change
@@ -58,6 +66,10 @@ loader path.
   surrounding whitespace trimmed. What is left becomes `IScalar.value` verbatim — `1e5` stays
   `"1e5"`, `true` stays `"true"`, `007` stays `"007"`. There is no type inference anywhere in the
   parser.
+- **`null`** — the one reserved word. An unquoted scalar whose trimmed text is exactly `null`
+  becomes `Node.INull`; `"null"` in quotes stays a scalar. A tag is kept: `!secret null` is an
+  `INull` with `tag = Some("secret")`. `true`, `false` and every other word remain plain scalars.
+  `null` is reserved only in value position — as a key it is an ordinary bare key.
 
 ## 4. Grammar sketch
 
@@ -70,7 +82,7 @@ value      = [ tag ] ( scalar | block | seq | directive | substitution-expr )
 seq        = "[" [ value { sep value } [ sep ] ] "]"
 sep        = "," | newline
 tag        = "!" identifier
-scalar     = bare-scalar | quoted-scalar | multiline-scalar
+scalar     = null | bare-scalar | quoted-scalar | multiline-scalar
 ```
 
 Fields are separated by a newline or a `,`. `key { … }` needs no `=`. A dotted key
@@ -175,6 +187,8 @@ from a substitution.
   yields `Node.INone` rather than an error.
 - Lookup order is the merged tree, then system properties, then environment variables — the HOCON
   behaviour, chosen deliberately over an explicit `${env:…}` form.
+- The graft keeps `null`: `b = ${a}` with `a = null` gives an `INull` at `b`, which is not the same
+  as `${?a}` over a missing `a`.
 - Cycles are an error naming the path. Self-reference (`a = ${a}" x"` reading the pre-merge value) is
   **not** supported in v1; it is reported as a cycle.
 
@@ -184,10 +198,71 @@ Every node carries its own `Location`, with `description` rendered as `<source>:
 This is the visible win over `impl/hocon`, where the description is whatever typesafe-config
 composed.
 
-For a node produced by a substitution, the proposal is to keep the **definition** site — where the
-value was actually written — rather than the reference site.
+A node produced by a substitution carries **both** sites: the reference site as its primary
+coordinates, and the location of the node it was taken from. `Location` is an open trait in `cfg`, so
+this needs no protocol change — the module defines its own hierarchy:
 
-## 11. Implementation notes
+```scala
+sealed trait NcfLocation extends Location
+
+// written here
+final case class SourceLocation(source: String, line: Int, column: Int) extends NcfLocation
+// grafted here by `${path}`; `origin` is where the value came from
+final case class ReferenceLocation(at: SourceLocation, path: String, origin: Location) extends NcfLocation
+// a scalar built by concatenation; one entry per `${…}`, each with its own column
+final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLocation]) extends NcfLocation
+// origins that are not a file
+final case class SystemPropertyLocation(name: String) extends NcfLocation
+final case class EnvLocation(name: String) extends NcfLocation
+```
+
+`origin` is a `Location`, not a `SourceLocation`, so chains fall out on their own: with
+`a = ${b}`, `b = ${c}`, `c = 1`, the node at `a` is `ReferenceLocation(a-site, "b",
+ReferenceLocation(b-site, "c", SourceLocation(c-site)))`. The environment and system properties get
+a location of their own instead of a fake file position.
+
+`description` puts the reference site first, because that is where the reader has to go:
+`app.conf:12:9 (${db.url} from base.conf:3:7)`.
+
+**Grafted containers.** With `a = ${server}`, *every* node in the grafted subtree gets a
+`ReferenceLocation` — the reference site of `a`, the path it was taken by (`server.port`), and that
+node's own origin. Marking only the root would leave an error at `a.port` pointing at `server`'s
+line with no hint of how it ended up under `a`.
+
+**Concatenation.** `url = "jdbc:"${host}"/db"` is a new scalar written at the reference site, so its
+primary coordinates are that site, and it carries one `ReferenceLocation` per `${…}` in the order
+written — every source the value was assembled from.
+
+## 11. Errors
+
+The loader returns `Either[NcfErrors, Node.IMap[Id.Root]]`, where `NcfErrors` is a non-empty list of
+module-local errors and itself a `CfgError` — `Either` is covariant, so it reads as
+`Either[CfgError, …]` to anyone who does not care. The list is the module's own type (head + `List`),
+because `AndError` and `NonEmptyChain` live in `schema` and Cats is not a dependency here. Every
+error carries a `Location`.
+
+The goal is **as many errors per run as can be reported without inventing any**: a user fixing a
+config should not have to rerun the loader once per mistake, but a cascade of consequences of one
+mistake is worse than stopping.
+
+- **Parsing recovers at synchronisation points.** A broken field is skipped to the next field
+  separator (newline or `,`) at the same bracket depth, or to the `}` closing its block; the parser
+  tracks bracket depth to find them. The braced syntax is what makes this cheap. Each source is
+  parsed independently, so an error in one file never hides errors in another.
+- **Some errors end the source.** An unterminated `"…"` or `"""…"""`, or an unbalanced bracket at
+  end of input, leaves nothing trustworthy to resynchronise on; the parser reports it and stops
+  *that source*.
+- **Directive failures are local.** A missing include, a cycle, an unknown directive or a bad
+  argument is reported, the directive contributes nothing, and expansion continues.
+- **Phases are gated.** If phases 1–2 (§8) produced any error, phases 3–5 do not run: substitutions
+  over a tree with holes cut by recovery would report references to fields that exist but were lost
+  in the skip. Syntax and directive errors come as one batch; substitution errors, if the first
+  batch was empty, as the next.
+- **Substitution errors report root causes only.** Every unresolved reference, cycle and
+  concatenation of a non-scalar is reported, but a node that depends on an already failed node is
+  dropped silently: with `a = ${missing}` and `b = ${a}`, only `missing` is named.
+
+## 12. Implementation notes
 
 - No external dependencies, like `cfg` and `impl/hocon`.
 - Unlike the hocon and yaml backends, which wrap a foreign structure lazily, this module owns its
@@ -198,24 +273,12 @@ value was actually written — rather than the reference site.
 - `-Xfatal-warnings` is on, so exhaustiveness in the parser's pattern matches is enforced rather
   than merely intended.
 
-## 12. Open questions
+## 13. Open questions
 
-1. **Error model.** `Either[CfgError, Node.IMap[Id.Root]]` keeps the module dependency-free and puts
-   a syntax error in the same algebra as a decode error; an exception matches what `HOCON` and `YAML`
-   do today; `Validated` would let a whole file's errors accumulate through `AndError` but pulls in
-   Cats. Recommendation: `Either`, with a `ParseError` carrying a `Location`.
-2. **How to write `null`.** `INull` is a distinct node in the protocol, so the format needs a
-   spelling for it, but a bare `null` keyword is exactly the kind of magic word the directive system
-   exists to avoid. Candidates: bare `null`, a `!null` tag, an `@null` directive, or an empty value.
-3. **Dotted keys.** Kept as sugar above; worth confirming, since they interact with quoted keys and
-   with `Id.path` round-tripping.
-4. **Substitution location** — definition site or reference site (§10).
-5. **Name.** Format name, module directory, artifact id, package, file extension and loader object
-   name. Deferred by decision.
-6. **Does this retire `impl/hocon`?** It is recorded as a temporary PoC, and this module covers its
-   use cases without its scalar-fidelity defect.
+1. **Name.** Format name, module directory, artifact id, package, file extension and loader object
+   name. Deferred by decision; still has to be settled before any code is written.
 
-## 13. Decision log
+## 14. Decision log
 
 Each entry records what was chosen, and — where it matters — what was rejected and why. A rejected
 alternative listed here should not be re-proposed without new information.
@@ -248,3 +311,31 @@ alternative listed here should not be re-proposed without new information.
   a Scala 2 keyword — the package would need backticks), `SCON`, `H8CON`, `H8`, and role-based names
   like `cfg-text`. To be settled before any code is written, since it appears in the directory,
   artifact id, package, file extension and loader object name.
+
+### Session 2 — 2026-09-25
+
+- **Error model: `Either`.** The reason given was dependency minimisation, held to as long as
+  possible. Rejected: exceptions (what `HOCON` and `YAML` do today) and `Validated` (pulls in Cats).
+- **Report as many errors as possible, not the first one.** The user's requirement, added after the
+  first draft of this entry said "first error only" because `AndError` lives in `schema`. Resolved
+  without Cats: the left side is a module-local non-empty error list that is itself a `CfgError`,
+  and the parser recovers at synchronisation points (§11).
+- **Phases are gated, and substitution errors name root causes only** (§11). Both proposed in
+  session 2 and accepted as written: running substitutions over a tree with holes cut by recovery
+  would report fields that exist but were skipped, and reporting every dependant of a failed
+  reference buries the one line that needs fixing.
+- **`null` is a reserved word — probably the only one.** Rejected: a `!null` tag (tags are for the
+  decoder, and `INull` already has a `tag` field of its own), an `@null` directive (directives
+  expand to maps or nodes during parsing; spending one on a constant is ceremony), an empty value
+  (invisible, and easy to produce by accident). This amends the "no special words" row in §2 rather
+  than overturning it: the directive system still covers everything extensible.
+- **A quoted key is indivisible.** Dots split only between key tokens, so `"a.b"` is one key. This
+  matches what `Id.path` already renders.
+- **Substitution location: reference site, with the definition site carried along.** The user's
+  proposal of two location types. Rejected: definition site only (the proposal in session 1) — it
+  points away from the line that actually put the value there.
+- **Every node of a grafted subtree gets a `ReferenceLocation`**, not only its root.
+- **A concatenated scalar carries the list of its sources**, one `ReferenceLocation` per `${…}`.
+  Rejected: a plain `SourceLocation` at the reference site, which forgets where the parts came from.
+- **`impl/hocon` stays**, alongside this module, rather than being retired by it.
+
