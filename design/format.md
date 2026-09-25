@@ -331,6 +331,7 @@ mistake is worse than stopping.
 
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
    indentation can claim it later.
+
 3. **Details of `:`.** Whether whitespace (or end of line) is required after it, which would make
    `a:b` in a block an error rather than a field; whether an unquoted value may start with `'`
    (YAML's `a: 'x'` would otherwise silently keep the quotes), and whether `~` needs a rule; and
