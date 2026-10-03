@@ -11,7 +11,7 @@ object Dependencies {
 
   val ScalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.14.0"
 
-  val IzumiReflect = "dev.zio" %% "izumi-reflect" % "3.0.10"
+  val IzumiReflect = "dev.zio" %% "izumi-reflect" % "3.0.11"
 
   val TestBundle: Seq[ModuleID] =
     Seq(
