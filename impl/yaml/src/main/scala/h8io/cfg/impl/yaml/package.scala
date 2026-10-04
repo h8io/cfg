@@ -4,6 +4,7 @@ import h8io.cfg.{Id, Node}
 import org.snakeyaml.engine.v2.api.lowlevel.{Present, Serialize}
 import org.snakeyaml.engine.v2.api.{DumpSettings, LoadSettings}
 import org.snakeyaml.engine.v2.common.FlowStyle
+import org.snakeyaml.engine.v2.composer.Composer
 import org.snakeyaml.engine.v2.exceptions.{Mark, YamlEngineException}
 import org.snakeyaml.engine.v2.nodes.{MappingNode, Node as YamlNode, NodeTuple, ScalarNode, SequenceNode, Tag}
 import org.snakeyaml.engine.v2.parser.ParserImpl
@@ -17,12 +18,6 @@ import scala.jdk.CollectionConverters.*
 
 package object yaml {
 
-  /** Key of the node property under which [[TaggedComposer]] stores the tag written in the source. */
-  private[yaml] def TagProperty: String = "h8io.cfg.yaml.tag"
-
-  /** The non-specific tag `!`. It carries no type information, so it is treated as no tag at all. */
-  private[yaml] def NonSpecificTag: String = "!"
-
   /** YAML 1.2 core schema: `~`, `Null` and `NULL` are nulls and `<<` merge keys are supported. */
   private[yaml] val CoreSchemaInstance: Schema = new CoreSchema
 
@@ -33,7 +28,7 @@ package object yaml {
 
   /** Composes a single YAML document, returning an empty mapping for an empty input. */
   private[yaml] def compose(settings: LoadSettings, reader: Reader): YamlNode =
-    new TaggedComposer(settings, new ParserImpl(settings, new StreamReader(settings, reader)))
+    new Composer(settings, new ParserImpl(settings, new StreamReader(settings, reader)))
       .getSingleNode
       .orElse(emptyMapping)
 
@@ -46,9 +41,9 @@ package object yaml {
       Optional.empty[Mark],
       Optional.empty[Mark])
 
-  /** The tag written in the source, or `None` when the tag was inferred by the resolver. */
+  /** The tag written in the source, or `None` when the tag was inferred by the resolver or is the non-specific `!`. */
   @inline private[yaml] def tagOf(node: YamlNode): Option[String] =
-    Option(node.getProperty(TagProperty).asInstanceOf[String])
+    if (node.isResolved) None else Some(node.getTag.getValue)
 
   @inline private[yaml] def keyOf(tuple: NodeTuple): String = tuple.getKeyNode.asInstanceOf[ScalarNode].getValue
 
@@ -76,12 +71,14 @@ package object yaml {
   }
 
   /** A mapping with the tag, style and location of `source` but a different set of entries. */
-  private[yaml] def copyOf(source: MappingNode, tuples: JList[NodeTuple]): MappingNode = {
-    val result =
-      new MappingNode(source.getTag, true, tuples, source.getFlowStyle, source.getStartMark, source.getEndMark)
-    tagOf(source).foreach(tag => result.setProperty(TagProperty, tag))
-    result
-  }
+  private[yaml] def copyOf(source: MappingNode, tuples: JList[NodeTuple]): MappingNode =
+    new MappingNode(
+      source.getTag,
+      source.isResolved,
+      tuples,
+      source.getFlowStyle,
+      source.getStartMark,
+      source.getEndMark)
 
   /** Overlays `next` onto `previous`: mappings are merged key by key, anything else is replaced outright. */
   private[yaml] def merge(previous: YamlNode, next: YamlNode): YamlNode =
