@@ -88,7 +88,7 @@ Built-in decoders (all `implicit`, mixed in via `decoders` package object):
 
 `YAML.apply(urls: URL*)` composes each URL with `snakeyaml-engine` (YAML 1.2 core schema, so `~`/`Null`/`NULL` are nulls and `<<` merge keys work), overlays them in order, and wraps the result as `Node.IMap[Id.Root]`. Mappings merge recursively; scalars and sequences are replaced outright. No substitution step. A root that is not a mapping is an error; duplicate keys in a mapping collapse onto the last one.
 
-Unlike the HOCON loader this one sets `tag` — but only when the tag was *written* in the source, expanded through the tag handles in effect (`!!int` → `tag:yaml.org,2002:int`, `!postgres` stays `!postgres`). A tag the resolver inferred, and the non-specific `!`, both give `None`. Since `Composer` resolves a tag for every node and exposes no `isResolved`, `TaggedComposer` peeks at the parser event before each node is built and stashes the source tag in a node property that `tagOf` reads back.
+Unlike the HOCON loader this one sets `tag` — but only when the tag was *written* in the source, expanded through the tag handles in effect (`!!int` → `tag:yaml.org,2002:int`, `!postgres` stays `!postgres`). A tag the resolver inferred, and the non-specific `!`, both give `None`. `tagOf` reads this off `Node.isResolved` (public since snakeyaml-engine 3.2); `copyOf` must carry the flag over when it rebuilds a merged mapping.
 
 ## Conventions
 
