@@ -11,15 +11,15 @@ object Dependencies {
 
   val ScalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.14.0"
 
-  val IzumiReflect = "dev.zio" %% "izumi-reflect" % "3.0.9"
+  val IzumiReflect = "dev.zio" %% "izumi-reflect" % "3.0.10"
 
   val TestBundle: Seq[ModuleID] =
     Seq(
       "org.scalatest" %% "scalatest" % "3.2.20",
-      "org.scalamock" %% "scalamock" % "7.5.5",
+      "org.scalamock" %% "scalamock-scalatest" % "7.6.0",
       "org.typelevel" %% "cats-laws" % CatsVersion,
       "org.typelevel" %% "discipline-scalatest" % "2.3.0",
-      "org.scalatestplus" %% "scalacheck-1-18" % "3.2.19.0",
-      "org.scalacheck" %% "scalacheck" % "1.19.0"
+      "org.scalatestplus" %% "scalacheck-1-19" % "3.2.20.0",
+      "org.scalacheck" %% "scalacheck" % "1.20.0"
     )
 }
