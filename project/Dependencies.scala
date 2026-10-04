@@ -5,7 +5,7 @@ object Dependencies {
 
   val Cats = "org.typelevel" %% "cats-core" % CatsVersion
 
-  val Config = "io.h8" % "typesafe-config-yaml" % "1.2.1"
+  val Config = "io.h8" % "typesafe-config-yaml" % "1.2.2"
 
   val SnakeYaml = "org.snakeyaml" % "snakeyaml-engine" % "3.2"
 
