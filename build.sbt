@@ -93,9 +93,12 @@ val pages = (project in file("pages"))
     publish / skip := true,
     publishLocal / skip := true,
     TestScalaUnidoc / unidoc / unidocProjectFilter := inAnyProject -- inProjects(root),
+    // sbt-unidoc concatenates the modules' separately resolved classpaths, so snakeyaml-engine 3.0.1 (pulled by
+    // typesafe-config-yaml into hocon) shadows 3.2 (yaml). Use this project's own classpath, resolved as a whole.
+    ScalaUnidoc / unidoc / fullClasspath := (Compile / fullClasspath).value,
     tlSiteApiUrl := Some(url(s"${SiteRoot}api/scala-2.13/")),
     tlSiteHelium ~= { _.site.mainNavigation(depth = 3) }
   )
-  .dependsOn(root)
+  .dependsOn(cfg, hocon, schema, yaml)
   .aggregate(cfg, hocon, schema, yaml)
   .enablePlugins(ScalaUnidocPlugin, TypelevelSitePlugin)
