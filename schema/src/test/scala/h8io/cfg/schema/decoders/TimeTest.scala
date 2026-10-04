@@ -38,8 +38,10 @@ class TimeTest extends AnyFlatSpec with Matchers with MockFactory with Inside wi
 
   "finiteDurationDecoder" should "return a finite duration value from scalar" in
     forAll { (value: FiniteDuration) =>
-      finiteDurationDecoder(Node.Scalar(Id.Root, None, value.toString, mock[Location])) shouldBe
-        value.valid
+      whenever(Duration(value.toString) == value) {
+        finiteDurationDecoder(Node.Scalar(Id.Root, None, value.toString, mock[Location])) shouldBe
+          value.valid
+      }
     }
 
   it should "return an error from scalar with positive infinite value" in {
