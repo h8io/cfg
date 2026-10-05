@@ -335,7 +335,8 @@ mistake is worse than stopping.
    tag a merged map ends up with when both sides wrote one.
 3. **Value expressions**, e.g. `${b} + ${c}` for sequence concatenation — the replacement for an
    append operator (§7). Not in v1. Whitespace never joins values (§3), so `${b} + ${c}` is an error
-   today and the syntax stays free.
+   today and the syntax stays free. **Parked** by the user as hard from every angle — do not reopen
+   it until it is raised again.
 4. **Indentation as an alternative to braces**, Scala 3 style — both forms allowed. Not in v1; v1 is
    braces only. **Parked until implementation of indentation starts** — do not reopen it before then.
 
@@ -489,3 +490,5 @@ alternative listed here should not be re-proposed without new information.
   whether `:+` takes an element (as in Scala and HOCON's `+=`) or a sequence.
 - **Merging over an unresolved substitution is unspecified** — found while discussing `:+`, but it
   applies to plain `:` already. Recorded as open (§13).
+- **Value expressions parked.** Sequence concatenation through expressions is left for later, by the
+  user's call: it is not simple from any angle. §13 keeps it as a parked item.
