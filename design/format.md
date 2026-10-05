@@ -188,6 +188,17 @@ The same rule applies in all three places it is needed, so there is one behaviou
 
 This follows the call already made for `impl/yaml`.
 
+**Tags in a merge.** When two maps merge, the result takes the later map's tag if one was written there,
+and keeps the earlier one otherwise. Being untagged is not a reason to drop a tag:
+
+```
+routes: !ordered { a: 1 }
+routes { b: 2 }            # !ordered { a: 1, b: 2 }
+routes: !sorted { c: 3 }   # !sorted { a: 1, b: 2, c: 3 }
+```
+
+A replaced value carries only its own tag; with `:=` that holds for maps too.
+
 **Explicit replacement — `:=`.** A field written with `:=` discards whatever the key held before and
 takes the new value as is, with its own tag:
 
@@ -352,12 +363,11 @@ mistake is worse than stopping.
 
 1. **Name.** Format name, module directory, artifact id, package, file extension and loader object
    name. Deferred by decision; still has to be settled before any code is written.
-2. **The tag of a merged map**, when both sides of a `:` merge wrote one.
-3. **Value expressions**, e.g. `${b} + ${c}` for sequence concatenation — the replacement for an
+2. **Value expressions**, e.g. `${b} + ${c}` for sequence concatenation — the replacement for an
    append operator (§7). Not in v1. Whitespace never joins values (§3), so `${b} + ${c}` is an error
    today and the syntax stays free. **Parked** by the user as hard from every angle — do not reopen
    it until it is raised again.
-4. **Indentation as an alternative to braces**, Scala 3 style — both forms allowed. Not in v1; v1 is
+3. **Indentation as an alternative to braces**, Scala 3 style — both forms allowed. Not in v1; v1 is
    braces only. **Parked until implementation of indentation starts** — do not reopen it before then.
 
    Settled:
@@ -517,3 +527,4 @@ alternative listed here should not be re-proposed without new information.
   substitution is an error pointing at `:=`. Rejected for now: a deferred merge resolved in phase 4
   (HOCON's `ConfigDelayedMerge`), which is what lifting the restriction later would take. Also
   offered and not meant: dropping deep merge from v1 entirely.
+- **A merged map takes the later tag if written, the earlier one otherwise** (§7). The user's call.
