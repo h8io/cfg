@@ -17,6 +17,8 @@ Extensible Format*:
 is still open, and §14 logs how each decision was reached so a later session does not reopen a
 question that was already argued through. Add to §14 rather than silently editing §2.
 
+The implementation is tracked step by step in [`plan.md`](plan.md).
+
 ## 1. Why a format of our own
 
 The `cfg` protocol says an `IScalar` carries the raw string that was written in the source, that a
