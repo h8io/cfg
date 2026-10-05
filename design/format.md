@@ -1,8 +1,17 @@
-# Native config format — design notes
+# DEF — design notes
 
-Working document for the new loader module under `impl/`. The format name, the module name and
-the file extension are **not decided yet**; this document says `NCF` (native config format) as a
-placeholder and marks every place the name leaks into the code.
+Working document for the new loader module under `impl/`. The format is **DEF** — *Declarative
+Extensible Format*:
+
+| Where | Name |
+|---|---|
+| Format | DEF |
+| Module directory | `impl/def` |
+| sbt project | `df` — `def` cannot be a `val` |
+| Artifact | `cfg-def` |
+| Package | `h8io.cfg.impl.df` |
+| Loader object | `DEF`, as `HOCON` and `YAML` |
+| File extension | `.def` |
 
 **Status:** under discussion, expected to span several sessions. §2 lists what is settled, §13 what
 is still open, and §14 logs how each decision was reached so a later session does not reopen a
@@ -289,17 +298,17 @@ coordinates, and the location of the node it was taken from. `Location` is an op
 this needs no protocol change — the module defines its own hierarchy:
 
 ```scala
-sealed trait NcfLocation extends Location
+sealed trait DefLocation extends Location
 
 // written here
-final case class SourceLocation(source: String, line: Int, column: Int) extends NcfLocation
+final case class SourceLocation(source: String, line: Int, column: Int) extends DefLocation
 // grafted here by `${path}`; `origin` is where the value came from
-final case class ReferenceLocation(at: SourceLocation, path: String, origin: Location) extends NcfLocation
+final case class ReferenceLocation(at: SourceLocation, path: String, origin: Location) extends DefLocation
 // a scalar built by concatenation; one entry per `${…}`, each with its own column
-final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLocation]) extends NcfLocation
+final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLocation]) extends DefLocation
 // origins that are not a file
-final case class SystemPropertyLocation(name: String) extends NcfLocation
-final case class EnvLocation(name: String) extends NcfLocation
+final case class SystemPropertyLocation(name: String) extends DefLocation
+final case class EnvLocation(name: String) extends DefLocation
 ```
 
 `origin` is a `Location`, not a `SourceLocation`, so chains fall out on their own: with
@@ -321,7 +330,7 @@ written — every source the value was assembled from.
 
 ## 11. Errors
 
-The loader returns `Either[NcfErrors, Node.IMap[Id.Root]]`, where `NcfErrors` is a non-empty list of
+The loader returns `Either[DefErrors, Node.IMap[Id.Root]]`, where `DefErrors` is a non-empty list of
 module-local errors and itself a `CfgError` — `Either` is covariant, so it reads as
 `Either[CfgError, …]` to anyone who does not care. The list is the module's own type (head + `List`),
 because `AndError` and `NonEmptyChain` live in `schema` and Cats is not a dependency here. Every
@@ -361,13 +370,11 @@ mistake is worse than stopping.
 
 ## 13. Open questions
 
-1. **Name.** Format name, module directory, artifact id, package, file extension and loader object
-   name. Deferred by decision; still has to be settled before any code is written.
-2. **Value expressions**, e.g. `${b} + ${c}` for sequence concatenation — the replacement for an
+1. **Value expressions**, e.g. `${b} + ${c}` for sequence concatenation — the replacement for an
    append operator (§7). Not in v1. Whitespace never joins values (§3), so `${b} + ${c}` is an error
    today and the syntax stays free. **Parked** by the user as hard from every angle — do not reopen
    it until it is raised again.
-3. **Indentation as an alternative to braces**, Scala 3 style — both forms allowed. Not in v1; v1 is
+2. **Indentation as an alternative to braces**, Scala 3 style — both forms allowed. Not in v1; v1 is
    braces only. **Parked until implementation of indentation starts** — do not reopen it before then.
 
    Settled:
@@ -528,3 +535,14 @@ alternative listed here should not be re-proposed without new information.
   (HOCON's `ConfigDelayedMerge`), which is what lifting the restriction later would take. Also
   offered and not meant: dropping deep merge from v1 entirely.
 - **A merged map takes the later tag if written, the earlier one otherwise** (§7). The user's call.
+- **Name: DEF, Declarative Extensible Format.** The user's proposal; "extensible" stands for the
+  directive system (§6). `def` is a keyword in Scala 2 and 3, so the package cannot carry the name.
+  The user rejected backticks (``h8io.cfg.impl.`def` ``) — every user importing the public location
+  and error types would have to write them. Read as an acronym, the name fits the `HOCON`/`YAML`
+  convention for the loader object, and the package is `df` — the acronym without the word it
+  collides on. Also rejected: an upper-case package `DEF` (clashes with the object of the same name
+  and goes against JVM convention), and `defs`. The extension `.def` was checked: GitHub Linguist
+  maps it to no language, and its other uses (Windows linker module-definition files, Apptainer
+  container definitions, Modula-2) barely overlap with a Scala project's resources.
+- **Correction to session 1:** `native` is not a Scala 2 keyword (Scala has the `@native` annotation,
+  not a reserved word). The collision with Scala Native alone is enough to keep it rejected.
