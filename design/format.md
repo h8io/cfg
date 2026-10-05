@@ -44,6 +44,7 @@ loader path.
 | Dotted keys | Sugar for nesting; a quoted key is indivisible, dots included |
 | Substitution location | Reference site, carrying the definition site with it (§10) |
 | `impl/hocon` | Stays, alongside this module |
+| Overriding | `:` merges maps, `:=` replaces whatever was there (§7); no append operator |
 
 ## 3. Lexical structure
 
@@ -72,6 +73,7 @@ loader path.
   value with the quotes kept. `~` gets no rule — it is the string `~`, and `null` is written out.
 - **`:` after a key** must be followed by whitespace or the end of the line, so `a:b` in a block is an
   error with a hint rather than a field. Inside a value `:` is ordinary: `url: http://host:8080`.
+  `:=` is the replacing form of `:` (§7) and follows the same rule: `a:=b` is an error.
 - **Separators** are `,` and newline, nothing else — whitespace never separates, so `[foo bar]` and
   `a: 1 b: 2` are errors, not two elements or two fields. After any value, scalar or container,
   only a separator, a comment or the closing bracket may follow: `a { x: 1 } b: 2` needs a `,`.
@@ -92,7 +94,7 @@ loader path.
 document   = block-body
 block      = "{" block-body "}"
 block-body = { field | directive } 
-field      = key { "." key } ( ":" value | block )
+field      = key { "." key } ( ( ":" | ":=" ) value | block )
 value      = [ tag ] ( scalar | block | seq | directive | substitution-expr )
 seq        = "[" [ value { sep value } [ sep ] ] "]"
 sep        = "," | newline
@@ -103,7 +105,8 @@ scalar     = null | bare-scalar | quoted-scalar | multiline-scalar
 Fields are separated by a newline or a `,` (§3). `key { … }` needs no `:`, and the `{` must be on the
 same line as the key: `key` followed by `{` on the next line is an error. That keeps a key at the end
 of a line free for the indentation syntax (§13). A dotted key
-(`server.tls.enabled: true`) is sugar for nested blocks.
+(`server.tls.enabled: true`) is sugar for nested blocks. The block form `key { … }` means `key: { … }`,
+so it merges; replacing a block is written `key := { … }`.
 
 ## 5. Values
 
@@ -184,6 +187,33 @@ The same rule applies in all three places it is needed, so there is one behaviou
 - the N URLs passed to the loader.
 
 This follows the call already made for `impl/yaml`.
+
+**Explicit replacement — `:=`.** A field written with `:=` discards whatever the key held before and
+takes the new value as is, with its own tag:
+
+```
+# reference.conf
+pool { min: 1, max: 10, idle: 30s }
+
+# app.conf
+pool := { max: 4 }    # pool is { max: 4 }; min and idle are gone
+```
+
+With `:` the result would have been `{ min: 1, max: 4, idle: 30s }`, and there is no other way to drop
+a key that an earlier source defined. For scalars and sequences `:=` gives the same result as `:`, so
+in practice it matters for maps, and anywhere the author wants the intent to be visible.
+
+- With a dotted key the operator applies to the last key only: `a.b.c := { … }` replaces `c` and
+  merges `a` and `b` as usual.
+- The operator is kept in the syntax tree until merging, and works in all three places listed above:
+  `:=` in an included file resets what the including block held before the `@include`, and `:=` in
+  the second URL resets what the first defined.
+- With no earlier value `:=` behaves like `:`.
+- `a := ${b}` needs no deferred merge: whatever `${b}` resolves to, nothing before it survives.
+
+There is deliberately no append operator. Appending to a sequence or concatenating values is a job for
+an expression in value position — `a: ${b} + ${c}` — which can be added later (§13); replacement
+cannot be expressed any other way.
 
 ## 8. Phase order
 
@@ -299,7 +329,14 @@ mistake is worse than stopping.
 
 1. **Name.** Format name, module directory, artifact id, package, file extension and loader object
    name. Deferred by decision; still has to be settled before any code is written.
-2. **Indentation as an alternative to braces**, Scala 3 style — both forms allowed. Not in v1; v1 is
+2. **Merging over a substitution.** `a: ${server}` followed by `a { port: 1 }` — the earlier side is
+   not resolved until phase 4 (§8), so the deep merge of phase 3 cannot be done there and has to be
+   deferred into a node resolved together with the substitutions. Not specified yet. Related: which
+   tag a merged map ends up with when both sides wrote one.
+3. **Value expressions**, e.g. `${b} + ${c}` for sequence concatenation — the replacement for an
+   append operator (§7). Not in v1. Whitespace never joins values (§3), so `${b} + ${c}` is an error
+   today and the syntax stays free.
+4. **Indentation as an alternative to braces**, Scala 3 style — both forms allowed. Not in v1; v1 is
    braces only. **Parked until implementation of indentation starts** — do not reopen it before then.
 
    Settled:
@@ -440,3 +477,15 @@ alternative listed here should not be re-proposed without new information.
   error to prevent; for the same reason concatenation parts must touch. After any value comes a
   separator, a comment or a closing bracket. Empty elements are errors; a trailing separator is
   allowed in sequences and blocks. Directive arguments follow the same rule. Newline is LF or CRLF.
+
+### Session 3 — 2026-10-05
+
+- **`:=` for explicit replacement.** The user's proposal. Deep merge left no way to drop a key that an
+  earlier source or an include defined; `:=` discards the earlier value whatever it was. `:` keeps its
+  meaning, and so does the block form `key { … }`. The spelling matches sbt.
+- **No append operator.** Proposed together with `:=` as `:+` (append to a sequence, merge into a
+  map), then dropped by the user: appending can later be expressed as a value expression such as
+  `a: ${b} + ${c}` (§13), while replacement has no other spelling. Also discussed and left with it:
+  whether `:+` takes an element (as in Scala and HOCON's `+=`) or a sequence.
+- **Merging over an unresolved substitution is unspecified** — found while discussing `:+`, but it
+  applies to plain `:` already. Recorded as open (§13).
