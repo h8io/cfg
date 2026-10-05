@@ -209,7 +209,30 @@ in practice it matters for maps, and anywhere the author wants the intent to be 
   `:=` in an included file resets what the including block held before the `@include`, and `:=` in
   the second URL resets what the first defined.
 - With no earlier value `:=` behaves like `:`.
-- `a := ${b}` needs no deferred merge: whatever `${b}` resolves to, nothing before it survives.
+- `a := ${b}` is always allowed: whatever `${b}` resolves to, nothing before it survives.
+
+**No merging over a substitution in v1.** Merging runs in phase 3 and substitutions resolve in phase 4
+(§8), so when one side of a `:` merge is a whole-value `${…}`, phase 3 cannot know whether it is
+merging two maps or replacing one value with another. Instead of deferring the merge, v1 rejects it:
+a `:` field meeting an earlier value of the same key is an error when one side is a substitution and
+the other is a map or a substitution.
+
+```
+a: ${server}
+a { port: 1 }      # error: cannot merge into a substitution, use := to replace
+
+b { port: 1 }
+b: ${server}       # error: ${server} may be a map, use := to replace
+
+c: ${x}
+c: 5               # fine: a scalar replaces whatever ${x} turns out to be
+```
+
+A concatenation such as `"jdbc:"${host}` is always a scalar and never triggers the rule; `${?x}` does,
+since whether it resolves is not known in phase 3 either. The rule applies at every depth of a
+recursive merge, and the error offers `:=` as the fix. Merge errors are reported in the same batch as
+substitution errors (§11); the key is dropped, and nodes depending on it are silenced by the
+root-cause rule.
 
 There is deliberately no append operator. Appending to a sequence or concatenating values is a job for
 an expression in value position — `a: ${b} + ${c}` — which can be added later (§13); replacement
@@ -329,10 +352,7 @@ mistake is worse than stopping.
 
 1. **Name.** Format name, module directory, artifact id, package, file extension and loader object
    name. Deferred by decision; still has to be settled before any code is written.
-2. **Merging over a substitution.** `a: ${server}` followed by `a { port: 1 }` — the earlier side is
-   not resolved until phase 4 (§8), so the deep merge of phase 3 cannot be done there and has to be
-   deferred into a node resolved together with the substitutions. Not specified yet. Related: which
-   tag a merged map ends up with when both sides wrote one.
+2. **The tag of a merged map**, when both sides of a `:` merge wrote one.
 3. **Value expressions**, e.g. `${b} + ${c}` for sequence concatenation — the replacement for an
    append operator (§7). Not in v1. Whitespace never joins values (§3), so `${b} + ${c}` is an error
    today and the syntax stays free. **Parked** by the user as hard from every angle — do not reopen
@@ -492,3 +512,8 @@ alternative listed here should not be re-proposed without new information.
   applies to plain `:` already. Recorded as open (§13).
 - **Value expressions parked.** Sequence concatenation through expressions is left for later, by the
   user's call: it is not simple from any angle. §13 keeps it as a parked item.
+- **No merging over a substitution in v1** (§7). The user's call, the first of two readings offered:
+  deep merge stays, but a `:` merge where one side is a whole-value `${…}` and the other a map or a
+  substitution is an error pointing at `:=`. Rejected for now: a deferred merge resolved in phase 4
+  (HOCON's `ConfigDelayedMerge`), which is what lifting the restriction later would take. Also
+  offered and not meant: dropping deep merge from v1 entirely.
