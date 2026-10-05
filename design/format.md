@@ -7,9 +7,9 @@ Extensible Format*:
 |---|---|
 | Format | DEF |
 | Module directory | `impl/def` |
-| sbt project | `df` — `def` cannot be a `val` |
+| sbt project | `defg` — `def` cannot be a `val` |
 | Artifact | `cfg-def` |
-| Package | `h8io.cfg.impl.df` |
+| Package | `h8io.cfg.impl.defg` — *def* + *cfg* |
 | Loader object | `DEF`, as `HOCON` and `YAML` |
 | File extension | `.def` |
 
@@ -539,9 +539,12 @@ alternative listed here should not be re-proposed without new information.
   directive system (§6). `def` is a keyword in Scala 2 and 3, so the package cannot carry the name.
   The user rejected backticks (``h8io.cfg.impl.`def` ``) — every user importing the public location
   and error types would have to write them. Read as an acronym, the name fits the `HOCON`/`YAML`
-  convention for the loader object, and the package is `df` — the acronym without the word it
-  collides on. Also rejected: an upper-case package `DEF` (clashes with the object of the same name
-  and goes against JVM convention), and `defs`. The extension `.def` was checked: GitHub Linguist
+  convention for the loader object. The package and the sbt project are `defg` — *def* + *cfg*,
+  offered by the user half as a joke: no keyword, no association with anything else, searchable.
+  Rejected: `df`, briefly adopted, because it reads as a Spark DataFrame and the format is expected
+  to be used with Spark, where a local `df` would also shadow the package; an upper-case package
+  `DEF` (clashes with the object of the same name and goes against JVM convention); `defs`, which
+  the user did not like. The extension `.def` was checked: GitHub Linguist
   maps it to no language, and its other uses (Windows linker module-definition files, Apptainer
   container definitions, Modula-2) barely overlap with a Scala project's resources.
 - **Correction to session 1:** `native` is not a Scala 2 keyword (Scala has the `@native` annotation,
