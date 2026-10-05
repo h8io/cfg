@@ -1,12 +1,21 @@
-# Native config format — design notes
+# DEF — design notes
 
-Working document for the new loader module under `impl/`. The format name, the module name and
-the file extension are **not decided yet**; this document says `NCF` (native config format) as a
-placeholder and marks every place the name leaks into the code.
+Working document for the new loader module under `impl/`. The format is **DEF** — *Declarative
+Extensible Format*:
 
-**Status:** under discussion, expected to span several sessions. §2 lists what is settled, §12 what
-is still open, and §13 logs how each decision was reached so a later session does not reopen a
-question that was already argued through. Add to §13 rather than silently editing §2.
+| Where | Name |
+|---|---|
+| Format | DEF |
+| Module directory | `impl/def` |
+| sbt project | `defg` — `def` cannot be a `val` |
+| Artifact | `cfg-def` |
+| Package | `h8io.cfg.impl.defg` — *def* + *cfg* |
+| Loader object | `DEF`, as `HOCON` and `YAML` |
+| File extension | `.def` |
+
+**Status:** under discussion, expected to span several sessions. §2 lists what is settled, §13 what
+is still open, and §14 logs how each decision was reached so a later session does not reopen a
+question that was already argued through. Add to §14 rather than silently editing §2.
 
 ## 1. Why a format of our own
 
@@ -39,25 +48,54 @@ loader path.
 | Include placement | Anywhere in the tree, not just at file top level |
 | Include sources | Relative paths, classpath resources; optional variant that tolerates a missing file |
 | Multi-line strings | Triple quotes, raw, with the common leading indent stripped |
-| Special words | Avoided — `@`-prefixed directives instead, as an open, extensible set |
+| Special words | Avoided — `@`-prefixed directives instead, as an open, extensible set. `null` is the one exception |
+| Error model | `Either`, no Cats; as many errors per run as can be reported honestly (§11) |
+| Dotted keys | Sugar for nesting; a quoted key is indivisible, dots included |
+| Substitution location | Reference site, carrying the definition site with it (§10) |
+| `impl/hocon` | Stays, alongside this module |
+| Overriding | `:` merges maps, `:=` replaces whatever was there (§7); no append operator |
 
 ## 3. Lexical structure
 
-- Encoding is UTF-8.
+- Encoding is UTF-8. A newline is LF or CRLF; a lone CR is an error.
 - `#` starts a comment that runs to the end of the line. There is deliberately no second comment
   form.
 - **Bare keys** match `Id.SafeKeyPattern` exactly — `^[\p{L}_][\p{L}\p{N}_-]*$`. Anything else is
   written as a quoted key.
 - **Quoted keys and quoted scalars** use `"…"` with the escape set `Id.quote` produces: `\"`, `\\`,
   `\b`, `\f`, `\n`, `\r`, `\t` and `\uXXXX`.
+- **Dotted keys** — `a.b.c: v` is sugar for `a { b { c: v } }`. The split happens only on dots
+  *between* key tokens: a quoted key is indivisible, so `"a.b": v` is one key named `a.b`, and
+  `x."a.b".c` is three levels. This is also what `Id.path` produces — a key containing a dot fails
+  `SafeKeyPattern` and is rendered quoted — so the round-trip property holds.
 
   The two rules together buy a property worth keeping: the output of `Id.path` is itself valid
   source. `server."odd key"[0]` renders from a node and parses back to the same address. Any change
   to `Id.quote` has to be mirrored here, and vice versa.
-- **Unquoted scalars** run to the end of the line, or to the first `,`, `}`, `]` or `#`, with
-  surrounding whitespace trimmed. What is left becomes `IScalar.value` verbatim — `1e5` stays
+- **Unquoted scalars** contain no whitespace. One runs to the first whitespace, `,`, `}`, `]` or `#`;
+  after it only a separator, a comment or the end of the block may follow, so `a: foo bar` is an
+  error that says to quote the value. What was read becomes `IScalar.value` verbatim — `1e5` stays
   `"1e5"`, `true` stays `"true"`, `007` stays `"007"`. There is no type inference anywhere in the
-  parser.
+  parser. A value with spaces is written quoted: `greeting: "Hello, world"`.
+
+  An unquoted scalar may not start with `'`: YAML's `a: 'x'` would otherwise parse silently to a
+  value with the quotes kept. `~` gets no rule — it is the string `~`, and `null` is written out.
+- **`:` after a key** must be followed by whitespace or the end of the line, so `a:b` in a block is an
+  error with a hint rather than a field. Inside a value `:` is ordinary: `url: http://host:8080`.
+  `:=` is the replacing form of `:` (§7) and follows the same rule: `a:=b` is an error.
+- **Separators** are `,` and newline, nothing else — whitespace never separates, so `[foo bar]` and
+  `a: 1 b: 2` are errors, not two elements or two fields. After any value, scalar or container,
+  only a separator, a comment or the closing bracket may follow: `a { x: 1 } b: 2` needs a `,`.
+  A `,` followed by a newline is one separator, and blank lines separate nothing extra. An empty
+  element (`[a,,b]`, `[, a]`) is an error — there is no empty value, `null` is written out. A
+  trailing separator is allowed in sequences and blocks alike.
+
+  The rule also frees `- ` (dash, space) at the start of an indented line for the sequence element
+  marker (§13): `- 5` can never be a scalar, `-5` and `"- 5"` always are.
+- **`null`** — the one reserved word. An unquoted scalar whose trimmed text is exactly `null`
+  becomes `Node.INull`; `"null"` in quotes stays a scalar. A tag is kept: `!secret null` is an
+  `INull` with `tag = Some("secret")`. `true`, `false` and every other word remain plain scalars.
+  `null` is reserved only in value position — as a key it is an ordinary bare key.
 
 ## 4. Grammar sketch
 
@@ -65,16 +103,19 @@ loader path.
 document   = block-body
 block      = "{" block-body "}"
 block-body = { field | directive } 
-field      = key { "." key } ( "=" value | block )
+field      = key { "." key } ( ( ":" | ":=" ) value | block )
 value      = [ tag ] ( scalar | block | seq | directive | substitution-expr )
 seq        = "[" [ value { sep value } [ sep ] ] "]"
 sep        = "," | newline
 tag        = "!" identifier
-scalar     = bare-scalar | quoted-scalar | multiline-scalar
+scalar     = null | bare-scalar | quoted-scalar | multiline-scalar
 ```
 
-Fields are separated by a newline or a `,`. `key { … }` needs no `=`. A dotted key
-(`server.tls.enabled = true`) is sugar for nested blocks.
+Fields are separated by a newline or a `,` (§3). `key { … }` needs no `:`, and the `{` must be on the
+same line as the key: `key` followed by `{` on the next line is an error. That keeps a key at the end
+of a line free for the indentation syntax (§13). A dotted key
+(`server.tls.enabled: true`) is sugar for nested blocks. The block form `key { … }` means `key: { … }`,
+so it merges; replacing a block is written `key := { … }`.
 
 ## 5. Values
 
@@ -86,7 +127,7 @@ longest common leading whitespace across the non-blank lines is stripped:
 
 ```
 server {
-  banner = """
+  banner: """
     Welcome.
       Indented line.
   """
@@ -97,8 +138,8 @@ server {
 **Tags** — `!name` before any value, including containers:
 
 ```
-timeout = !duration 5s
-routes  = !ordered { a = 1, b = 2 }
+timeout: !duration 5s
+routes: !ordered { a: 1, b: 2 }
 ```
 
 Only tags written in the source reach `ISome.tag`; nothing is ever inferred, and there is no
@@ -116,7 +157,11 @@ and may appear in two positions:
 
 - **statement position**, inside any block or at the top of a file — it must produce a map, which is
   merged into the enclosing block at the point where it appears, so fields below it override it;
-- **value position**, on the right of `=` or as a sequence element — it produces a single node.
+- **value position**, on the right of `:` or as a sequence element — it produces a single node.
+
+Arguments are separated like everything else, by `,` or a newline, so a long directive can be split
+across lines. They keep `name = literal`, not `name: literal`: a directive is a call with named
+arguments, as in Scala, not a block of fields.
 
 Argument literals are strings, bare identifiers, `true`/`false` and integers. Arguments are
 **literal only — no substitutions**. This is not a simplification, it is forced by the phase order in
@@ -152,6 +197,67 @@ The same rule applies in all three places it is needed, so there is one behaviou
 
 This follows the call already made for `impl/yaml`.
 
+**Tags in a merge.** When two maps merge, the result takes the later map's tag if one was written there,
+and keeps the earlier one otherwise. Being untagged is not a reason to drop a tag:
+
+```
+routes: !ordered { a: 1 }
+routes { b: 2 }            # !ordered { a: 1, b: 2 }
+routes: !sorted { c: 3 }   # !sorted { a: 1, b: 2, c: 3 }
+```
+
+A replaced value carries only its own tag; with `:=` that holds for maps too.
+
+**Explicit replacement — `:=`.** A field written with `:=` discards whatever the key held before and
+takes the new value as is, with its own tag:
+
+```
+# reference.conf
+pool { min: 1, max: 10, idle: 30s }
+
+# app.conf
+pool := { max: 4 }    # pool is { max: 4 }; min and idle are gone
+```
+
+With `:` the result would have been `{ min: 1, max: 4, idle: 30s }`, and there is no other way to drop
+a key that an earlier source defined. For scalars and sequences `:=` gives the same result as `:`, so
+in practice it matters for maps, and anywhere the author wants the intent to be visible.
+
+- With a dotted key the operator applies to the last key only: `a.b.c := { … }` replaces `c` and
+  merges `a` and `b` as usual.
+- The operator is kept in the syntax tree until merging, and works in all three places listed above:
+  `:=` in an included file resets what the including block held before the `@include`, and `:=` in
+  the second URL resets what the first defined.
+- With no earlier value `:=` behaves like `:`.
+- `a := ${b}` is always allowed: whatever `${b}` resolves to, nothing before it survives.
+
+**No merging over a substitution in v1.** Merging runs in phase 3 and substitutions resolve in phase 4
+(§8), so when one side of a `:` merge is a whole-value `${…}`, phase 3 cannot know whether it is
+merging two maps or replacing one value with another. Instead of deferring the merge, v1 rejects it:
+a `:` field meeting an earlier value of the same key is an error when one side is a substitution and
+the other is a map or a substitution.
+
+```
+a: ${server}
+a { port: 1 }      # error: cannot merge into a substitution, use := to replace
+
+b { port: 1 }
+b: ${server}       # error: ${server} may be a map, use := to replace
+
+c: ${x}
+c: 5               # fine: a scalar replaces whatever ${x} turns out to be
+```
+
+A concatenation such as `"jdbc:"${host}` is always a scalar and never triggers the rule; `${?x}` does,
+since whether it resolves is not known in phase 3 either. The rule applies at every depth of a
+recursive merge, and the error offers `:=` as the fix. Merge errors are reported in the same batch as
+substitution errors (§11); the key is dropped, and nodes depending on it are silenced by the
+root-cause rule.
+
+There is deliberately no append operator. Appending to a sequence or concatenating values is a job for
+an expression in value position — `a: ${b} + ${c}` — which can be added later (§13); replacement
+cannot be expressed any other way.
+
 ## 8. Phase order
 
 1. Parse each source URL into a syntax tree, directives unexpanded.
@@ -170,12 +276,15 @@ from a substitution.
 - `${path}` in place of a whole value grafts the referenced node, whatever it is — scalar, block or
   sequence.
 - `prefix${path}suffix` concatenates; the referenced node must then be a scalar, and the result is a
-  scalar.
+  scalar. The parts touch: `"a" ${b}` with a space between is an error, not a concatenation with a
+  space as in HOCON — whitespace never joins or separates values.
 - `${?path}` is optional: when it does not resolve, the field is omitted entirely, so a later lookup
   yields `Node.INone` rather than an error.
 - Lookup order is the merged tree, then system properties, then environment variables — the HOCON
   behaviour, chosen deliberately over an explicit `${env:…}` form.
-- Cycles are an error naming the path. Self-reference (`a = ${a}" x"` reading the pre-merge value) is
+- The graft keeps `null`: `b: ${a}` with `a: null` gives an `INull` at `b`, which is not the same
+  as `${?a}` over a missing `a`.
+- Cycles are an error naming the path. Self-reference (`a: ${a}" x"` reading the pre-merge value) is
   **not** supported in v1; it is reported as a cycle.
 
 ## 10. Locations
@@ -184,10 +293,71 @@ Every node carries its own `Location`, with `description` rendered as `<source>:
 This is the visible win over `impl/hocon`, where the description is whatever typesafe-config
 composed.
 
-For a node produced by a substitution, the proposal is to keep the **definition** site — where the
-value was actually written — rather than the reference site.
+A node produced by a substitution carries **both** sites: the reference site as its primary
+coordinates, and the location of the node it was taken from. `Location` is an open trait in `cfg`, so
+this needs no protocol change — the module defines its own hierarchy:
 
-## 11. Implementation notes
+```scala
+sealed trait DefLocation extends Location
+
+// written here
+final case class SourceLocation(source: String, line: Int, column: Int) extends DefLocation
+// grafted here by `${path}`; `origin` is where the value came from
+final case class ReferenceLocation(at: SourceLocation, path: String, origin: Location) extends DefLocation
+// a scalar built by concatenation; one entry per `${…}`, each with its own column
+final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLocation]) extends DefLocation
+// origins that are not a file
+final case class SystemPropertyLocation(name: String) extends DefLocation
+final case class EnvLocation(name: String) extends DefLocation
+```
+
+`origin` is a `Location`, not a `SourceLocation`, so chains fall out on their own: with
+`a: ${b}`, `b: ${c}`, `c: 1`, the node at `a` is `ReferenceLocation(a-site, "b",
+ReferenceLocation(b-site, "c", SourceLocation(c-site)))`. The environment and system properties get
+a location of their own instead of a fake file position.
+
+`description` puts the reference site first, because that is where the reader has to go:
+`app.conf:12:9 (${db.url} from base.conf:3:7)`.
+
+**Grafted containers.** With `a: ${server}`, *every* node in the grafted subtree gets a
+`ReferenceLocation` — the reference site of `a`, the path it was taken by (`server.port`), and that
+node's own origin. Marking only the root would leave an error at `a.port` pointing at `server`'s
+line with no hint of how it ended up under `a`.
+
+**Concatenation.** `url: "jdbc:"${host}"/db"` is a new scalar written at the reference site, so its
+primary coordinates are that site, and it carries one `ReferenceLocation` per `${…}` in the order
+written — every source the value was assembled from.
+
+## 11. Errors
+
+The loader returns `Either[DefErrors, Node.IMap[Id.Root]]`, where `DefErrors` is a non-empty list of
+module-local errors and itself a `CfgError` — `Either` is covariant, so it reads as
+`Either[CfgError, …]` to anyone who does not care. The list is the module's own type (head + `List`),
+because `AndError` and `NonEmptyChain` live in `schema` and Cats is not a dependency here. Every
+error carries a `Location`.
+
+The goal is **as many errors per run as can be reported without inventing any**: a user fixing a
+config should not have to rerun the loader once per mistake, but a cascade of consequences of one
+mistake is worse than stopping.
+
+- **Parsing recovers at synchronisation points.** A broken field is skipped to the next field
+  separator (newline or `,`) at the same bracket depth, or to the `}` closing its block; the parser
+  tracks bracket depth to find them. The braced syntax is what makes this cheap. Each source is
+  parsed independently, so an error in one file never hides errors in another.
+- **Some errors end the source.** An unterminated `"…"` or `"""…"""`, or an unbalanced bracket at
+  end of input, leaves nothing trustworthy to resynchronise on; the parser reports it and stops
+  *that source*.
+- **Directive failures are local.** A missing include, a cycle, an unknown directive or a bad
+  argument is reported, the directive contributes nothing, and expansion continues.
+- **Phases are gated.** If phases 1–2 (§8) produced any error, phases 3–5 do not run: substitutions
+  over a tree with holes cut by recovery would report references to fields that exist but were lost
+  in the skip. Syntax and directive errors come as one batch; substitution errors, if the first
+  batch was empty, as the next.
+- **Substitution errors report root causes only.** Every unresolved reference, cycle and
+  concatenation of a non-scalar is reported, but a node that depends on an already failed node is
+  dropped silently: with `a: ${missing}` and `b: ${a}`, only `missing` is named.
+
+## 12. Implementation notes
 
 - No external dependencies, like `cfg` and `impl/hocon`.
 - Unlike the hocon and yaml backends, which wrap a foreign structure lazily, this module owns its
@@ -198,24 +368,62 @@ value was actually written — rather than the reference site.
 - `-Xfatal-warnings` is on, so exhaustiveness in the parser's pattern matches is enforced rather
   than merely intended.
 
-## 12. Open questions
+## 13. Open questions
 
-1. **Error model.** `Either[CfgError, Node.IMap[Id.Root]]` keeps the module dependency-free and puts
-   a syntax error in the same algebra as a decode error; an exception matches what `HOCON` and `YAML`
-   do today; `Validated` would let a whole file's errors accumulate through `AndError` but pulls in
-   Cats. Recommendation: `Either`, with a `ParseError` carrying a `Location`.
-2. **How to write `null`.** `INull` is a distinct node in the protocol, so the format needs a
-   spelling for it, but a bare `null` keyword is exactly the kind of magic word the directive system
-   exists to avoid. Candidates: bare `null`, a `!null` tag, an `@null` directive, or an empty value.
-3. **Dotted keys.** Kept as sugar above; worth confirming, since they interact with quoted keys and
-   with `Id.path` round-tripping.
-4. **Substitution location** — definition site or reference site (§10).
-5. **Name.** Format name, module directory, artifact id, package, file extension and loader object
-   name. Deferred by decision.
-6. **Does this retire `impl/hocon`?** It is recorded as a temporary PoC, and this module covers its
-   use cases without its scalar-fidelity defect.
+1. **Value expressions**, e.g. `${b} + ${c}` for sequence concatenation — the replacement for an
+   append operator (§7). Not in v1. Whitespace never joins values (§3), so `${b} + ${c}` is an error
+   today and the syntax stays free. **Parked** by the user as hard from every angle — do not reopen
+   it until it is raised again.
+2. **Indentation as an alternative to braces**, Scala 3 style — both forms allowed. Not in v1; v1 is
+   braces only. **Parked until implementation of indentation starts** — do not reopen it before then.
 
-## 13. Decision log
+   Settled:
+   - The lexer turns indentation into virtual `{` / `}` from a stack of widths; the grammar in §4 and
+     the parser stay unchanged, which is why it can be added later.
+   - A tab in indentation is an error.
+   - A dedent must land exactly on a width in the stack. Recovery (§11): every line is reported as an
+     error until one lands on a width from the stack again.
+   - **Sequences use a `- ` element marker.** Unquoted scalars contain no whitespace (§3), so a line
+     starting with `- ` is always an element: `- 5` is an element holding `5`, while `-5` and
+     `"- 5"` are scalars. Bare keys cannot start with `-` either, so the marker is never a key.
+     Whether a block opened by indentation is a map or a sequence is decided by its first line;
+     mixing fields and `- ` elements in one block is an error.
+   - **A map element is written as in YAML:** its first field on the marker's line, the rest aligned
+     under that field's key. The column after `- ` becomes the element's indentation baseline.
+
+     ```
+     servers:
+       - host: a
+         port: 1
+       - host: b
+         port: 2
+     ```
+
+   Proposed, not confirmed:
+   - `key:` at the end of a line, followed by a deeper-indented line, opens a block — the Scala 3
+     rule for `:` at the end of a line, and what `key:` would lead a reader to expect anyway. A bare
+     key alone on a line stays an error.
+   - A container tag goes after `:`: `routes: !ordered`, block on the next line.
+   - Blank lines and comment-only lines do not take part in indentation.
+
+   Open:
+   - **Backward compatibility with v1 files.** Session 2 sketched indentation as significant at file
+     level and inside `{…}`. That breaks any v1 file with sloppy indentation inside braces — the
+     dedent rule would reject it. The alternative: indentation is significant only inside a block
+     that was *opened* by indentation, and an explicit `{` switches it off until its `}`. Then no v1
+     file changes meaning, but a braced block cannot contain an indented one.
+   - **Mixing styles** in one file, and in one block.
+   - **Indent width** — any deeper indent opens a block, or one step fixed per file (which would also
+     catch some shifted lines).
+   - **Silently shifted lines.** A line moved by exactly one level is still valid and changes parent.
+     Braces make that mistake loud; the stack rule catches only misaligned lines. Accept, or find a
+     mitigation (fixed width above is one).
+   - **Opt-in.** Enabled everywhere automatically, or per file (a directive, or a separate extension).
+
+   Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
+   indentation can claim it later.
+
+## 14. Decision log
 
 Each entry records what was chosen, and — where it matters — what was rejected and why. A rejected
 alternative listed here should not be re-proposed without new information.
@@ -248,3 +456,96 @@ alternative listed here should not be re-proposed without new information.
   a Scala 2 keyword — the package would need backticks), `SCON`, `H8CON`, `H8`, and role-based names
   like `cfg-text`. To be settled before any code is written, since it appears in the directory,
   artifact id, package, file extension and loader object name.
+
+### Session 2 — 2026-09-25
+
+- **Error model: `Either`.** The reason given was dependency minimisation, held to as long as
+  possible. Rejected: exceptions (what `HOCON` and `YAML` do today) and `Validated` (pulls in Cats).
+- **Report as many errors as possible, not the first one.** The user's requirement, added after the
+  first draft of this entry said "first error only" because `AndError` lives in `schema`. Resolved
+  without Cats: the left side is a module-local non-empty error list that is itself a `CfgError`,
+  and the parser recovers at synchronisation points (§11).
+- **Phases are gated, and substitution errors name root causes only** (§11). Both proposed in
+  session 2 and accepted as written: running substitutions over a tree with holes cut by recovery
+  would report fields that exist but were skipped, and reporting every dependant of a failed
+  reference buries the one line that needs fixing.
+- **`null` is a reserved word — probably the only one.** Rejected: a `!null` tag (tags are for the
+  decoder, and `INull` already has a `tag` field of its own), an `@null` directive (directives
+  expand to maps or nodes during parsing; spending one on a constant is ceremony), an empty value
+  (invisible, and easy to produce by accident). This amends the "no special words" row in §2 rather
+  than overturning it: the directive system still covers everything extensible.
+- **A quoted key is indivisible.** Dots split only between key tokens, so `"a.b"` is one key. This
+  matches what `Id.path` already renders.
+- **Substitution location: reference site, with the definition site carried along.** The user's
+  proposal of two location types. Rejected: definition site only (the proposal in session 1) — it
+  points away from the line that actually put the value there.
+- **Every node of a grafted subtree gets a `ReferenceLocation`**, not only its root.
+- **A concatenated scalar carries the list of its sources**, one `ReferenceLocation` per `${…}`.
+  Rejected: a plain `SourceLocation` at the reference site, which forgets where the parts came from.
+- **`impl/hocon` stays**, alongside this module, rather than being retired by it.
+- **Indentation deferred, braces only in v1.** Raised by the user as Scala 3-style dual syntax, which
+  is new information against session 1's rejection (that rejected indentation *instead of* braces).
+  Kept as an open question (§13) with the mechanics recorded there; the user's rules so far: tabs in
+  indentation are an error, and a misaligned dedent is reported on every line until indentation
+  matches the stack again.
+
+- **Unquoted scalars contain no whitespace; a value with spaces is quoted.** The user's rule, and it
+  applies to v1, not only to indentation: it replaces "unquoted scalars run to the end of the line".
+  Since every value is a string anyway, nothing is lost but the quotes. It is what makes the
+  indentation sequence marker unambiguous — `- 5` is an element, `-5` and `"- 5"` are scalars —
+  and it turns a stray second word on a line into an error instead of part of the value.
+- **`{` must be on the key's line.** Forbidden in v1 so that a key at the end of a line stays free to
+  open an indentation block later (§13). Rejected: allowing it, which would make that position
+  ambiguous the moment indentation is added.
+- **A map inside an indentation sequence is written as in YAML**: first field on the `- ` line, the
+  rest aligned under it. Rejected: `-` alone on a line with the map below it, and allowing both.
+- **`:` between key and value, not `=`.** The user's preference, and close to Scala 3. `=` is as
+  common inside values as `:` (SQL, expressions), so neither frees values from quoting. The known
+  cost: a file with `:`, indentation and `- ` looks like YAML, and pasted YAML mostly fails loudly —
+  multi-word values, block scalars, anchors — but `a: 'x'` and `a: ~` would parse silently to
+  something else (§13). The gain: `key:` at the end of a line becomes a natural indentation opener,
+  as in Scala 3, and the proposal in §13 now uses it. Rejected: allowing both `:` and `=` as HOCON
+  does — two spellings for one thing.
+- **Details of `:`.** Whitespace or end of line is required after it. An unquoted value may not
+  start with `'`, which closes the silent YAML difference for `a: 'x'`; `~` gets no rule, being one
+  character with `null` spelled out. Directive arguments keep `name = literal`: a call with named
+  arguments, as in Scala, distinct from fields.
+- **Separators: `,` and newline only.** Whitespace never separates — `[foo bar]` with forgotten
+  quotes would otherwise silently become two elements, the same failure `a: foo bar` was made an
+  error to prevent; for the same reason concatenation parts must touch. After any value comes a
+  separator, a comment or a closing bracket. Empty elements are errors; a trailing separator is
+  allowed in sequences and blocks. Directive arguments follow the same rule. Newline is LF or CRLF.
+
+### Session 3 — 2026-10-05
+
+- **`:=` for explicit replacement.** The user's proposal. Deep merge left no way to drop a key that an
+  earlier source or an include defined; `:=` discards the earlier value whatever it was. `:` keeps its
+  meaning, and so does the block form `key { … }`. The spelling matches sbt.
+- **No append operator.** Proposed together with `:=` as `:+` (append to a sequence, merge into a
+  map), then dropped by the user: appending can later be expressed as a value expression such as
+  `a: ${b} + ${c}` (§13), while replacement has no other spelling. Also discussed and left with it:
+  whether `:+` takes an element (as in Scala and HOCON's `+=`) or a sequence.
+- **Merging over an unresolved substitution is unspecified** — found while discussing `:+`, but it
+  applies to plain `:` already. Recorded as open (§13).
+- **Value expressions parked.** Sequence concatenation through expressions is left for later, by the
+  user's call: it is not simple from any angle. §13 keeps it as a parked item.
+- **No merging over a substitution in v1** (§7). The user's call, the first of two readings offered:
+  deep merge stays, but a `:` merge where one side is a whole-value `${…}` and the other a map or a
+  substitution is an error pointing at `:=`. Rejected for now: a deferred merge resolved in phase 4
+  (HOCON's `ConfigDelayedMerge`), which is what lifting the restriction later would take. Also
+  offered and not meant: dropping deep merge from v1 entirely.
+- **A merged map takes the later tag if written, the earlier one otherwise** (§7). The user's call.
+- **Name: DEF, Declarative Extensible Format.** The user's proposal; "extensible" stands for the
+  directive system (§6). `def` is a keyword in Scala 2 and 3, so the package cannot carry the name.
+  The user rejected backticks (``h8io.cfg.impl.`def` ``) — every user importing the public location
+  and error types would have to write them. Read as an acronym, the name fits the `HOCON`/`YAML`
+  convention for the loader object. The package and the sbt project are `defg` — *def* + *cfg*,
+  offered by the user half as a joke: no keyword, no association with anything else, searchable.
+  Rejected: `df`, briefly adopted, because it reads as a Spark DataFrame and the format is expected
+  to be used with Spark, where a local `df` would also shadow the package; an upper-case package
+  `DEF` (clashes with the object of the same name and goes against JVM convention); `defs`, which
+  the user did not like. The extension `.def` was checked: GitHub Linguist
+  maps it to no language, and its other uses (Windows linker module-definition files, Apptainer
+  container definitions, Modula-2) barely overlap with a Scala project's resources.
+- **Correction to session 1:** `native` is not a Scala 2 keyword (Scala has the `@native` annotation,
+  not a reserved word). The collision with Scala Native alone is enough to keep it rejected.
