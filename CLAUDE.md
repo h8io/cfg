@@ -9,13 +9,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 sbt compile
 
 # Run all tests (cross-compiled)
-sbt +test
+sbt +testFull
 
 # Run tests for a single module
-sbt cfg/test
-sbt schema/test
-sbt hocon/test
-sbt yaml/test
+sbt cfg/testFull
+sbt schema/testFull
+sbt hocon/testFull
+sbt yaml/testFull
 
 # Run a single test class
 sbt "schema/testOnly h8io.cfg.schema.DecoderTest"
@@ -24,7 +24,7 @@ sbt "schema/testOnly h8io.cfg.schema.DecoderTest"
 sbt scalafmt
 
 # Check formatting without modifying (used in CI)
-sbt scalafmtSbtCheck scalafmtCheckAll
+sbt "scalafmtSbtCheck; scalafmtCheckAll"
 
 # Full CI check (format + cross-compile + coverage + docs + site)
 ./test.sh
@@ -103,9 +103,25 @@ Built-in decoders (all `implicit`, mixed in via `decoders` package object):
 
 Unlike the HOCON loader this one sets `tag` — but only when the tag was *written* in the source, expanded through the tag handles in effect (`!!int` → `tag:yaml.org,2002:int`, `!postgres` stays `!postgres`). A tag the resolver inferred, and the non-specific `!`, both give `None`. `tagOf` reads this off `Node.isResolved` (public since snakeyaml-engine 3.2); `copyOf` must carry the flag over when it rebuilds a merged mapping.
 
+## sbt 2
+
+sbt 2 differs from sbt 1 in ways that matter here:
+- `sbt` starts a thin client that keeps a server running in the background. The client takes one command line, so
+  several commands as separate arguments fail to parse; scripts run `sbt --server`, which works like sbt 1.
+- `test` is incremental: it skips suites that passed before and have not changed since, even after `clean`. `testFull`
+  runs everything.
+- Task results, compilation included, are cached on disk machine-wide (`~/.cache/sbt`). A cached compilation bypasses
+  the scoverage compiler plugin, so its instrumentation data is never written; `cleanFull` empties that cache (and
+  `target`) and is how `test.sh` starts. CI starts with an empty cache anyway.
+- Bare settings in `build.sbt` apply to every project, which is what `ThisBuild` used to be for. sbt-dynver's keys are
+  the exception: the plugin reads them from `ThisBuild`.
+- Every project's `target` lives under the root's `target/out`. `pages` writes mdoc and unidoc output to
+  `pages/target` instead, where Docusaurus and `release.sh` read it; `pages/clean` empties it, `cleanFull` does not.
+
 ## Conventions
 
-- Scala 2.13 is the primary version; 2.12 is cross-compiled. Use `+` prefix in sbt for cross-compilation.
+- Scala 2.13 is the primary version; 2.12 is cross-compiled. Use `+` prefix in sbt for cross-compilation. Cross-building
+  goes through `crossScalaVersions` and `+`, not `projectMatrix`.
 - Write Scala 3 syntax. The scalafmt dialect is `scala213source3` and scalac runs with `-Xsource:3`, so use
   `import a.b.*` for wildcards and `import a.b.{C as D}` for renames — never `._` or `{C => D}`. Max line length 120.
 - Scalac options include `-Xfatal-warnings`; all warnings are errors.
