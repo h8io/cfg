@@ -4,36 +4,28 @@ import sbt.*
 
 val ProjectName = "cfg"
 
-ThisBuild / organization := "io.h8"
-ThisBuild / organizationName := "H8IO"
-ThisBuild / organizationHomepage := Some(url(s"https://github.com/h8io/$ProjectName"))
-ThisBuild / homepage := Some(url(s"https://github.com/h8io/$ProjectName"))
+organization := "io.h8"
+organizationName := "H8IO"
+organizationHomepage := Some(uri(s"https://github.com/h8io/$ProjectName"))
+homepage := Some(uri(s"https://github.com/h8io/$ProjectName"))
+scmInfo := Some(ScmInfo(uri(s"https://github.com/h8io/$ProjectName"), s"scm:git@github.com:h8io/$ProjectName.git"))
+licenses := List(License.Apache2)
+developers := List(
+  Developer(id = "eshu", name = "Pavel", email = "tjano.xibalba@gmail.com", url = uri("https://github.com/eshu/")))
 
-ThisBuild / scmInfo := Some(
-  ScmInfo(
-    url(s"https://github.com/h8io/$ProjectName"), s"scm:git@github.com:h8io/$ProjectName.git"))
+versionScheme := Some("semver-spec")
 
-ThisBuild / licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.txt"))
+coverageSummaryStmtLowThreshold := 100
+coverageSummaryStmtHighThreshold := 100
+coverageSummaryBranchLowThreshold := 100
+coverageSummaryBranchHighThreshold := 100
 
-ThisBuild / developers := List(
-  Developer(
-    id = "eshu",
-    name = "Pavel",
-    email = "tjano.xibalba@gmail.com",
-    url = url("https://github.com/eshu/")))
-
-ThisBuild / versionScheme := Some("semver-spec")
-
-ThisBuild / coverageSummaryStmtLowThreshold := 100
-ThisBuild / coverageSummaryStmtHighThreshold := 100
-ThisBuild / coverageSummaryBranchLowThreshold := 100
-ThisBuild / coverageSummaryBranchHighThreshold := 100
-
+// sbt-dynver computes the version once for the whole build, from these two in ThisBuild
 ThisBuild / dynverSonatypeSnapshots := true
 ThisBuild / dynverSeparator := "-"
 
-ThisBuild / libraryDependencies +=
-  compilerPlugin("org.typelevel" %% "kind-projector" % "0.13.4" cross CrossVersion.full)
+libraryDependencies +=
+  compilerPlugin(("org.typelevel" %% "kind-projector" % "0.13.4").cross(CrossVersion.full))
 
 val Scalac2Options = Seq(
   "-Xsource:3",
@@ -46,7 +38,7 @@ val Scalac2Options = Seq(
   "-opt:l:inline",
   "-opt-warnings")
 
-ThisBuild / scalacOptions ++=
+scalacOptions ++=
   (CrossVersion.partialVersion(scalaVersion.value) match {
     case Some((2, 12)) =>
       Scalac2Options ++ Seq("-Ywarn-unused", "-Ywarn-dead-code", "-Ywarn-unused:-nowarn", "-Ypartial-unification")
@@ -54,13 +46,13 @@ ThisBuild / scalacOptions ++=
     case _ => Nil
   })
 
-ThisBuild / javacOptions ++= Seq("--release", "11")
+javacOptions ++= Seq("--release", "11")
 
-ThisBuild / scalaVersion := "2.13.18"
-ThisBuild / crossScalaVersions += "2.12.21"
+scalaVersion := "2.13.18"
+crossScalaVersions += "2.12.21"
 
-ThisBuild / libraryDependencies ++= TestBundle % Test
-ThisBuild / libraryDependencies ++=
+libraryDependencies ++= TestBundle % Test
+libraryDependencies ++=
   (CrossVersion.partialVersion(scalaVersion.value) match {
     case Some((2, 12)) => Seq(ScalaCollectionCompat)
     case _ => Nil
