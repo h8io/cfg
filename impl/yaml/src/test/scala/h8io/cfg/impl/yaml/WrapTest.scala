@@ -23,7 +23,7 @@ tagged-nothing: !!null ~
   "wrap" should "create a Node.Map object" in {
     val value = valueOf(config, "map")
     val id = Id.Index(42, Id.Root)
-    inside(wrap(id, value)) { case map: Node.IMap[Id.Index] =>
+    inside(wrap(id, value)) { case map: Node.IMap[?] =>
       map should be(MapImpl(id, value.asInstanceOf[MappingNode]))
       map.tag shouldBe None
       map.iterator.map {
@@ -35,7 +35,7 @@ tagged-nothing: !!null ~
 
   it should "create a Node.Seq object" in {
     val value = valueOf(config, "seq")
-    inside(wrap(Id.Root, value)) { case seq: Node.ISeq[Id.Root] =>
+    inside(wrap(Id.Root, value)) { case seq: Node.ISeq[?] =>
       seq.iterator.zipWithIndex.map { case (node, i) =>
         inside(node) { case Node.Scalar(Id.Index(`i`, Id.Root), None, scalar, _) => scalar }
       }.toList should contain theSameElementsInOrderAs List("1", "2", "3")
@@ -68,7 +68,7 @@ tagged-nothing: !!null ~
   it should "reject a node kind that a composed document cannot contain" in {
     val anchor = new AnchorNode(valueOf(config, "scalar"))
     the[YamlEngineException] thrownBy wrap(Id.Root, anchor) should have message
-      s"Unexpected ${anchor.getNodeType} node at $Label: 4:9"
+      s"Unexpected ${anchor.getNodeType.toString} node at $Label: 4:9"
   }
 
   "tagOf" should "return None for a tag the resolver inferred" in {

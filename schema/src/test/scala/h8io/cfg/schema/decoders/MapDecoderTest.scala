@@ -5,7 +5,6 @@ import h8io.cfg.schema.Decoder
 import h8io.cfg.schema.errors.{CfgErrorOps, UnexpectedNode}
 import h8io.cfg.schema.testutil.MockLocation
 import h8io.cfg.{Id, Node}
-import izumi.reflect.Tag
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -17,11 +16,12 @@ class MapDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
       Iterator("abc" -> "zyx", "def" -> "wvu", "ghi" -> "tsr").map { case (k, v) =>
         Node.Scalar(Id.Key(k, Id.Root), None, v, MockLocation(s"$v location ($k)"))
       } ++ List(Node.Null(Id.Key("jkl", Id.Root), None, MockLocation("null location (qpo)"))))
-    def decoder: Decoder[String] = {
+    // Shadows the built-in stringDecoder of the package, which would otherwise be ambiguous with it on Scala 2
+    implicit def stringDecoder: Decoder[String] = {
       case Node.Scalar(_, _, v, _) => s"decoded $v".valid
       case node: Node => UnexpectedNode[String](node).invalid
     }
-    mapDecoder[String](decoder, Tag[String])(map) shouldBe
+    mapDecoder[String].apply(map) shouldBe
       Map("abc" -> "decoded zyx", "def" -> "decoded wvu", "ghi" -> "decoded tsr").valid
   }
 
@@ -39,17 +39,19 @@ class MapDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
         Node.Scalar(Id.Key("五", Id.Root), None, "sixth", MockLocation(s"sixth location (5)")),
         Node.Null(Id.Key("六", Id.Root), None, MockLocation(s"null location (6)"))
       ))
-    def decoder: Decoder[String] = {
+    // Shadows the built-in stringDecoder of the package, which would otherwise be ambiguous with it on Scala 2
+    implicit def stringDecoder: Decoder[String] = {
       case Node.Scalar(_, _, v, _) => s"decoded $v".valid
       case node: Node => UnexpectedNode[String](node).invalid
     }
-    mapDecoder[String](decoder, Tag[String])(map) shouldBe
+    mapDecoder[String].apply(map) shouldBe
       (UnexpectedNode[String](mapItem) & UnexpectedNode[String](seqItem)).invalid
   }
 
   it should "return UnexpectedNode[Map[String, String]] if node is not a Map" in {
     val scalar = Node.Scalar(Id.Root, None, "value", MockLocation("loc"))
-    def decoder: Decoder[String] = { case node: Node => UnexpectedNode[String](node).invalid }
-    mapDecoder[String](decoder, Tag[String])(scalar) shouldBe UnexpectedNode[Map[String, String]](scalar).invalid
+    // Shadows the built-in stringDecoder of the package, which would otherwise be ambiguous with it on Scala 2
+    implicit def stringDecoder: Decoder[String] = { case node: Node => UnexpectedNode[String](node).invalid }
+    mapDecoder[String].apply(scalar) shouldBe UnexpectedNode[Map[String, String]](scalar).invalid
   }
 }

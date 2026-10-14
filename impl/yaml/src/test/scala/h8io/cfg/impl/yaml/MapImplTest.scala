@@ -25,7 +25,7 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside {
   }
 
   it should "return a Node.Seq object" in
-    inside(MapImpl(Id.Root, yaml"seq: [a, ~, b]")("seq")) { case seq: Node.ISeq[Id.Key] =>
+    inside(MapImpl(Id.Root, yaml"seq: [a, ~, b]")("seq")) { case seq: Node.ISeq[?] =>
       val id = seq.id
       seq.iterator.map {
         inside(_) {
@@ -36,7 +36,7 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside {
     }
 
   it should "return a Node.Map object" in
-    inside(MapImpl(Id.Root, yaml"map: {a: ~, b: c}")("map")) { case map: Node.IMap[Id.Key] =>
+    inside(MapImpl(Id.Root, yaml"map: {a: ~, b: c}")("map")) { case map: Node.IMap[?] =>
       map.iterator.map {
         inside(_) {
           case Node.Scalar(Id.Key(key, Id.Key("map", Id.Root)), None, scalar, _) => key -> Some(scalar)

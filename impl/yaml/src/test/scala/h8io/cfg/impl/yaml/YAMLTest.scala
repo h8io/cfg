@@ -26,7 +26,7 @@ class YAMLTest extends AnyFlatSpec with Matchers with Inside {
     cfg("source") should matchPattern { case Node.Scalar(Id.Key("source", Id.Root), None, "base", _) => }
     cfg("property") should matchPattern { case Node.Scalar(Id.Key("property", Id.Root), None, "12", _) => }
     cfg("nullable") should matchPattern { case Node.Null(Id.Key("nullable", Id.Root), None, _) => }
-    inside(cfg("server")) { case server: Node.IMap[Id.Key] =>
+    inside(cfg("server")) { case server: Node.IMap[?] =>
       server("port") should matchPattern { case Node.Scalar(_, None, "8080", _) => }
       server("secure") should matchPattern { case Node.None(_, _) => }
     }
@@ -35,7 +35,7 @@ class YAMLTest extends AnyFlatSpec with Matchers with Inside {
   it should "name the URL in the location of every node it reads" in {
     val url = resource("base.yaml")
     inside(YAML(url)("property")) { case Node.Scalar(_, None, "12", location) =>
-      location.description shouldBe s"$url: 3:11"
+      location.description shouldBe s"${url.toString}: 3:11"
     }
   }
 
@@ -48,12 +48,12 @@ class YAMLTest extends AnyFlatSpec with Matchers with Inside {
     cfg("source") should matchPattern { case Node.Scalar(Id.Key("source", Id.Root), None, "overridden", _) => }
     cfg("property") should matchPattern { case Node.Scalar(Id.Key("property", Id.Root), None, "12", _) => }
     cfg("nullable") should matchPattern { case Node.Scalar(Id.Key("nullable", Id.Root), None, "non-null", _) => }
-    inside(cfg("server")) { case server: Node.IMap[Id.Key] =>
+    inside(cfg("server")) { case server: Node.IMap[?] =>
       server("host") should matchPattern { case Node.Scalar(_, None, "localhost", _) => }
       server("port") should matchPattern { case Node.Scalar(_, None, "9090", _) => }
       server("secure") should matchPattern { case Node.Scalar(_, None, "true", _) => }
     }
-    inside(cfg("hosts")) { case hosts: Node.ISeq[Id.Key] => hosts.size shouldBe 1 }
+    inside(cfg("hosts")) { case hosts: Node.ISeq[?] => hosts.size shouldBe 1 }
   }
 
   it should "report the tags written in the source" in {
@@ -70,6 +70,6 @@ class YAMLTest extends AnyFlatSpec with Matchers with Inside {
   it should "reject a document that is not rooted at a mapping" in {
     val url = resource("root-seq.yaml")
     the[YamlEngineException] thrownBy YAML(url) should have message
-      s"A configuration root must be a mapping, SEQUENCE found at $url: 1:1"
+      s"A configuration root must be a mapping, SEQUENCE found at ${url.toString}: 1:1"
   }
 }
