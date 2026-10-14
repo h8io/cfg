@@ -1,0 +1,45 @@
+// The sources are the Markdown files under `docs/` at the root of the repository, but Docusaurus reads them from
+// `target/mdoc`, where `sbt pages/mdoc` leaves them with every `scala mdoc` block compiled and evaluated.
+module.exports = {
+  title: 'cfg',
+  url: 'https://cfg.h8.io',
+  baseUrl: '/',
+  onBrokenLinks: 'throw',
+  onBrokenAnchors: 'throw',
+  markdown: {
+    // CommonMark rather than MDX: braces and angle brackets in prose are Scala, not JSX.
+    format: 'detect',
+    hooks: { onBrokenMarkdownLinks: 'throw' },
+  },
+  presets: [
+    [
+      'classic',
+      {
+        docs: { path: 'target/mdoc', routeBasePath: '/', sidebarPath: require.resolve('./sidebars.js') },
+        blog: false,
+        pages: false,
+        theme: {},
+      },
+    ],
+  ],
+  themeConfig: {
+    navbar: {
+      title: 'cfg',
+      items: [
+        // `pathname://` because the API is copied next to the site after it is built, out of the link checker's sight.
+        {
+          type: 'dropdown',
+          label: 'API',
+          position: 'right',
+          items: [
+            { href: 'pathname:///api/scala-2.13/', label: 'Scala 2.13' },
+            { href: 'pathname:///api/scala-2.12/', label: 'Scala 2.12' },
+          ],
+        },
+        { href: 'https://github.com/h8io/cfg', label: 'GitHub', position: 'right' },
+      ],
+    },
+    // Prism's Scala grammar extends its Java one, which is not loaded by default either.
+    prism: { additionalLanguages: ['java', 'scala'] },
+  },
+};

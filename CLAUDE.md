@@ -26,8 +26,17 @@ sbt scalafmt
 # Check formatting without modifying (used in CI)
 sbt scalafmtSbtCheck scalafmtCheckAll
 
-# Full CI check (format + cross-compile + coverage)
+# Full CI check (format + cross-compile + coverage + docs + site)
 ./test.sh
+
+# Compile the docs' `scala mdoc` blocks, into pages/target/mdoc
+sbt pages/mdoc
+
+# Render pages/target/mdoc with Docusaurus, into pages/target/site
+(cd pages && npm ci && npm run build)
+
+# Live preview; pair with `sbt "pages/mdoc --watch"`
+(cd pages && npm start)
 ```
 
 ## Architecture
@@ -41,6 +50,10 @@ Two-layer design: `cfg` is the low-level protocol (a format-agnostic ADT for con
 - **`impl/hocon`** (artifact `cfg-hocon`) — loads HOCON and YAML into the `cfg` AST using `typesafe-config` + `typesafe-config-yaml`.
 - **`impl/yaml`** (artifact `cfg-yaml`) — loads YAML into the `cfg` AST using `snakeyaml-engine` directly, propagating tags.
 - **root** (artifact `cfg-all`) — aggregate; not published.
+- **pages** — documentation site (sources in `docs/`); not aggregated in root. Two halves: sbt runs mdoc and unidoc,
+  then Docusaurus (`pages/package.json`, Node ≥ 20) renders mdoc's output. The navigation is `pages/sidebars.js` — a new
+  page must be listed there. Docs are CommonMark, not MDX (`markdown.format: 'detect'`), and broken links fail the
+  build.
 
 ### Core AST (`h8io.cfg`)
 
