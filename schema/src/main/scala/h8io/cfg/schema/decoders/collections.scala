@@ -4,7 +4,7 @@ import cats.syntax.all.*
 import h8io.cfg.schema.errors.UnexpectedNode
 import h8io.cfg.schema.{Decoder, ValuesOps}
 import h8io.cfg.{Id, Node}
-import izumi.reflect.{HKTag, Tag}
+import izumi.reflect.Tag
 
 import scala.collection.mutable
 
@@ -16,8 +16,7 @@ trait collections {
         case item: Node.INull[Id.Index] => item.invalid
       }.collectInto[Vector[T], mutable.Builder[T, Vector[T]]](Vector.newBuilder[T])
     case node =>
-      new UnexpectedNode[Vector[T]](
-        node, implicitly[HKTag[{ type Arg[A] = Vector[A] }]].tag.combine(implicitly[Tag[T]].tag)).invalid
+      UnexpectedNode[Vector[T]](node).invalid
   }
 
   implicit def mapDecoder[T: Decoder: Tag]: Decoder[Map[String, T]] = {
@@ -26,7 +25,6 @@ trait collections {
         case entry: Node.Value => Decoder[T](entry).map(value => entry.id.key -> value)
       }.collectInto[Map[String, T], mutable.Builder[(String, T), Map[String, T]]](Map.newBuilder[String, T])
     case node =>
-      new UnexpectedNode[Map[String, T]](
-        node, implicitly[HKTag[{ type Arg[A] = Map[String, A] }]].tag.combine(implicitly[Tag[T]].tag)).invalid
+      UnexpectedNode[Map[String, T]](node).invalid
   }
 }
