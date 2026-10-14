@@ -46,7 +46,7 @@ object HOCON {
       Id.Root,
       urls.iterator
         .map(loader.parseURL)
-        .reduceOption((p, n) => n withFallback p)
+        .reduceOption((p, n) => n.withFallback(p))
         .map(ConfigFactory.load)
         .getOrElse(loader.load)
         .root()

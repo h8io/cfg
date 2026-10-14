@@ -32,6 +32,7 @@ module.exports = {
           label: 'API',
           position: 'right',
           items: [
+            { href: 'pathname:///api/scala-3/', label: 'Scala 3.9' },
             { href: 'pathname:///api/scala-2.13/', label: 'Scala 2.13' },
             { href: 'pathname:///api/scala-2.12/', label: 'Scala 2.12' },
           ],

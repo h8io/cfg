@@ -48,7 +48,7 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
   it should "return Node.Seq" in {
     val list = hocon"""list: [three, [t, w, o], one]""".toConfig.getList("list")
     val nested = list.get(1).asInstanceOf[ConfigList]
-    inside(SeqImpl(Id.Root, list)(1)) { case seq: Node.ISeq[Id.Index] =>
+    inside(SeqImpl(Id.Root, list)(1)) { case seq: Node.ISeq[?] =>
       seq.iterator.zipWithIndex.map { case (value, i) =>
         val expectedOrigin = nested.get(i).origin
         val id = seq.id
@@ -69,7 +69,7 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     val list = hocon"""list: [three, [t, w, o], {n: 2, o: 1, e: 3}]""".toConfig.getList("list")
     val index = list.size() - 1
     val obj = list.get(index).asInstanceOf[ConfigObject]
-    inside(SeqImpl(Id.Root, list)(index)) { case map: Node.IMap[Id.Index] =>
+    inside(SeqImpl(Id.Root, list)(index)) { case map: Node.IMap[?] =>
       map.iterator.map { node =>
         inside(node) {
           case Node.Scalar(Id.Key(key, Id.Index(`index`, Id.Root)), None, scalar, LocationImpl(origin)) =>

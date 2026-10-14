@@ -55,7 +55,7 @@ package object yaml {
       case scalar: ScalarNode => Node.Scalar(id, tagOf(scalar), scalar.getValue, LocationImpl(scalar))
       case _ =>
         throw new YamlEngineException(
-          s"Unexpected ${node.getNodeType} node at ${LocationImpl(node).description}")
+          s"Unexpected ${node.getNodeType.toString} node at ${LocationImpl(node).description}")
     }
 
   @inline private[yaml] def wrap[I <: Id](id: I, mapping: MappingNode): Node.IMap[I] = MapImpl(id, mapping)
