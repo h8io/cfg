@@ -3,7 +3,6 @@ import h8io.sbt.dependencies.*
 import sbt.*
 
 val ProjectName = "cfg"
-val SiteRoot = s"https://cfg.h8.io/"
 
 ThisBuild / organization := "io.h8"
 ThisBuild / organizationName := "H8IO"
@@ -92,13 +91,17 @@ val pages = (project in file("pages"))
     name := "cfg-pages",
     publish / skip := true,
     publishLocal / skip := true,
-    TestScalaUnidoc / unidoc / unidocProjectFilter := inAnyProject -- inProjects(root),
+    // sbt 2 moves every target under the root's target/out; npm and release.sh expect the site's inputs here
+    cleanFiles += baseDirectory.value / "target",
+    ScalaUnidoc / unidoc / target := baseDirectory.value / "target" / s"scala-${scalaBinaryVersion.value}" / "unidoc",
+    ScalaUnidoc / unidoc / unidocProjectFilter := inAnyProject -- inProjects(root),
     // sbt-unidoc concatenates the modules' separately resolved classpaths, so snakeyaml-engine 3.0.1 (pulled by
     // typesafe-config-yaml into hocon) shadows 3.2 (yaml). Use this project's own classpath, resolved as a whole.
     ScalaUnidoc / unidoc / fullClasspath := (Compile / fullClasspath).value,
-    tlSiteApiUrl := Some(url(s"${SiteRoot}api/scala-2.13/")),
-    tlSiteHelium ~= { _.site.mainNavigation(depth = 3) }
+    mdocIn := (ThisBuild / baseDirectory).value / "docs",
+    mdocOut := baseDirectory.value / "target" / "mdoc",
+    mdocVariables :=
+      Map("VERSION" -> (if (isSnapshot.value) previousStableVersion.value else None).getOrElse(version.value))
   )
   .dependsOn(cfg, hocon, schema, yaml)
-  .aggregate(cfg, hocon, schema, yaml)
-  .enablePlugins(ScalaUnidocPlugin, TypelevelSitePlugin)
+  .enablePlugins(ScalaUnidocPlugin, MdocPlugin)
