@@ -1,7 +1,8 @@
 package h8io.cfg.schema.errors
 
 import cats.data.NonEmptyChain
-import cats.kernel.Eq
+import cats.kernel.{Eq, Semigroup}
+import cats.kernel.laws.SemigroupLaws
 import cats.kernel.laws.discipline.SemigroupTests
 import h8io.cfg.CfgError
 import org.scalacheck.{Arbitrary, Gen}
@@ -28,5 +29,14 @@ class CfgErrorLawsTest extends AnyFunSuite with FunSuiteDiscipline with Checkers
 
   checkAll("CfgError AND semigroup", SemigroupTests[CfgError].semigroup)
 
-  checkAll("CfgError OR semigroup", SemigroupTests[CfgError](_ | _).semigroup)
+  // The AND semigroup is the implicit one, so the OR one is handed to the laws directly
+  checkAll(
+    "CfgError OR semigroup",
+    new SemigroupTests[CfgError] {
+      def laws: SemigroupLaws[CfgError] =
+        new SemigroupLaws[CfgError] {
+          override implicit def S: Semigroup[CfgError] = Semigroup.instance(_ | _)
+        }
+    }.semigroup
+  )
 }

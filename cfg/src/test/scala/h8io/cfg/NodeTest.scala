@@ -17,6 +17,11 @@ class NodeTest extends AnyFlatSpec with Matchers with MockFactory {
     Node.INone(key, parent) should matchPattern { case Node.None(`key`, `parent`) => }
   }
 
+  it should "be the node of its own error" in {
+    val none = Node.INone(Id.Key("unexistent", Id.Root), mock[Node.Map])
+    none.node should be theSameInstanceAs none
+  }
+
   "Null" should "be created successfully" in {
     val key = Id.Index(42, Id.Root)
     val location = mock[Location]
@@ -27,6 +32,11 @@ class NodeTest extends AnyFlatSpec with Matchers with MockFactory {
     val key = Id.Index(42, Id.Root)
     val location = mock[Location]
     Node.INull(key, None, location) should matchPattern { case Node.Null(`key`, _, `location`) => }
+  }
+
+  it should "be the node of its own error" in {
+    val nul = Node.INull(Id.Index(42, Id.Root), None, mock[Location])
+    nul.node should be theSameInstanceAs nul
   }
 
   "Scalar" should "be created successfully" in {

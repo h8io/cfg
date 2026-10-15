@@ -37,7 +37,7 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside {
     }
 
   it should "return Node.Seq" in
-    inside(SeqImpl(Id.Root, list"[three, [t, w, o]]")(1)) { case seq: Node.ISeq[Id.Index] =>
+    inside(SeqImpl(Id.Root, list"[three, [t, w, o]]")(1)) { case seq: Node.ISeq[?] =>
       val id = seq.id
       seq.iterator.map {
         inside(_) { case Node.Scalar(Id.Index(_, `id`), None, scalar, _) => scalar }
@@ -45,7 +45,7 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside {
     }
 
   it should "return Node.Map" in
-    inside(SeqImpl(Id.Root, list"[three, {n: 2, o: 1}]")(1)) { case map: Node.IMap[Id.Index] =>
+    inside(SeqImpl(Id.Root, list"[three, {n: 2, o: 1}]")(1)) { case map: Node.IMap[?] =>
       map.iterator.map {
         inside(_) { case Node.Scalar(Id.Key(key, Id.Index(1, Id.Root)), None, scalar, _) => key -> scalar }
       }.toList should contain theSameElementsInOrderAs List("n" -> "2", "o" -> "1")

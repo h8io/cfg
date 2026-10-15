@@ -59,6 +59,6 @@ object YAML {
       case mapping: MappingNode => mapping
       case _ =>
         throw new YamlEngineException(
-          s"A configuration root must be a mapping, ${node.getNodeType} found at ${LocationImpl(node).description}")
+          s"A configuration root must be a mapping, ${node.getNodeType.toString} found at ${LocationImpl(node).description}")
     }
 }

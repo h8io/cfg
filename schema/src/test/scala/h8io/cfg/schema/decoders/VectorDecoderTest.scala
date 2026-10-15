@@ -5,7 +5,6 @@ import h8io.cfg.schema.Decoder
 import h8io.cfg.schema.errors.{CfgErrorOps, UnexpectedNode}
 import h8io.cfg.schema.testutil.MockLocation
 import h8io.cfg.{Id, Node}
-import izumi.reflect.Tag
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -17,11 +16,12 @@ class VectorDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
       Iterator("abc", "def", "ghi").zipWithIndex.map { case (v, i) =>
         Node.Scalar(Id.Index(i, Id.Root), None, v, MockLocation(s"$v location ($i)"))
       })
-    def decoder: Decoder[String] = {
+    // Shadows the built-in stringDecoder of the package, which would otherwise be ambiguous with it on Scala 2
+    implicit def stringDecoder: Decoder[String] = {
       case Node.Scalar(_, _, v, _) => s"decoded $v".valid
       case node: Node => UnexpectedNode[String](node).invalid
     }
-    vectorDecoder[String](decoder, Tag[String])(seq) shouldBe Vector("decoded abc", "decoded def", "decoded ghi").valid
+    vectorDecoder[String].apply(seq) shouldBe Vector("decoded abc", "decoded def", "decoded ghi").valid
   }
 
   it should "return a list of all errors if some values are not decoded successfully" in {
@@ -39,17 +39,19 @@ class VectorDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
         Node.Scalar(Id.Index(5, Id.Root), None, "sixth", MockLocation(s"sixth location (5)")),
         nullItem
       ))
-    def decoder: Decoder[String] = {
+    // Shadows the built-in stringDecoder of the package, which would otherwise be ambiguous with it on Scala 2
+    implicit def stringDecoder: Decoder[String] = {
       case Node.Scalar(_, _, v, _) => s"decoded $v".valid
       case node: Node => UnexpectedNode[String](node).invalid
     }
-    vectorDecoder[String](decoder, Tag[String])(seq) shouldBe
+    vectorDecoder[String].apply(seq) shouldBe
       (UnexpectedNode[String](mapItem) & UnexpectedNode[String](seqItem) & nullItem).invalid
   }
 
   it should "return UnexpectedNode[Vector[String]] if node is not a Seq" in {
     val scalar = Node.Scalar(Id.Root, None, "value", MockLocation("loc"))
-    def decoder: Decoder[String] = { case node: Node => UnexpectedNode[String](node).invalid }
-    vectorDecoder[String](decoder, Tag[String])(scalar) shouldBe UnexpectedNode[Vector[String]](scalar).invalid
+    // Shadows the built-in stringDecoder of the package, which would otherwise be ambiguous with it on Scala 2
+    implicit def stringDecoder: Decoder[String] = { case node: Node => UnexpectedNode[String](node).invalid }
+    vectorDecoder[String].apply(scalar) shouldBe UnexpectedNode[Vector[String]](scalar).invalid
   }
 }

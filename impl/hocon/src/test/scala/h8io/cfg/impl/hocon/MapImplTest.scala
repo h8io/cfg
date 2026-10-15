@@ -38,7 +38,7 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
   it should "return a Node.Seq object" in {
     val obj = hocon"""seq: [a, null, b, null, c, null, "null"]"""
     val list = obj.toConfig.getList("seq")
-    inside(MapImpl(Id.Root, obj)("seq")) { case seq: Node.ISeq[Id.Key] =>
+    inside(MapImpl(Id.Root, obj)("seq")) { case seq: Node.ISeq[?] =>
       seq.iterator.zipWithIndex.map { case (value, i) =>
         val expectedOrigin = list.get(i).origin
         val id = seq.id
@@ -59,7 +59,7 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
   it should "return a Node.Map object" in {
     val cfg = hocon"""map { a: null, b: c, null: "null" }"""
     val obj = cfg.toConfig.getObject("map")
-    inside(MapImpl(Id.Root, cfg)("map")) { case map: Node.IMap[Id.Key] =>
+    inside(MapImpl(Id.Root, cfg)("map")) { case map: Node.IMap[?] =>
       map.iterator.map { node =>
         inside(node) {
           case Node.Scalar(Id.Key(key, Id.Key("map", Id.Root)), None, scalar, LocationImpl(origin)) =>

@@ -29,14 +29,14 @@ class MergeTest extends AnyFlatSpec with Matchers with Inside {
 
   it should "merge nested mappings key by key" in
     inside(merged("{server: {host: h, port: 1}}", "{server: {port: 2, secure: true}}")) {
-      case map: Node.IMap[Id.Root] =>
+      case map: Node.IMap[?] =>
         scalars(map("server").asInstanceOf[Node.ISome[Id.Key]]) should
           contain theSameElementsInOrderAs List("host" -> "h", "port" -> "2", "secure" -> "true")
     }
 
   it should "replace a sequence rather than concatenate it" in
-    inside(merged("{hosts: [a, b, c]}", "{hosts: [x]}")) { case map: Node.IMap[Id.Root] =>
-      inside(map("hosts")) { case hosts: Node.ISeq[Id.Key] =>
+    inside(merged("{hosts: [a, b, c]}", "{hosts: [x]}")) { case map: Node.IMap[?] =>
+      inside(map("hosts")) { case hosts: Node.ISeq[?] =>
         hosts.iterator.map {
           inside(_) { case Node.Scalar(_, _, scalar, _) => scalar }
         }.toList should contain theSameElementsInOrderAs List("x")
@@ -48,7 +48,7 @@ class MergeTest extends AnyFlatSpec with Matchers with Inside {
   }
 
   it should "replace a scalar by a mapping" in
-    inside(merged("{a: 1}", "{a: {b: 2}}")) { case map: Node.IMap[Id.Root] =>
+    inside(merged("{a: 1}", "{a: {b: 2}}")) { case map: Node.IMap[?] =>
       scalars(map("a").asInstanceOf[Node.ISome[Id.Key]]) should contain theSameElementsInOrderAs List("b" -> "2")
     }
 
@@ -59,7 +59,7 @@ class MergeTest extends AnyFlatSpec with Matchers with Inside {
   }
 
   it should "keep the tag and the location of the overlay" in {
-    inside(merged("{a: 1}", "!postgres {a: 2}")) { case map: Node.IMap[Id.Root] =>
+    inside(merged("{a: 1}", "!postgres {a: 2}")) { case map: Node.IMap[?] =>
       map.tag shouldBe Some("!postgres")
       map.location.description shouldBe s"$Label: 1:1"
     }

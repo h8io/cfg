@@ -8,14 +8,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Compile
 sbt compile
 
-# Run all tests (cross-compiled)
-sbt +test
+# Run all tests on 2.13, 2.12 and 3.9
+sbt +testFull
 
 # Run tests for a single module
-sbt cfg/test
-sbt schema/test
-sbt hocon/test
-sbt yaml/test
+sbt cfg/testFull
+sbt schema/testFull
+sbt hocon/testFull
+sbt yaml/testFull
 
 # Run a single test class
 sbt "schema/testOnly h8io.cfg.schema.DecoderTest"
@@ -24,10 +24,19 @@ sbt "schema/testOnly h8io.cfg.schema.DecoderTest"
 sbt scalafmt
 
 # Check formatting without modifying (used in CI)
-sbt scalafmtSbtCheck scalafmtCheckAll
+sbt "scalafmtSbtCheck; scalafmtCheckAll"
 
-# Full CI check (format + cross-compile + coverage)
+# Full CI check (format + cross-compile + coverage + docs + site)
 ./test.sh
+
+# Compile the docs' `scala mdoc` blocks, into pages/target/mdoc
+sbt pages/mdoc
+
+# Render pages/target/mdoc with Docusaurus, into pages/target/site
+(cd pages && npm ci && npm run build)
+
+# Live preview; pair with `sbt "pages/mdoc --watch"`
+(cd pages && npm start)
 ```
 
 ## Architecture
@@ -41,6 +50,10 @@ Two-layer design: `cfg` is the low-level protocol (a format-agnostic ADT for con
 - **`impl/hocon`** (artifact `cfg-hocon`) — loads HOCON and YAML into the `cfg` AST using `typesafe-config` + `typesafe-config-yaml`.
 - **`impl/yaml`** (artifact `cfg-yaml`) — loads YAML into the `cfg` AST using `snakeyaml-engine` directly, propagating tags.
 - **root** (artifact `cfg-all`) — aggregate; not published.
+- **pages** — documentation site (sources in `docs/`); not aggregated in root. Two halves: sbt runs mdoc and unidoc,
+  then Docusaurus (`pages/package.json`, Node ≥ 20) renders mdoc's output. The navigation is `pages/sidebars.js` — a new
+  page must be listed there. Docs are CommonMark, not MDX (`markdown.format: 'detect'`), and broken links fail the
+  build.
 
 ### Core AST (`h8io.cfg`)
 
@@ -90,9 +103,42 @@ Built-in decoders (all `implicit`, mixed in via `decoders` package object):
 
 Unlike the HOCON loader this one sets `tag` — but only when the tag was *written* in the source, expanded through the tag handles in effect (`!!int` → `tag:yaml.org,2002:int`, `!postgres` stays `!postgres`). A tag the resolver inferred, and the non-specific `!`, both give `None`. `tagOf` reads this off `Node.isResolved` (public since snakeyaml-engine 3.2); `copyOf` must carry the flag over when it rebuilds a merged mapping.
 
+## sbt 2
+
+sbt 2 differs from sbt 1 in ways that matter here:
+- `sbt` starts a thin client that keeps a server running in the background. The client takes one command line, so
+  several commands as separate arguments fail to parse; scripts run `sbt --server`, which works like sbt 1.
+- `test` is incremental: it skips suites that passed before and have not changed since, even after `clean`. `testFull`
+  runs everything.
+- Task results, compilation included, are cached on disk machine-wide (`~/.cache/sbt`). A cached compilation bypasses
+  the scoverage compiler plugin, so its instrumentation data is never written; `cleanFull` empties that cache (and
+  `target`) and is how `test.sh` starts. CI starts with an empty cache anyway.
+- Bare settings in `build.sbt` apply to every project, which is what `ThisBuild` used to be for. sbt-dynver's keys are
+  the exception: the plugin reads them from `ThisBuild`.
+- Every project's `target` lives under the root's `target/out`. `pages` writes mdoc and unidoc output to
+  `pages/target` instead, where Docusaurus and `release.sh` read it; `pages/clean` empties it, `cleanFull` does not.
+
 ## Conventions
 
-- Scala 2.13 is the primary version; 2.12 is cross-compiled. Use `+` prefix in sbt for cross-compilation.
+- Scala 2.13 is the main version and the priority, being the one native to current Spark; it is cross-built to 2.12 and
+  to Scala 3.9 (LTS). Use `+` prefix in sbt for cross-compilation. Cross-building goes through `crossScalaVersions` and
+  `+`, not `projectMatrix`. All three share one source tree, written in Scala 2 style that Scala 3 also accepts;
+  idiomatic Scala 3 (`enum`, `extension`, no package objects) is planned for later, with version-specific source
+  directories. Every branch on the Scala version in `build.sbt` lists the versions it knows and ends in
+  `unsupportedScala`. kind-projector is a compiler plugin on 2.x only.
+- Warnings are fatal on every version (`-Xfatal-warnings` on 2.x, `-Werror` on 3), except Scala 3's notice that a
+  trailing `_` for eta-expansion is unnecessary — Scala 2 needs it. Scala 3 takes `-Wall`, and Scala 2 its counterparts,
+  including discarded values (`-Wvalue-discard`, `-Wnonunit-statement`; `-Ywarn-value-discard` on 2.12). Tests and the
+  docs' mdoc snippets silence those two through `-Wconf` (`lenientScalacOptions` in `build.sbt`): a ScalaMock
+  expectation, a ScalaTest assertion or an expression shown with its result is a statement whose value is dropped on
+  purpose. Tests on Scala 3 also silence the initialization checker, which cannot follow ScalaTest's registration of
+  tests during construction.
+- Scala 3 idioms in tests: a context bound is a `using` parameter, and 2.x has no `using` at the call site, so tests put
+  the instance in implicit scope instead of passing it positionally (named after the built-in one it replaces, so that
+  it shadows it on 2.x). A type test on a node is written `case m: Node.IMap[?]`; Scala 3 cannot check
+  `Node.IMap[Id.Key]` against an `INode[Id.Key]`. Interpolating a non-`String` takes an explicit `.toString`.
+- The site's API docs are built for every version, `scala-3`, `scala-2.13` and `scala-2.12` under `api/`, and the
+  navbar's API menu lists them by hand.
 - Write Scala 3 syntax. The scalafmt dialect is `scala213source3` and scalac runs with `-Xsource:3`, so use
   `import a.b.*` for wildcards and `import a.b.{C as D}` for renames — never `._` or `{C => D}`. Max line length 120.
 - Scalac options include `-Xfatal-warnings`; all warnings are errors.

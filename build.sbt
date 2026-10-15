@@ -3,68 +3,98 @@ import h8io.sbt.dependencies.*
 import sbt.*
 
 val ProjectName = "cfg"
-val SiteRoot = s"https://cfg.h8.io/"
 
-ThisBuild / organization := "io.h8"
-ThisBuild / organizationName := "H8IO"
-ThisBuild / organizationHomepage := Some(url(s"https://github.com/h8io/$ProjectName"))
-ThisBuild / homepage := Some(url(s"https://github.com/h8io/$ProjectName"))
+organization := "io.h8"
+organizationName := "H8IO"
+organizationHomepage := Some(uri(s"https://github.com/h8io/$ProjectName"))
+homepage := Some(uri(s"https://github.com/h8io/$ProjectName"))
+scmInfo := Some(ScmInfo(uri(s"https://github.com/h8io/$ProjectName"), s"scm:git@github.com:h8io/$ProjectName.git"))
+licenses := List(License.Apache2)
+developers := List(
+  Developer(id = "eshu", name = "Pavel", email = "tjano.xibalba@gmail.com", url = uri("https://github.com/eshu/")))
 
-ThisBuild / scmInfo := Some(
-  ScmInfo(
-    url(s"https://github.com/h8io/$ProjectName"), s"scm:git@github.com:h8io/$ProjectName.git"))
+versionScheme := Some("semver-spec")
 
-ThisBuild / licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.txt"))
+coverageSummaryStmtLowThreshold := 100
+coverageSummaryStmtHighThreshold := 100
+coverageSummaryBranchLowThreshold := 100
+coverageSummaryBranchHighThreshold := 100
 
-ThisBuild / developers := List(
-  Developer(
-    id = "eshu",
-    name = "Pavel",
-    email = "tjano.xibalba@gmail.com",
-    url = url("https://github.com/eshu/")))
-
-ThisBuild / versionScheme := Some("semver-spec")
-
-ThisBuild / coverageSummaryStmtLowThreshold := 100
-ThisBuild / coverageSummaryStmtHighThreshold := 100
-ThisBuild / coverageSummaryBranchLowThreshold := 100
-ThisBuild / coverageSummaryBranchHighThreshold := 100
-
+// sbt-dynver computes the version once for the whole build, from these two in ThisBuild
 ThisBuild / dynverSonatypeSnapshots := true
 ThisBuild / dynverSeparator := "-"
 
-ThisBuild / libraryDependencies +=
-  compilerPlugin("org.typelevel" %% "kind-projector" % "0.13.4" cross CrossVersion.full)
+// Every branch on the Scala version lists the versions it knows and ends here, so that a new one fails the build until
+// each of them has been looked at
+def unsupportedScala(version: String): Nothing = throw new MessageOnlyException(s"Unsupported Scala version $version")
 
-val Scalac2Options = Seq(
-  "-Xsource:3",
-  "-language:higherKinds",
-  "--deprecation",
-  "--feature",
-  "--unchecked",
-  "-Xlint:_",
-  "-Xfatal-warnings",
-  "-opt:l:inline",
-  "-opt-warnings")
+scalaVersion := "2.13.18"
+crossScalaVersions ++= Seq("2.12.21", "3.9.0")
+javacOptions ++= Seq("--release", "11")
 
-ThisBuild / scalacOptions ++=
+libraryDependencies ++=
   (CrossVersion.partialVersion(scalaVersion.value) match {
-    case Some((2, 12)) =>
-      Scalac2Options ++ Seq("-Ywarn-unused", "-Ywarn-dead-code", "-Ywarn-unused:-nowarn", "-Ypartial-unification")
-    case Some((2, 13)) => Scalac2Options ++ Seq("--explain-types", "--language:_", "-Wunused:_", "-Wdead-code")
-    case _ => Nil
+    case Some((2, 13)) | Some((2, 12)) =>
+      Seq(compilerPlugin(("org.typelevel" %% "kind-projector" % "0.13.4").cross(CrossVersion.full)))
+    case Some((3, 9)) => Nil
+    case _ => unsupportedScala(scalaVersion.value)
   })
 
-ThisBuild / javacOptions ++= Seq("--release", "11")
+scalacOptions ++= {
+  val scala2 = Seq("-Xsource:3", "--deprecation", "--feature", "--unchecked", "-Xlint:_", "-Xfatal-warnings",
+    "-opt:l:inline", "-opt-warnings")
+  CrossVersion.partialVersion(scalaVersion.value) match {
+    case Some((2, 13)) =>
+      scala2 ++ Seq("--explain-types", "--language:_", "-Wunused:_", "-Wdead-code", "-Wvalue-discard",
+        "-Wnonunit-statement")
+    case Some((2, 12)) =>
+      scala2 ++ Seq("-language:higherKinds", "-Ywarn-unused", "-Ywarn-dead-code", "-Ywarn-unused:-nowarn",
+        "-Ywarn-value-discard", "-Ypartial-unification")
+    case Some((3, 9)) =>
+      Seq(
+        "-deprecation",
+        "-feature",
+        "-unchecked",
+        "-Wall",
+        "-Werror",
+        "-explain",
+        "-opt",
+        "-Wopt:at-inline-failed-summary",
+        // Scala 2 needs the trailing `_` to eta-expand a method without an expected function type, Scala 3 does not
+        "-Wconf:msg=eta-expansion is unnecessary:s"
+      )
+    case _ => unsupportedScala(scalaVersion.value)
+  }
+}
 
-ThisBuild / scalaVersion := "2.13.18"
-ThisBuild / crossScalaVersions += "2.12.21"
+// For code whose statements are values on purpose: a ScalaMock expectation or a ScalaTest assertion in tests, an
+// expression shown with its result in the docs. Those are spared the warnings about discarded values. On 2.13 the
+// category of -Wnonunit-statement is shared with the warning about a pure expression in statement position, which
+// they lose as well.
+def lenientScalacOptions(scalaVersion: String): Seq[String] =
+  CrossVersion.partialVersion(scalaVersion) match {
+    case Some((2, 13)) => Seq("-Wconf:cat=w-flag-value-discard:s,cat=other-pure-statement:s")
+    case Some((2, 12)) => Seq("-Wconf:cat=w-flag-value-discard:s")
+    case Some((3, 9)) => Seq("-Wconf:name=ValueDiscarding:s,name=UnusedNonUnitValue:s")
+    case _ => unsupportedScala(scalaVersion)
+  }
 
-ThisBuild / libraryDependencies ++= TestBundle % Test
-ThisBuild / libraryDependencies ++=
+Test / scalacOptions ++= lenientScalacOptions(scalaVersion.value)
+// Tests are registered while the suite is being constructed, so Scala 3's initialization checker (part of -Wall) cannot
+// prove that a test body or a law's Eq, which close over the suite, only run once it is fully initialized
+Test / scalacOptions ++=
+  (CrossVersion.partialVersion(scalaVersion.value) match {
+    case Some((2, 13)) | Some((2, 12)) => Nil
+    case Some((3, 9)) => Seq("-Wconf:msg=transitively initialized:s")
+    case _ => unsupportedScala(scalaVersion.value)
+  })
+
+libraryDependencies ++= TestBundle % Test
+libraryDependencies ++=
   (CrossVersion.partialVersion(scalaVersion.value) match {
     case Some((2, 12)) => Seq(ScalaCollectionCompat)
-    case _ => Nil
+    case Some((2, 13)) | Some((3, 9)) => Nil
+    case _ => unsupportedScala(scalaVersion.value)
   })
 
 val cfg = (project in file("cfg"))
@@ -92,13 +122,18 @@ val pages = (project in file("pages"))
     name := "cfg-pages",
     publish / skip := true,
     publishLocal / skip := true,
-    TestScalaUnidoc / unidoc / unidocProjectFilter := inAnyProject -- inProjects(root),
+    scalacOptions ++= lenientScalacOptions(scalaVersion.value),
+    // sbt 2 moves every target under the root's target/out; npm and release.sh expect the site's inputs here
+    cleanFiles += baseDirectory.value / "target",
+    ScalaUnidoc / unidoc / target := baseDirectory.value / "target" / s"scala-${scalaBinaryVersion.value}" / "unidoc",
+    ScalaUnidoc / unidoc / unidocProjectFilter := inAnyProject -- inProjects(root),
     // sbt-unidoc concatenates the modules' separately resolved classpaths, so snakeyaml-engine 3.0.1 (pulled by
     // typesafe-config-yaml into hocon) shadows 3.2 (yaml). Use this project's own classpath, resolved as a whole.
     ScalaUnidoc / unidoc / fullClasspath := (Compile / fullClasspath).value,
-    tlSiteApiUrl := Some(url(s"${SiteRoot}api/scala-2.13/")),
-    tlSiteHelium ~= { _.site.mainNavigation(depth = 3) }
+    mdocIn := (ThisBuild / baseDirectory).value / "docs",
+    mdocOut := baseDirectory.value / "target" / "mdoc",
+    mdocVariables :=
+      Map("VERSION" -> (if (isSnapshot.value) previousStableVersion.value else None).getOrElse(version.value))
   )
   .dependsOn(cfg, hocon, schema, yaml)
-  .aggregate(cfg, hocon, schema, yaml)
-  .enablePlugins(ScalaUnidocPlugin, TypelevelSitePlugin)
+  .enablePlugins(ScalaUnidocPlugin, MdocPlugin)
