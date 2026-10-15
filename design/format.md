@@ -17,6 +17,8 @@ Extensible Format*:
 is still open, and §14 logs how each decision was reached so a later session does not reopen a
 question that was already argued through. Add to §14 rather than silently editing §2.
 
+The implementation is tracked step by step in [`plan.md`](plan.md).
+
 ## 1. Why a format of our own
 
 The `cfg` protocol says an `IScalar` carries the raw string that was written in the source, that a
@@ -52,6 +54,7 @@ loader path.
 | Error model | `Either`, no Cats; as many errors per run as can be reported honestly (§11) |
 | Dotted keys | Sugar for nesting; a quoted key is indivisible, dots included |
 | Substitution location | Reference site, carrying the definition site with it (§10) |
+| Location coordinates | Source as it was named — the URL passed to the loader, or an include argument as written; line and column 1-based, column in code points (§10) |
 | `impl/hocon` | Stays, alongside this module |
 | Overriding | `:` merges maps, `:=` replaces whatever was there (§7); no append operator |
 
@@ -293,6 +296,23 @@ Every node carries its own `Location`, with `description` rendered as `<source>:
 This is the visible win over `impl/hocon`, where the description is whatever typesafe-config
 composed.
 
+**`<source>` is the source as it was named**, so the reader sees the name they wrote and can find
+the file by it:
+
+- a source passed to `DEF(urls*)` — the full URL, as the caller gave it (`file:/etc/app/app.def`);
+- a source pulled in by `@include` — the argument as written in the directive (`conf.d/extra`,
+  `reference`, `https://…`), not the URL it resolves to. A `file` argument is therefore relative to
+  the including file, not to the working directory or the top-level source.
+
+The same written name can stand for different files when two files in different directories include
+it; the location does not disambiguate them. Accepted: the including file is one step away, and an
+error inside an include can name the include chain if that turns out to be needed.
+
+**Line and column are 1-based**, as in the YAML backend. **The column counts code points**, not
+UTF-16 units: `é`, `ж` and `😀` are one column each, so the number matches what an editor shows
+rather than `String.length`. A tab is one column. A line ends at LF or CRLF (§3); the CR of a CRLF is
+not part of the line.
+
 A node produced by a substitution carries **both** sites: the reference site as its primary
 coordinates, and the location of the node it was taken from. `Location` is an open trait in `cfg`, so
 this needs no protocol change — the module defines its own hierarchy:
@@ -317,7 +337,7 @@ ReferenceLocation(b-site, "c", SourceLocation(c-site)))`. The environment and sy
 a location of their own instead of a fake file position.
 
 `description` puts the reference site first, because that is where the reader has to go:
-`app.conf:12:9 (${db.url} from base.conf:3:7)`.
+`file:/etc/app/app.def:12:9 (${db.url} from base.def:3:7)`.
 
 **Grafted containers.** With `a: ${server}`, *every* node in the grafted subtree gets a
 `ReferenceLocation` — the reference site of `a`, the path it was taken by (`server.port`), and that
@@ -363,9 +383,10 @@ mistake is worse than stopping.
 - Unlike the hocon and yaml backends, which wrap a foreign structure lazily, this module owns its
   data: phase 5 builds immutable `Map`/`Vector` structures once, and `MapImpl`/`SeqImpl` are thin
   views over them.
-- Cross-built for 2.13 and 2.12. A hand-written lexer is exactly the kind of code that reaches for
-  2.13-only collection methods; `scala-collection-compat` is already wired in for 2.12.
-- `-Xfatal-warnings` is on, so exhaustiveness in the parser's pattern matches is enforced rather
+- Cross-built for 2.13, 2.12 and 3.9, from one source tree in Scala 2 style that Scala 3 accepts. A
+  hand-written lexer is exactly the kind of code that reaches for 2.13-only collection methods;
+  `scala-collection-compat` is already wired in for 2.12.
+- Warnings are fatal on every version (`-Xfatal-warnings` on 2.x, `-Werror` on 3), so exhaustiveness in the parser's pattern matches is enforced rather
   than merely intended.
 
 ## 13. Open questions
@@ -549,3 +570,17 @@ alternative listed here should not be re-proposed without new information.
   container definitions, Modula-2) barely overlap with a Scala project's resources.
 - **Correction to session 1:** `native` is not a Scala 2 keyword (Scala has the `@native` annotation,
   not a reserved word). The collision with Scala Native alone is enough to keep it rejected.
+
+### Session 4 — 2026-10-15
+
+- **`<source>` in a location is the source as it was named** (§10): the full URL for a source given
+  to the loader, the argument as written for an include. The user's call — "the full URL or a
+  relative path" — refined into this rule. Rejected: the full resolved URL everywhere (long, and an
+  include shows up under a name its author never wrote); the file name alone (ambiguous across
+  directories and meaningless for a URL or a resource); a path relative to the working directory
+  (includes resolve against the including file, never the working directory, §6).
+- **Line and column 1-based, column in code points, tab = 1** (§10). The user's call, on the
+  recommendation. Rejected: UTF-16 units — what `String.length` gives, but an astral character such
+  as an emoji counts twice and the column drifts from what the editor shows. Not discussed: grapheme
+  clusters (`e` + combining accent as one column) — they need `BreakIterator`, and editors disagree
+  about them anyway.
