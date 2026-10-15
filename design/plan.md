@@ -85,13 +85,13 @@ at the phase gate.
 - `build.sbt`: `val defg = (project in file("impl/def"))`, `name := "cfg-def"`, depends on `cfg` only,
   `publish / skip := true`. Add to `root / aggregate` (needed for coverage), **not** to `pages` yet.
 - Location hierarchy from §10 with `description` exactly as specified:
-  `app.conf:12:9`, and for a reference `app.conf:12:9 (${db.url} from base.conf:3:7)`. Chains render
-  recursively.
+  `file:/etc/app/app.def:12:9`, and for a reference
+  `file:/etc/app/app.def:12:9 (${db.url} from base.def:3:7)`. Chains render recursively. `<source>`,
+  line and column as decided in `format.md` §10.
 - `DefError` (sealed, every case has a `location`), `DefErrors` (head + tail, `CfgError`), and the
   private result type. Start with the error cases this step can test; later steps add theirs.
-- **Spec gaps:** what `<source>` in a location is — the full URL string, or a shortened form (file
-  name, path relative to the including file)? Column counting: code points or UTF-16 units, 1-based
-  (the YAML backend is 1-based)?
+- **Spec gaps:** none left — `<source>` and column counting were settled in session 4
+  (`format.md` §10, §14).
 
 ### 2. Source and lexer
 
