@@ -62,19 +62,26 @@ loader path.
 
 - Encoding is UTF-8. A newline is LF or CRLF; a lone CR is an error.
 - `#` starts a comment that runs to the end of the line. There is deliberately no second comment
-  form.
+  form. *Open:* replacing it with `//` and `/* */` to free `#` for tags (§13, item 3).
 - **Bare keys** match `Id.SafeKeyPattern` exactly — `^[\p{L}_][\p{L}\p{N}_-]*$`. Anything else is
-  written as a quoted key.
-- **Quoted keys and quoted scalars** use `"…"` with the escape set `Id.quote` produces: `\"`, `\\`,
-  `\b`, `\f`, `\n`, `\r`, `\t` and `\uXXXX`.
+  written as a quoted key. A key that would pass bare may be quoted too: `` `port` `` and `port` are
+  the same key.
+- **Names in backticks, values in double quotes.** A quoted key — in a field, a dotted key or a path
+  inside `${…}` — is written `` `…` ``; `"…"` is only ever a scalar. The role of a token is
+  therefore visible to the lexer without context, and `"port": 1` is an error with a hint, not a
+  second spelling. A quoted scalar uses the escape set `Id.quote` produces today: `\"`, `\\`, `\b`,
+  `\f`, `\n`, `\r`, `\t` and `\uXXXX`. Escaping inside backticks is open (§13, item 4). Neither form
+  may hold a raw newline — that is what `\n` and `"""…"""` are for — so an unterminated quote is
+  reported on its own line rather than at the end of the file.
 - **Dotted keys** — `a.b.c: v` is sugar for `a { b { c: v } }`. The split happens only on dots
-  *between* key tokens: a quoted key is indivisible, so `"a.b": v` is one key named `a.b`, and
-  `x."a.b".c` is three levels. This is also what `Id.path` produces — a key containing a dot fails
-  `SafeKeyPattern` and is rendered quoted — so the round-trip property holds.
+  *between* key tokens: a quoted key is indivisible, so `` `io.h8`: v `` is one key named `io.h8`,
+  and ``x.`a.b`.c`` is three levels. This is also what `Id.path` produces — a key containing a dot
+  fails `SafeKeyPattern` and is rendered quoted — so the round-trip property holds.
 
   The two rules together buy a property worth keeping: the output of `Id.path` is itself valid
-  source. `server."odd key"[0]` renders from a node and parses back to the same address. Any change
-  to `Id.quote` has to be mirrored here, and vice versa.
+  source. ``server.`odd key`[0]`` renders from a node and parses back to the same address. This
+  takes `Id.quote` in `cfg` from `"…"` to backticks, which changes every path the HOCON and YAML
+  loaders print as well. Any later change to `Id.quote` has to be mirrored here, and vice versa.
 - **Unquoted scalars** contain no whitespace. One runs to the first whitespace, `,`, `}`, `]` or `#`;
   after it only a separator, a comment or the end of the block may follow, so `a: foo bar` is an
   error that says to quote the value. What was read becomes `IScalar.value` verbatim — `1e5` stays
@@ -97,7 +104,7 @@ loader path.
   marker (§13): `- 5` can never be a scalar, `-5` and `"- 5"` always are.
 - **`null`** — the one reserved word. An unquoted scalar whose trimmed text is exactly `null`
   becomes `Node.INull`; `"null"` in quotes stays a scalar. A tag is kept: `!secret null` is an
-  `INull` with `tag = Some("secret")`. `true`, `false` and every other word remain plain scalars.
+  `INull` carrying the tag `secret` (the exact string in `ISome.tag` is open, §13, item 3). `true`, `false` and every other word remain plain scalars.
   `null` is reserved only in value position — as a key it is an ordinary bare key.
 
 ## 4. Grammar sketch
@@ -144,6 +151,11 @@ server {
 timeout: !duration 5s
 routes: !ordered { a: 1, b: 2 }
 ```
+
+A tag name follows the key rule: bare if it matches `Id.SafeKeyPattern`, in backticks otherwise.
+A quoted tag gives its content as is, the way YAML's verbatim `!<…>` does —
+``!`tag:yaml.org,2002:int` 5`` reaches `ISome.tag` as `tag:yaml.org,2002:int`, so there is no need
+for `!!`. The prefix character, and whether a bare tag keeps it, are open (§13, item 3).
 
 Only tags written in the source reach `ISome.tag`; nothing is ever inferred, and there is no
 non-specific tag that resolves to `None`. This matches the rule already settled for `impl/yaml`.
@@ -443,18 +455,63 @@ mistake is worse than stopping.
 
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
    indentation can claim it later.
-3. **What string a tag becomes in `ISome.tag`.** §3 has `!secret null` give `tag = Some("secret")`,
-   without the `!`. `impl/yaml` keeps it: `!postgres` gives `Some("!postgres")` (`tagOf` returns
-   `getTag.getValue`, and `TagOfTest` pins it), while `!!int` expands to `tag:yaml.org,2002:int`. As
-   written, the same `!postgres` in a `.yaml` and a `.def` file reaches a decoder as two different
-   strings, so a decoder matching on tags would have to know which loader produced the node.
-   Options, none chosen:
-   - DEF keeps the `!` as YAML does; fix the example in §3.
-   - DEF drops it, and so does `impl/yaml` for local tags — a breaking change to `cfg-yaml`.
-   - The two stay different on purpose, and the protocol says so.
+3. **Tag prefix, comment syntax, and the string in `ISome.tag`** — three questions that decide each
+   other. Settled meanwhile: a tag name follows the key rule, bare or in backticks, and a quoted tag
+   gives its content as is (§5).
 
-   Decide together with the tag-name character set (a step 2 spec gap in [`plan.md`](plan.md)),
-   before step 2 starts.
+   *The string.* `impl/yaml` keeps the `!` of a local tag: `!postgres` gives `Some("!postgres")`
+   (`tagOf` returns `getTag.getValue`, and `TagOfTest` pins it), while `!!int` expands to
+   `tag:yaml.org,2002:int`. Whatever DEF does, the same tag in a `.yaml` and a `.def` file should
+   reach a decoder as one string, or a decoder matching on tags has to know which loader produced
+   the node. Two coherent answers:
+   - The tag keeps the prefix, as in YAML: `!postgres` gives `!postgres`, ``!`x` `` gives `x` (like
+     verbatim `!<x>`). No change to `cfg-yaml`, but only if the prefix is `!`.
+   - The tag is the name, the prefix being syntax of the format: `postgres` from either loader.
+     Cleaner, and free to pick any prefix, but a breaking change to `cfg-yaml`, which would then
+     strip the `!` of local tags.
+
+   *The prefix.* Three candidates were discussed:
+   - **`!`** — known from YAML, keeps the first answer above available, costs nothing elsewhere.
+   - **`#`** — reads well (`timeout: #duration 5s`), and pasted YAML or HOCON comments fail loudly:
+     `# text` is a tag without a name, `#todo` in key position is no value. But `#` is the comment
+     today, so comments have to move (below), and a value starting with `#` needs quotes:
+     `color: #fff` would be the tag `fff` with no value — a loud error, but a frequent one
+     (colours, channel names). Implies the second answer above.
+   - **No prefix**, `key: tag value` — unambiguous, since an unquoted scalar holds no whitespace.
+     Rejected in discussion as it stands: it takes over exactly the position the "stray word is an
+     error" rule guards (§3). `greeting: Hello world` with forgotten quotes becomes tag `Hello`,
+     value `world`; `[a b]` with a forgotten comma becomes one tagged element; and in
+     `level: debug info` a reader cannot tell which word is the tag. All three are lexer errors
+     today and would surface, if at all, in a decoder far from the line.
+
+   `@`, `$` are taken by directives and substitutions.
+
+   *Comments, if `#` goes to tags:* `//` to the end of the line and `/* */`. Their traps are in
+   unquoted values:
+   - `//` — HOCON cuts `url: http://host` at the `//`. Avoided by opening a comment only at the
+     start of a line or after whitespace (or a separator); the price is that `a: 1//x` is silently
+     the scalar `1//x`. The alternative, URLs always quoted as in HOCON, costs far more often.
+   - `/*` — `pattern: /*.log` or `[/**, tmp]` open a comment after whitespace. Usually loud (a field
+     with no value, an unterminated comment), but if a `*/` follows further down, the comment
+     silently eats part of the file. A glob starting with `/*` is written in quotes.
+   - Block comments nest, as in Scala rather than Java, so commenting out a block that already holds
+     one is safe and a stray `*/` is an error; an unterminated `/*` is reported at its opening.
+   - Two comment forms instead of one, against the "deliberately one form" of §3.
+
+   Leaning, not chosen: `//`, `/* */` and `#tag`, with the tag string being the bare name — on the
+   ground that `ISome.tag` should carry the tag's name, not YAML's syntax for it. The cheaper path is
+   to keep `#` comments and `!` tags. Decide before step 2 starts; the lexer depends on all three.
+4. **Escaping inside backticks.** Options:
+   - **Backslashes, the same set as `"…"` plus ``\` ``** — recommended. One escape grammar in the
+     language, `` ` `` and `"` differing only in delimiter and role; every string is representable,
+     which the round-trip property test of step 2 needs (`Id.Key(k).path` lexes back to `k` for
+     *any* `k`).
+   - **Doubling, as in SQL** — ``` `my ``key`` ``` is ``my `key` ``. A `\` stays literal (Windows paths
+     as keys), but it is a second escaping mechanism beside the backslashes of `"…"`, and with raw
+     newlines forbidden a key holding a control character cannot be written at all.
+   - **Both** — two spellings of one thing; rejected as against the strictness the format aims for.
+
+   Decide before step 2 starts, together with the change to `Id.quote`.
 
 ## 14. Decision log
 
@@ -596,3 +653,22 @@ alternative listed here should not be re-proposed without new information.
   as an emoji counts twice and the column drifts from what the editor shows. Not discussed: grapheme
   clusters (`e` + combining accent as one column) — they need `BreakIterator`, and editors disagree
   about them anyway.
+
+### Session 5 — 2026-10-24
+
+- **Backticks for names, double quotes for values** (§3). The user's proposal, after weighing SQL's
+  separate identifier quotes. A key — in a field, a dotted key, a `${…}` path or a tag — is bare when
+  it matches `Id.SafeKeyPattern` and in `` `…` `` otherwise; `"…"` is only a scalar, and `"port": 1`
+  is an error. Gained: the role of a token is lexical, a name in value position stays free for
+  later syntax, and paths, tags and directive arguments read by one rule. Paid: `Id.quote` in `cfg`
+  moves to backticks, changing the paths every loader prints (accepted by the user); JSON and HOCON
+  habits break (intended — strictness is preferred over compatibility with HOCON and YAML); inline
+  code in the Markdown docs needs double backticks. Rejected: `"…"` for keys, as before — position
+  already tells a key from a value, but it closes value position to names for good. Supersedes
+  session 2's `"a.b"` example; the indivisibility it records stands.
+- **A quoted safe key is allowed**: `` `port` `` is `port`. The user's call — it does not weaken
+  strictness, and a generator of configs need not reproduce `SafeKeyPattern`.
+- **No raw newline inside `` `…` `` or `"…"`.** Agreed on the recommendation.
+- **Tag names follow the key rule; a quoted tag is taken verbatim**, like YAML's `!<…>`. Agreed; the
+  prefix and the string in `ISome.tag` stay open (§13, item 3), with `#` and no prefix discussed
+  there. Escaping inside backticks is open as well (§13, item 4).

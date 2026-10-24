@@ -97,24 +97,26 @@ at the phase gate.
 
 - Read a URL as UTF-8; LF and CRLF are newlines, a lone CR is an error (§3).
 - Tokens: `{ } [ ] ( ) , . : := = !tag @name`, newline, comment (skipped), bare key
-  (`Id.SafeKeyPattern`), unquoted scalar, quoted string with the escape set of `Id.quote`, triple-quoted
+  (`Id.SafeKeyPattern`), backticked name, unquoted scalar, quoted string with the escape set of
+  `Id.quote`, triple-quoted
   string (raw, first newline dropped, common indent stripped, §5), `${`/`${?` … `}`.
 - Value mode: an unquoted scalar runs to whitespace, `,`, `}`, `]` or `#`; may not start with `'`
   (§3). Key mode: `:` must be followed by whitespace or end of line, so must `:=`.
-- Fatal lexical errors (unterminated `"…"`/`"""…"""`) end the source (§11); others are reported and
+- Fatal lexical errors (unterminated `"…"`/`` `…` ``/`"""…"""`) end the source (§11); others are reported and
   lexing continues.
+- `Id.quote` in `cfg` renders a quoted key in backticks (`format.md` §3). Every path the HOCON and
+  YAML loaders print changes with it, so the release notes say so.
 - Property test: for any string `k`, `Id.Key(k, Id.Root).path` lexes in key mode to exactly one key
   token with value `k` — the round-trip promise of §3.
-- **Spec gaps:** the character set of a tag name (`!` + what?) and of a directive name; whether the
-  `!` stays in `ISome.tag`, which `impl/yaml` keeps and the `null` example in `format.md` §3 drops
-  (`format.md` §13, item 3); how a literal
+- **Spec gaps:** the tag prefix, the comment syntax and the string in `ISome.tag` (`format.md` §13,
+  item 3); escaping inside backticks (item 4); the character set of a directive name; how a literal
   `${` is written — is `${` inside an unquoted scalar always a substitution, and is it literal inside
   quotes (as in HOCON)? Byte order mark at the start of a file — skip or error? Can a tag be
   followed directly by a triple-quoted string?
 
 ### 3. Ast and parser: core syntax
 
-- Recursive descent over the lexer: document, block, fields, dotted keys (quoted keys indivisible),
+- Recursive descent over the lexer: document, block, fields, dotted keys (backticked keys indivisible),
   `:`/`:=`/`key { … }`, `{` on the key's line, sequences, separators (`,`/newline, trailing allowed,
   empty element an error, whitespace never separates), tags on every value, `null` in value position
   only, `a: foo bar` an error.
