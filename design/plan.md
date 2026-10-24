@@ -102,9 +102,11 @@ at the phase gate.
   `Id.quote`, triple-quoted
   string (raw, first newline dropped, common indent stripped, §5), `${`/`${?` … `}`.
 - Value mode: an unquoted scalar runs to whitespace, `,`, `}` or `]`; may not start with `'`
-  (§3), and `@` or `#` at its start opens a tag or a directive (§5, §6); `@name(` is an error. Inside it `//` and `/*` are ordinary characters; anywhere else they open a comment. Key mode: `:` must be followed by whitespace or end of line, so must `:=`.
-- Fatal lexical errors (unterminated `"…"`/`` `…` ``/`"""…"""`/`/*`) end the source (§11); others are reported and
-  lexing continues.
+  (§3), and `@` or `#` at its start opens a tag or a directive (§5, §6); `@name(` is an error. Inside
+  it `//` and `/*` are ordinary characters; anywhere else they open a comment. Key mode: `:` must be
+  followed by whitespace or end of line, so must `:=`.
+- Fatal lexical errors (unterminated `"…"`/`` `…` ``/`"""…"""`/`/*`) end the source (§11); others
+  are reported and lexing continues.
 - `Id.quote` in `cfg` renders a quoted key in backticks (`format.md` §3). Every path the HOCON and
   YAML loaders print changes with it, so the release notes say so.
 - `impl/yaml`: `tagOf` drops the leading `!` of a tag (`format.md` §5), `TagOfTest` updated, the
