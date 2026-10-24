@@ -500,6 +500,25 @@ mistake is worse than stopping.
      one is safe and a stray `*/` is an error; an unterminated `/*` is reported at its opening.
    - Two comment forms instead of one, against the "deliberately one form" of §3.
 
+   The user's reasons for C-style comments: a taste for them, `#` being a nod to scripting
+   languages, and **doc comments**. DEF is meant as the base of DSLs, which may one day want their
+   configuration documented in the source, as `/** … */`. `#` has no natural doc form (`##` is
+   possible but weak). Moving comments does not by itself decide the tag prefix: `!` stays free.
+
+   What doc comments would take, if they come:
+   - A home in the protocol. `Node` has no place for documentation today, so it needs a field such
+     as `doc: Option[String]` on `ISome` — a change to `cfg`, consumed by `schema` (generated
+     reference docs, decoder error messages).
+   - Positions fixed in advance. A doc comment attaches to the field, sequence element or directive
+     that follows it. Doc comments add no meaning to values, so introducing them later breaks
+     nothing — *unless* v1 accepts `/**` where a later version would not. So v1 already reserves it:
+     `/** … */` is legal only before a field, an element or a directive, an error elsewhere
+     (between a tag and its value, after a value on the same line), and otherwise ignored for now.
+     `/**/` is an empty ordinary comment, as in Java.
+   - Kept from step 2 on: the lexer emits a doc comment as a token rather than skipping it, and the
+     Ast keeps it on the node it attaches to, even while nothing reads it — cheap now, a refactoring
+     later.
+
    Leaning, not chosen: `//`, `/* */` and `#tag`, with the tag string being the bare name — on the
    ground that `ISome.tag` should carry the tag's name, not YAML's syntax for it. The cheaper path is
    to keep `#` comments and `!` tags. Decide before step 2 starts; the lexer depends on all three.
