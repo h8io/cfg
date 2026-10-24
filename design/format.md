@@ -443,6 +443,18 @@ mistake is worse than stopping.
 
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
    indentation can claim it later.
+3. **What string a tag becomes in `ISome.tag`.** §3 has `!secret null` give `tag = Some("secret")`,
+   without the `!`. `impl/yaml` keeps it: `!postgres` gives `Some("!postgres")` (`tagOf` returns
+   `getTag.getValue`, and `TagOfTest` pins it), while `!!int` expands to `tag:yaml.org,2002:int`. As
+   written, the same `!postgres` in a `.yaml` and a `.def` file reaches a decoder as two different
+   strings, so a decoder matching on tags would have to know which loader produced the node.
+   Options, none chosen:
+   - DEF keeps the `!` as YAML does; fix the example in §3.
+   - DEF drops it, and so does `impl/yaml` for local tags — a breaking change to `cfg-yaml`.
+   - The two stay different on purpose, and the protocol says so.
+
+   Decide together with the tag-name character set (a step 2 spec gap in [`plan.md`](plan.md)),
+   before step 2 starts.
 
 ## 14. Decision log
 

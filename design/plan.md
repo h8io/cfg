@@ -105,7 +105,9 @@ at the phase gate.
   lexing continues.
 - Property test: for any string `k`, `Id.Key(k, Id.Root).path` lexes in key mode to exactly one key
   token with value `k` — the round-trip promise of §3.
-- **Spec gaps:** the character set of a tag name (`!` + what?) and of a directive name; how a literal
+- **Spec gaps:** the character set of a tag name (`!` + what?) and of a directive name; whether the
+  `!` stays in `ISome.tag`, which `impl/yaml` keeps and the `null` example in `format.md` §3 drops
+  (`format.md` §13, item 3); how a literal
   `${` is written — is `${` inside an unquoted scalar always a substitution, and is it literal inside
   quotes (as in HOCON)? Byte order mark at the start of a file — skip or error? Can a tag be
   followed directly by a triple-quoted string?
