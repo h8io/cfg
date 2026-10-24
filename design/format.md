@@ -49,6 +49,7 @@ loader path.
 | Includes | Yes, but as a **directive**, not a keyword |
 | Include placement | Anywhere in the tree, not just at file top level |
 | Include sources | Relative paths, classpath resources; optional variant that tolerates a missing file |
+| Comments | `//` and nesting `/* */`; `/** */` reserved for doc comments (§3) |
 | Multi-line strings | Triple quotes, raw, with the common leading indent stripped |
 | Special words | Avoided — `@`-prefixed directives instead, as an open, extensible set. `null` is the one exception |
 | Error model | `Either`, no Cats; as many errors per run as can be reported honestly (§11) |
@@ -61,8 +62,19 @@ loader path.
 ## 3. Lexical structure
 
 - Encoding is UTF-8. A newline is LF or CRLF; a lone CR is an error.
-- `#` starts a comment that runs to the end of the line. There is deliberately no second comment
-  form. *Open:* replacing it with `//` and `/* */` to free `#` for tags (§13, item 3).
+- **Comments** are `//` to the end of the line and `/* … */`, which nest, as in Scala: commenting out
+  a block that already holds a comment is safe. An unterminated `/*` is reported at its opening, a
+  stray `*/` is an error, and `/**/` is an empty ordinary comment. Inside an unquoted scalar `//`
+  and `/*` are ordinary characters; anywhere else they open a comment. So `url: http://host` is one
+  scalar — and so is `a: 1//x`, the price of the rule — while `pattern: /*.log` opens a comment, and
+  a value starting with `//` or `/*` is written in quotes. `#` has no meaning of its own here.
+- **Doc comments** — `/** … */` is reserved for documentation that DSLs built on DEF may one day
+  want in the source. v1 ignores it, but accepts it only before a field, a sequence element or a
+  directive; anywhere else (between a tag and its value, after a value on the same line) it is an
+  error. Doc comments carry no meaning for values, so giving them one later breaks no v1 file. That
+  will take a field such as `doc: Option[String]` on `ISome` — a change to `cfg`, for `schema` to
+  read (generated reference docs, decoder messages) — so the lexer emits a doc comment as a token
+  and the Ast keeps it on the node it precedes from the start.
 - **Bare keys** match `Id.SafeKeyPattern` exactly — `^[\p{L}_][\p{L}\p{N}_-]*$`. Anything else is
   written as a quoted key. A key that would pass bare may be quoted too: `` `port` `` and `port` are
   the same key.
@@ -84,7 +96,7 @@ loader path.
   source. ``server.`odd key`[0]`` renders from a node and parses back to the same address. This
   takes `Id.quote` in `cfg` from `"…"` to backticks, which changes every path the HOCON and YAML
   loaders print as well. Any later change to `Id.quote` has to be mirrored here, and vice versa.
-- **Unquoted scalars** contain no whitespace. One runs to the first whitespace, `,`, `}`, `]` or `#`;
+- **Unquoted scalars** contain no whitespace. One runs to the first whitespace, `,`, `}` or `]`;
   after it only a separator, a comment or the end of the block may follow, so `a: foo bar` is an
   error that says to quote the value. What was read becomes `IScalar.value` verbatim — `1e5` stays
   `"1e5"`, `true` stays `"true"`, `007` stays `"007"`. There is no type inference anywhere in the
@@ -106,7 +118,7 @@ loader path.
   marker (§13): `- 5` can never be a scalar, `-5` and `"- 5"` always are.
 - **`null`** — the one reserved word. An unquoted scalar whose trimmed text is exactly `null`
   becomes `Node.INull`; `"null"` in quotes stays a scalar. A tag is kept: `!secret null` is an
-  `INull` carrying the tag `secret` (the exact string in `ISome.tag` is open, §13, item 3). `true`, `false` and every other word remain plain scalars.
+  `INull` with `tag = Some("secret")`. `true`, `false` and every other word remain plain scalars.
   `null` is reserved only in value position — as a key it is an ordinary bare key.
 
 ## 4. Grammar sketch
@@ -144,7 +156,7 @@ server {
       Indented line.
   """
 }
-# value: "Welcome.\n  Indented line."
+// value: "Welcome.\n  Indented line."
 ```
 
 **Tags** — `!name` before any value, including containers:
@@ -155,9 +167,13 @@ routes: !ordered { a: 1, b: 2 }
 ```
 
 A tag name follows the key rule: bare if it matches `Id.SafeKeyPattern`, in backticks otherwise.
-A quoted tag gives its content as is, the way YAML's verbatim `!<…>` does —
-``!`tag:yaml.org,2002:int` 5`` reaches `ISome.tag` as `tag:yaml.org,2002:int`, so there is no need
-for `!!`. The prefix character, and whether a bare tag keeps it, are open (§13, item 3).
+`ISome.tag` holds the name only — the prefix and the quotes are syntax of the format, not part of
+the tag: `!duration` gives `duration`, ``!`tag:yaml.org,2002:int` `` gives `tag:yaml.org,2002:int`,
+so there is no need for `!!`. `impl/yaml` follows the same rule and drops the leading `!` of a tag
+(`!postgres` gives `postgres`, `!!int` still `tag:yaml.org,2002:int`) — a breaking change to
+`cfg-yaml`, made in step 2 of the plan. It merges YAML's `!foo` and `!<foo>`, two different tags in
+YAML, into one name; the protocol accepts that. The prefix character is open (§13, item 3); `!` is
+used in examples meanwhile.
 
 Only tags written in the source reach `ISome.tag`; nothing is ever inferred, and there is no
 non-specific tag that resolves to `None`. This matches the rule already settled for `impl/yaml`.
@@ -193,9 +209,9 @@ in a directive name becomes a config silently missing half its content.
 `@include` is the only built-in:
 
 ```
-@include(file = "conf.d/extra")             # relative to the including file's URL
-@include(file = "local", optional = true)   # missing file is not an error
-@include(resource = "reference")            # classpath, JVM only
+@include(file = "conf.d/extra")             // relative to the including file's URL
+@include(file = "local", optional = true)   // missing file is not an error
+@include(resource = "reference")            // classpath, JVM only
 @include(url = "https://…")
 ```
 
@@ -219,8 +235,8 @@ and keeps the earlier one otherwise. Being untagged is not a reason to drop a ta
 
 ```
 routes: !ordered { a: 1 }
-routes { b: 2 }            # !ordered { a: 1, b: 2 }
-routes: !sorted { c: 3 }   # !sorted { a: 1, b: 2, c: 3 }
+routes { b: 2 }            // !ordered { a: 1, b: 2 }
+routes: !sorted { c: 3 }   // !sorted { a: 1, b: 2, c: 3 }
 ```
 
 A replaced value carries only its own tag; with `:=` that holds for maps too.
@@ -229,11 +245,11 @@ A replaced value carries only its own tag; with `:=` that holds for maps too.
 takes the new value as is, with its own tag:
 
 ```
-# reference.conf
+// reference.conf
 pool { min: 1, max: 10, idle: 30s }
 
-# app.conf
-pool := { max: 4 }    # pool is { max: 4 }; min and idle are gone
+// app.conf
+pool := { max: 4 }    // pool is { max: 4 }; min and idle are gone
 ```
 
 With `:` the result would have been `{ min: 1, max: 4, idle: 30s }`, and there is no other way to drop
@@ -256,13 +272,13 @@ the other is a map or a substitution.
 
 ```
 a: ${server}
-a { port: 1 }      # error: cannot merge into a substitution, use := to replace
+a { port: 1 }      // error: cannot merge into a substitution, use := to replace
 
 b { port: 1 }
-b: ${server}       # error: ${server} may be a map, use := to replace
+b: ${server}       // error: ${server} may be a map, use := to replace
 
 c: ${x}
-c: 5               # fine: a scalar replaces whatever ${x} turns out to be
+c: 5               // fine: a scalar replaces whatever ${x} turns out to be
 ```
 
 A concatenation such as `"jdbc:"${host}` is always a scalar and never triggers the rule; `${?x}` does,
@@ -457,71 +473,17 @@ mistake is worse than stopping.
 
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
    indentation can claim it later.
-3. **Tag prefix, comment syntax, and the string in `ISome.tag`** — three questions that decide each
-   other. Settled meanwhile: a tag name follows the key rule, bare or in backticks, and a quoted tag
-   gives its content as is (§5).
+3. **Tag prefix: `!` or `#`.** Comments have moved to `//` and `/* */` and `ISome.tag` holds the
+   name only (§3, §5), so neither candidate costs compatibility any more; the choice is about
+   reading and quoting.
+   - **`!`** — known from YAML. `#` stays an ordinary character, so `color: #fff` and
+     `channel: #general` are plain unquoted scalars.
+   - **`#`** — reads like an annotation (`timeout: #duration 5s`). A value starting with `#` needs
+     quotes: `color: #fff` would be the tag `fff` with no value — a loud error, but a frequent one.
 
-   *The string.* `impl/yaml` keeps the `!` of a local tag: `!postgres` gives `Some("!postgres")`
-   (`tagOf` returns `getTag.getValue`, and `TagOfTest` pins it), while `!!int` expands to
-   `tag:yaml.org,2002:int`. Whatever DEF does, the same tag in a `.yaml` and a `.def` file should
-   reach a decoder as one string, or a decoder matching on tags has to know which loader produced
-   the node. Two coherent answers:
-   - The tag keeps the prefix, as in YAML: `!postgres` gives `!postgres`, ``!`x` `` gives `x` (like
-     verbatim `!<x>`). No change to `cfg-yaml`, but only if the prefix is `!`.
-   - The tag is the name, the prefix being syntax of the format: `postgres` from either loader.
-     Cleaner, and free to pick any prefix, but a breaking change to `cfg-yaml`, which would then
-     strip the `!` of local tags.
-
-   *The prefix.* Three candidates were discussed:
-   - **`!`** — known from YAML, keeps the first answer above available, costs nothing elsewhere.
-   - **`#`** — reads well (`timeout: #duration 5s`), and pasted YAML or HOCON comments fail loudly:
-     `# text` is a tag without a name, `#todo` in key position is no value. But `#` is the comment
-     today, so comments have to move (below), and a value starting with `#` needs quotes:
-     `color: #fff` would be the tag `fff` with no value — a loud error, but a frequent one
-     (colours, channel names). Implies the second answer above.
-   - **No prefix**, `key: tag value` — unambiguous, since an unquoted scalar holds no whitespace.
-     Rejected in discussion as it stands: it takes over exactly the position the "stray word is an
-     error" rule guards (§3). `greeting: Hello world` with forgotten quotes becomes tag `Hello`,
-     value `world`; `[a b]` with a forgotten comma becomes one tagged element; and in
-     `level: debug info` a reader cannot tell which word is the tag. All three are lexer errors
-     today and would surface, if at all, in a decoder far from the line.
-
-   `@`, `$` are taken by directives and substitutions.
-
-   *Comments, if `#` goes to tags:* `//` to the end of the line and `/* */`. Their traps are in
-   unquoted values:
-   - `//` — HOCON cuts `url: http://host` at the `//`. Avoided by opening a comment only at the
-     start of a line or after whitespace (or a separator); the price is that `a: 1//x` is silently
-     the scalar `1//x`. The alternative, URLs always quoted as in HOCON, costs far more often.
-   - `/*` — `pattern: /*.log` or `[/**, tmp]` open a comment after whitespace. Usually loud (a field
-     with no value, an unterminated comment), but if a `*/` follows further down, the comment
-     silently eats part of the file. A glob starting with `/*` is written in quotes.
-   - Block comments nest, as in Scala rather than Java, so commenting out a block that already holds
-     one is safe and a stray `*/` is an error; an unterminated `/*` is reported at its opening.
-   - Two comment forms instead of one, against the "deliberately one form" of §3.
-
-   The user's reasons for C-style comments: a taste for them, `#` being a nod to scripting
-   languages, and **doc comments**. DEF is meant as the base of DSLs, which may one day want their
-   configuration documented in the source, as `/** … */`. `#` has no natural doc form (`##` is
-   possible but weak). Moving comments does not by itself decide the tag prefix: `!` stays free.
-
-   What doc comments would take, if they come:
-   - A home in the protocol. `Node` has no place for documentation today, so it needs a field such
-     as `doc: Option[String]` on `ISome` — a change to `cfg`, consumed by `schema` (generated
-     reference docs, decoder error messages).
-   - Positions fixed in advance. A doc comment attaches to the field, sequence element or directive
-     that follows it. Doc comments add no meaning to values, so introducing them later breaks
-     nothing — *unless* v1 accepts `/**` where a later version would not. So v1 already reserves it:
-     `/** … */` is legal only before a field, an element or a directive, an error elsewhere
-     (between a tag and its value, after a value on the same line), and otherwise ignored for now.
-     `/**/` is an empty ordinary comment, as in Java.
-   - Kept from step 2 on: the lexer emits a doc comment as a token rather than skipping it, and the
-     Ast keeps it on the node it attaches to, even while nothing reads it — cheap now, a refactoring
-     later.
-
-   Leaning, not chosen: `//`, `/* */` and `#tag`, with the tag string being the bare name — on the
-   ground that `ISome.tag` should carry the tag's name, not YAML's syntax for it. The cheaper path is
-   to keep `#` comments and `!` tags. Decide before step 2 starts; the lexer depends on all three.
+   Pasted YAML or HOCON comments fail loudly either way: `# text` is a tag without a name, or a `#`
+   where no bare key can start. Rejected in discussion: no prefix at all (§14, session 5). Decide
+   before step 2 starts.
 
 ## 14. Decision log
 
@@ -688,3 +650,19 @@ alternative listed here should not be re-proposed without new information.
   ``my `key` ``) — a second mechanism beside the backslashes of `"…"`, and with raw newlines
   forbidden a key holding a control character could not be written at all; both forms at once —
   two spellings of one thing. Both quotes being escapable in both forms follows from the one set.
+- **Comments are `//` and nesting `/* */`; `/** */` is reserved for doc comments** (§3). The user's
+  call. Reasons: C-style comments suit the user's taste better than `#`, which reads as a scripting
+  language, and DEF is meant as a base for DSLs, which may want documented configuration — `/** */`
+  is the familiar form, `#` has none (`##` would be weak). Comments open only outside an unquoted
+  scalar, so URLs need no quotes, at the price of `a: 1//x` being one scalar; values starting with
+  `//` or `/*` (globs) need quotes. Block comments nest, as in Scala. Doc comments are positioned
+  and kept as tokens from v1, so that giving them meaning later breaks nothing. Rejected: `#`, the
+  session 1 choice, and with it the "deliberately one comment form" rule.
+- **`ISome.tag` holds the tag's name only**, without the prefix or the quotes (§5). The user's call:
+  both are syntax of the format and meaningless in the value. `impl/yaml` drops the leading `!` to
+  match, a breaking change to `cfg-yaml`. Rejected: keeping YAML's `!` (the string would depend on
+  the syntax that wrote it); letting DEF and YAML differ.
+- **Tags need a prefix.** Rejected: `key: tag value`, unambiguous since an unquoted scalar holds no
+  whitespace, because it takes over the position the "stray word is an error" rule guards:
+  `greeting: Hello world` with forgotten quotes would become tag `Hello`, `[a b]` with a forgotten
+  comma one tagged element, and in `level: debug info` a reader cannot tell which word is the tag.

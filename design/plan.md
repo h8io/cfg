@@ -96,20 +96,22 @@ at the phase gate.
 ### 2. Source and lexer
 
 - Read a URL as UTF-8; LF and CRLF are newlines, a lone CR is an error (§3).
-- Tokens: `{ } [ ] ( ) , . : := = !tag @name`, newline, comment (skipped), bare key
+- Tokens: `{ } [ ] ( ) , . : := = !tag @name`, newline, comment (`//`, nesting `/* */`, skipped),
+  doc comment (`/** */`, kept), bare key
   (`Id.SafeKeyPattern`), backticked name, unquoted scalar, quoted string with the escape set of
   `Id.quote`, triple-quoted
   string (raw, first newline dropped, common indent stripped, §5), `${`/`${?` … `}`.
-- Value mode: an unquoted scalar runs to whitespace, `,`, `}`, `]` or `#`; may not start with `'`
-  (§3). Key mode: `:` must be followed by whitespace or end of line, so must `:=`.
-- Fatal lexical errors (unterminated `"…"`/`` `…` ``/`"""…"""`) end the source (§11); others are reported and
+- Value mode: an unquoted scalar runs to whitespace, `,`, `}` or `]`; may not start with `'`
+  (§3). Inside it `//` and `/*` are ordinary characters; anywhere else they open a comment. Key mode: `:` must be followed by whitespace or end of line, so must `:=`.
+- Fatal lexical errors (unterminated `"…"`/`` `…` ``/`"""…"""`/`/*`) end the source (§11); others are reported and
   lexing continues.
 - `Id.quote` in `cfg` renders a quoted key in backticks (`format.md` §3). Every path the HOCON and
   YAML loaders print changes with it, so the release notes say so.
+- `impl/yaml`: `tagOf` drops the leading `!` of a tag (`format.md` §5), `TagOfTest` updated, the
+  YAML section of `CLAUDE.md` with it. A breaking change to `cfg-yaml`, in the release notes too.
 - Property test: for any string `k`, `Id.Key(k, Id.Root).path` lexes in key mode to exactly one key
   token with value `k` — the round-trip promise of §3.
-- **Spec gaps:** the tag prefix, the comment syntax and the string in `ISome.tag` (`format.md` §13,
-  item 3); the character set of a directive name; how a literal
+- **Spec gaps:** the tag prefix, `!` or `#` (`format.md` §13, item 3); the character set of a directive name; how a literal
   `${` is written — is `${` inside an unquoted scalar always a substitution, and is it literal inside
   quotes (as in HOCON)? Byte order mark at the start of a file — skip or error? Can a tag be
   followed directly by a triple-quoted string?
@@ -119,7 +121,8 @@ at the phase gate.
 - Recursive descent over the lexer: document, block, fields, dotted keys (backticked keys indivisible),
   `:`/`:=`/`key { … }`, `{` on the key's line, sequences, separators (`,`/newline, trailing allowed,
   empty element an error, whitespace never separates), tags on every value, `null` in value position
-  only, `a: foo bar` an error.
+  only, `a: foo bar` an error. Doc comments only before a field, an element or a directive,
+  kept on that node in the Ast (§3).
 - In this step the parser stops at the first error; recovery is step 5.
 - The Ast keeps operators and source order — merging is step 6.
 
