@@ -499,6 +499,16 @@ mistake is worse than stopping.
        no `=` follows it. Cost: `=` gains a second role beside directive arguments
        (`@include(file = "x")`), and `a := duration = 5s` reads poorly.
 
+   Context from the user, for whichever form is chosen: tags in DEF do not mean what they mean in
+   YAML. There a tag is unambiguously a type; in DEF it may select a variant. A schema for DEF is
+   planned later, working somewhat like CSS, with a tag as the analogue of a class. Two things
+   follow that the choice should keep open:
+   - A CSS element takes several classes, while `ISome.tag` is an `Option[String]`. Whether a node
+     may carry more than one tag is not decided; the syntax picked here should leave room for a
+     list (`#a #b value` extends naturally, the prefix-free form does not — `a b value` is already
+     ambiguous with one tag).
+   - Declared tags (above) fit a schema that knows its classes.
+
    Decide before step 2 starts.
 
 ## 14. Decision log
