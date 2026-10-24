@@ -72,8 +72,9 @@ loader path.
   second spelling. Both forms share one escape set: `\"`, ``\` ``, `\\`, `\b`, `\f`, `\n`, `\r`, `\t`
   and `\uXXXX` — the set `Id.quote` produces today, plus ``\` ``. Both quotes are escapable in both
   forms, so there is one escape grammar rather than one per delimiter; `Id.quote` itself only needs
-  ``\` `` and `\\`. Any other `\` is an error. Neither form may hold a raw newline — that is what `\n` and `"""…"""` are for — so an unterminated quote is
-  reported on its own line rather than at the end of the file.
+  ``\` `` and `\\`. Any other `\` is an error. Neither form may hold a raw newline — that is what `\n`
+  and `"""…"""` are for — so an unterminated quote is reported on its own line rather than at the end
+  of the file.
 - **Dotted keys** — `a.b.c: v` is sugar for `a { b { c: v } }`. The split happens only on dots
   *between* key tokens: a quoted key is indivisible, so `` `io.h8`: v `` is one key named `io.h8`,
   and ``x.`a.b`.c`` is three levels. This is also what `Id.path` produces — a key containing a dot
