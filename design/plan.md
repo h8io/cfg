@@ -111,7 +111,7 @@ at the phase gate.
   YAML section of `CLAUDE.md` with it. A breaking change to `cfg-yaml`, in the release notes too.
 - Property test: for any string `k`, `Id.Key(k, Id.Root).path` lexes in key mode to exactly one key
   token with value `k` — the round-trip promise of §3.
-- **Spec gaps:** the tag prefix, `!` or `#` (`format.md` §13, item 3); the character set of a directive name; how a literal
+- **Spec gaps:** the tag syntax, `#` or no prefix (`format.md` §13, item 3); the character set of a directive name; how a literal
   `${` is written — is `${` inside an unquoted scalar always a substitution, and is it literal inside
   quotes (as in HOCON)? Byte order mark at the start of a file — skip or error? Can a tag be
   followed directly by a triple-quoted string?

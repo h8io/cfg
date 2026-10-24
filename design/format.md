@@ -473,17 +473,33 @@ mistake is worse than stopping.
 
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
    indentation can claim it later.
-3. **Tag prefix: `!` or `#`.** Comments have moved to `//` and `/* */` and `ISome.tag` holds the
-   name only (§3, §5), so neither candidate costs compatibility any more; the choice is about
-   reading and quoting.
-   - **`!`** — known from YAML. `#` stays an ordinary character, so `color: #fff` and
-     `channel: #general` are plain unquoted scalars.
-   - **`#`** — reads like an annotation (`timeout: #duration 5s`). A value starting with `#` needs
-     quotes: `color: #fff` would be the tag `fff` with no value — a loud error, but a frequent one.
+3. **Tag syntax: `#`, or no prefix at all.** Comments have moved to `//` and `/* */` and `ISome.tag`
+   holds the name only (§3, §5), so no candidate costs compatibility any more.
+   - **`#`** — reads like an annotation (`timeout: #duration 5s`). The user accepts the cost: a value
+     starting with `#` is quoted, `color: "#fff"` — unquoted it would be the tag `fff` with no value,
+     a loud error. Pasted YAML or HOCON comments fail loudly too: `# text` is a tag without a name.
+     `!` (YAML's) is the fallback, with no quoting cost but no other merit left.
+   - **No prefix**, `key: tag value` — reopened by the user after being rejected the same session
+     (§14). Unambiguous, since an unquoted scalar holds no whitespace. The objection stands as
+     recorded: it takes over the position the "stray word is an error" rule guards, so forgotten
+     quotes (`greeting: Hello world`) or a forgotten comma (`[a b]`) parse silently as a tag, and in
+     `level: debug info` a reader cannot tell the tag from the value. Ways to keep the form and get
+     the error back, offered for consideration:
+     - **Declared tags.** A bare word in tag position must name a tag the loader knows — registered
+       next to the directive handlers (§6, plan step 10), or declared in the file. An unknown one is
+       the old error, "unknown tag `Hello`, or quote the value". For a DSL, a closed set of tags is
+       natural; for a plain config with no tags declared, nothing changes from today. Cost: tags are
+       no longer free-form, and a loader call without the registry rejects a tagged file.
+     - **A backticked name in value position is a tag**, with no registry: ``timeout: `duration` 5s``.
+       Deliberate quoting cannot be a forgotten one, and it uses the slot §3 kept free for names in
+       value position. Cost: noisy for the common case, which is why it fits better as the escape
+       hatch of the declared form (undeclared or non-safe names) than on its own.
+     - **Tag between key and value, marked by `=`**, Scala's ascription order:
+       `timeout: duration = 5s`, `routes: ordered = { a: 1 }`. The stray word stays an error because
+       no `=` follows it. Cost: `=` gains a second role beside directive arguments
+       (`@include(file = "x")`), and `a := duration = 5s` reads poorly.
 
-   Pasted YAML or HOCON comments fail loudly either way: `# text` is a tag without a name, or a `#`
-   where no bare key can start. Rejected in discussion: no prefix at all (§14, session 5). Decide
-   before step 2 starts.
+   Decide before step 2 starts.
 
 ## 14. Decision log
 
@@ -666,3 +682,4 @@ alternative listed here should not be re-proposed without new information.
   whitespace, because it takes over the position the "stray word is an error" rule guards:
   `greeting: Hello world` with forgotten quotes would become tag `Hello`, `[a b]` with a forgotten
   comma one tagged element, and in `level: debug info` a reader cannot tell which word is the tag.
+  **Reopened** by the user later the same session, to think the prefix-free form over (§13, item 3).
