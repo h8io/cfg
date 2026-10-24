@@ -484,11 +484,38 @@ mistake is worse than stopping.
 
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
    indentation can claim it later.
-3. **Several tags on one node.** Tags may select variants rather than types, and a later schema
-   for DEF is planned to work somewhat like CSS, with a tag as the analogue of a class. A CSS element
-   takes several classes, while `ISome.tag` is an `Option[String]`. The syntax already leaves room
-   for a list (`@a @b value`, like stacked annotations); allowing it is a change to `cfg`, best made
-   together with `cfg-yaml` dropping the `!` (plan step 2), so the API breaks once. Not decided.
+3. **Several tags on one node — and with it, what tags do when values are inherited.** Tags may
+   select variants rather than types, and a later schema for DEF is planned to work somewhat like
+   CSS, with a tag as the analogue of a class. A CSS element takes several classes, while
+   `ISome.tag` is an `Option[String]`. The syntax already leaves room for a list (`@a @b value`, like
+   stacked annotations).
+
+   The answer matters beyond the syntax: "yes" may also settle the tags of inherited values, which
+   today rest on a rule that exists only because a node has at most one tag. §7 has a merged map
+   take the later tag if one was written and keep the earlier one otherwise — with one slot, the
+   two sides can only compete. With a set they can accumulate, as classes do:
+
+   ```
+   routes: @ordered { a: 1 }
+   routes: @sorted { b: 2 }    // today: @sorted; with sets: @ordered @sorted
+   ```
+
+   What a set would need answered:
+   - **Merge**: union, in order of appearance, duplicates collapsed — or keep "later wins" per
+     node and use sets only for what one source writes.
+   - **Removing an inherited tag.** Union alone can only add; `:=` drops the whole value, tags and
+     fields together. Either that is enough, or a way to drop one tag is wanted (a syntax such as
+     `@-ordered` was not discussed and is only an illustration).
+   - **Order.** A set or a sequence — does `@a @b` differ from `@b @a`? CSS says no; a decoder
+     choosing a variant by the first tag would say yes.
+   - **Grafts.** `a: @x ${b}` where the node at `b` carries tags of its own: add `x` to them, or
+     replace them. §9 does not say today even for a single tag.
+   - **The protocol.** `ISome.tag: Option[String]` becomes a collection (`tags`), a change to `cfg`
+     and every loader. Best made together with `cfg-yaml` dropping the `!` (plan step 2), so the API
+     breaks once. YAML allows one tag per node, so `cfg-yaml` would produce at most one.
+
+   If the answer is "no", §7 stays as it is and the grafting question still needs its own answer.
+   Not decided.
 
 ## 14. Decision log
 
