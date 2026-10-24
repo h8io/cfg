@@ -515,6 +515,31 @@ mistake is worse than stopping.
      breaks once. YAML allows one tag per node, so `cfg-yaml` would produce at most one.
 
    If the answer is "no", §7 stays as it is and the grafting question still needs its own answer.
+
+   **Candidate, from the user: the tag is a collection** — one tag per node, whose value is a list
+   rather than a name: `@[ordered, sorted] value`, with `@ordered` short for a one-element list. Its
+   appeal is that tags would need no rules of their own: a tag is a value, and merges as DEF values
+   already do. Consequences, as discussed so far:
+   - **Merge follows §7 for sequences**: a tag written later replaces the earlier one, an absent tag
+     keeps it — today's rule, now derived instead of special. No accumulation: sequences are
+     replaced wholesale and there is no append operator, so union comes, if ever, with value
+     expressions (item 1), as appending to any sequence would.
+   - **Removal is free**: `@[]` writes an empty tag and drops the inherited one. Whether `@[]` on a
+     fresh node is the same as no tag (`None` vs an empty list) needs a word.
+   - **One spelling**: with `@[a, b]` available, stacked `@a @b` would be a second one, so a value
+     takes at most one `@`.
+   - **Order is kept**, being a list. CSS classes are a set; a decoder choosing a variant by the
+     first tag wants order. If set semantics are wanted, the decoder can ignore order, not the
+     other way round.
+   - **Further out**: the same shape stretches to a map, `@{ variant: postgres }`, which would merge
+     key by key as maps do — a home for "arguments to tags" (§5 keeps `@name(` an error for that).
+     Not proposed, only noted as where this leads.
+   - **Protocol**: `ISome.tag` becomes a list of names (`Vector[String]`, empty for none) — or, if
+     the map form is ever wanted, a node of its own, which raises what `Id` and `Location` a tag
+     node has.
+   - **Grafts** (`a: @x ${b}`) read naturally as "the written tag replaces the grafted node's", by
+     the same rule; still to be confirmed.
+
    Not decided.
 
 ## 14. Decision log
