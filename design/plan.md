@@ -109,7 +109,7 @@ at the phase gate.
 - Property test: for any string `k`, `Id.Key(k, Id.Root).path` lexes in key mode to exactly one key
   token with value `k` — the round-trip promise of §3.
 - **Spec gaps:** the tag prefix, the comment syntax and the string in `ISome.tag` (`format.md` §13,
-  item 3); escaping inside backticks (item 4); the character set of a directive name; how a literal
+  item 3); the character set of a directive name; how a literal
   `${` is written — is `${` inside an unquoted scalar always a substitution, and is it literal inside
   quotes (as in HOCON)? Byte order mark at the start of a file — skip or error? Can a tag be
   followed directly by a triple-quoted string?

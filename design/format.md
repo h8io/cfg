@@ -69,9 +69,10 @@ loader path.
 - **Names in backticks, values in double quotes.** A quoted key — in a field, a dotted key or a path
   inside `${…}` — is written `` `…` ``; `"…"` is only ever a scalar. The role of a token is
   therefore visible to the lexer without context, and `"port": 1` is an error with a hint, not a
-  second spelling. A quoted scalar uses the escape set `Id.quote` produces today: `\"`, `\\`, `\b`,
-  `\f`, `\n`, `\r`, `\t` and `\uXXXX`. Escaping inside backticks is open (§13, item 4). Neither form
-  may hold a raw newline — that is what `\n` and `"""…"""` are for — so an unterminated quote is
+  second spelling. Both forms share one escape set: `\"`, ``\` ``, `\\`, `\b`, `\f`, `\n`, `\r`, `\t`
+  and `\uXXXX` — the set `Id.quote` produces today, plus ``\` ``. Both quotes are escapable in both
+  forms, so there is one escape grammar rather than one per delimiter; `Id.quote` itself only needs
+  ``\` `` and `\\`. Any other `\` is an error. Neither form may hold a raw newline — that is what `\n` and `"""…"""` are for — so an unterminated quote is
   reported on its own line rather than at the end of the file.
 - **Dotted keys** — `a.b.c: v` is sugar for `a { b { c: v } }`. The split happens only on dots
   *between* key tokens: a quoted key is indivisible, so `` `io.h8`: v `` is one key named `io.h8`,
@@ -501,17 +502,6 @@ mistake is worse than stopping.
    Leaning, not chosen: `//`, `/* */` and `#tag`, with the tag string being the bare name — on the
    ground that `ISome.tag` should carry the tag's name, not YAML's syntax for it. The cheaper path is
    to keep `#` comments and `!` tags. Decide before step 2 starts; the lexer depends on all three.
-4. **Escaping inside backticks.** Options:
-   - **Backslashes, the same set as `"…"` plus ``\` ``** — recommended. One escape grammar in the
-     language, `` ` `` and `"` differing only in delimiter and role; every string is representable,
-     which the round-trip property test of step 2 needs (`Id.Key(k).path` lexes back to `k` for
-     *any* `k`).
-   - **Doubling, as in SQL** — ``` `my ``key`` ``` is ``my `key` ``. A `\` stays literal (Windows paths
-     as keys), but it is a second escaping mechanism beside the backslashes of `"…"`, and with raw
-     newlines forbidden a key holding a control character cannot be written at all.
-   - **Both** — two spellings of one thing; rejected as against the strictness the format aims for.
-
-   Decide before step 2 starts, together with the change to `Id.quote`.
 
 ## 14. Decision log
 
@@ -671,4 +661,10 @@ alternative listed here should not be re-proposed without new information.
 - **No raw newline inside `` `…` `` or `"…"`.** Agreed on the recommendation.
 - **Tag names follow the key rule; a quoted tag is taken verbatim**, like YAML's `!<…>`. Agreed; the
   prefix and the string in `ISome.tag` stay open (§13, item 3), with `#` and no prefix discussed
-  there. Escaping inside backticks is open as well (§13, item 4).
+  there.
+- **Backslash escapes inside backticks**, the same set as in `"…"` (§3). The user's call, on the
+  recommendation: one escape grammar for the whole language, and every string representable, which
+  the round-trip property of `Id.path` needs. Rejected: doubling as in SQL (``` `my ``key`` ``` for
+  ``my `key` ``) — a second mechanism beside the backslashes of `"…"`, and with raw newlines
+  forbidden a key holding a control character could not be written at all; both forms at once —
+  two spellings of one thing. Both quotes being escapable in both forms follows from the one set.
