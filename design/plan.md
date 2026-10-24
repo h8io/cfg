@@ -71,7 +71,7 @@ at the phase gate.
 | 8 | Renderer and round-trip property tests | todo |
 | 9 | Substitutions | todo |
 | 10 | Directive framework | todo |
-| 11 | `@include` | todo |
+| 11 | `#include` | todo |
 | 12 | Error messages and hints | todo |
 | 13 | Hardening | todo |
 | 14 | Docs and release | todo |
@@ -96,13 +96,13 @@ at the phase gate.
 ### 2. Source and lexer
 
 - Read a URL as UTF-8; LF and CRLF are newlines, a lone CR is an error (§3).
-- Tokens: `{ } [ ] ( ) , . : := = !tag @name`, newline, comment (`//`, nesting `/* */`, skipped),
+- Tokens: `{ } [ ] ( ) , . : := = @tag #name`, newline, comment (`//`, nesting `/* */`, skipped),
   doc comment (`/** */`, kept), bare key
   (`Id.SafeKeyPattern`), backticked name, unquoted scalar, quoted string with the escape set of
   `Id.quote`, triple-quoted
   string (raw, first newline dropped, common indent stripped, §5), `${`/`${?` … `}`.
 - Value mode: an unquoted scalar runs to whitespace, `,`, `}` or `]`; may not start with `'`
-  (§3). Inside it `//` and `/*` are ordinary characters; anywhere else they open a comment. Key mode: `:` must be followed by whitespace or end of line, so must `:=`.
+  (§3), and `@` or `#` at its start opens a tag or a directive (§5, §6); `@name(` is an error. Inside it `//` and `/*` are ordinary characters; anywhere else they open a comment. Key mode: `:` must be followed by whitespace or end of line, so must `:=`.
 - Fatal lexical errors (unterminated `"…"`/`` `…` ``/`"""…"""`/`/*`) end the source (§11); others are reported and
   lexing continues.
 - `Id.quote` in `cfg` renders a quoted key in backticks (`format.md` §3). Every path the HOCON and
@@ -111,7 +111,7 @@ at the phase gate.
   YAML section of `CLAUDE.md` with it. A breaking change to `cfg-yaml`, in the release notes too.
 - Property test: for any string `k`, `Id.Key(k, Id.Root).path` lexes in key mode to exactly one key
   token with value `k` — the round-trip promise of §3.
-- **Spec gaps:** the tag syntax, `#` or no prefix (`format.md` §13, item 3); the character set of a directive name; how a literal
+- **Spec gaps:** the character set of a directive name; how a literal
   `${` is written — is `${` inside an unquoted scalar always a substitution, and is it literal inside
   quotes (as in HOCON)? Byte order mark at the start of a file — skip or error? Can a tag be
   followed directly by a triple-quoted string?
@@ -205,7 +205,7 @@ at the phase gate.
   the user before coding. Whether the loader takes the handler set as a parameter of `DEF.apply`, of a
   `DEF` instance, or both.
 
-### 11. `@include`
+### 11. `#include`
 
 - `file` (relative to the including URL), `resource` (classpath), `url`; exactly one of them;
   `optional = true` tolerates a missing target (§6).

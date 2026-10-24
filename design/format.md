@@ -51,7 +51,7 @@ loader path.
 | Include sources | Relative paths, classpath resources; optional variant that tolerates a missing file |
 | Comments | `//` and nesting `/* */`; `/** */` reserved for doc comments (§3) |
 | Multi-line strings | Triple quotes, raw, with the common leading indent stripped |
-| Special words | Avoided — `@`-prefixed directives instead, as an open, extensible set. `null` is the one exception |
+| Special words | Avoided — `#`-prefixed directives instead, as an open, extensible set. `null` is the one exception |
 | Error model | `Either`, no Cats; as many errors per run as can be reported honestly (§11) |
 | Dotted keys | Sugar for nesting; a quoted key is indivisible, dots included |
 | Substitution location | Reference site, carrying the definition site with it (§10) |
@@ -117,7 +117,7 @@ loader path.
   The rule also frees `- ` (dash, space) at the start of an indented line for the sequence element
   marker (§13): `- 5` can never be a scalar, `-5` and `"- 5"` always are.
 - **`null`** — the one reserved word. An unquoted scalar whose trimmed text is exactly `null`
-  becomes `Node.INull`; `"null"` in quotes stays a scalar. A tag is kept: `!secret null` is an
+  becomes `Node.INull`; `"null"` in quotes stays a scalar. A tag is kept: `@secret null` is an
   `INull` with `tag = Some("secret")`. `true`, `false` and every other word remain plain scalars.
   `null` is reserved only in value position — as a key it is an ordinary bare key.
 
@@ -131,7 +131,8 @@ field      = key { "." key } ( ( ":" | ":=" ) value | block )
 value      = [ tag ] ( scalar | block | seq | directive | substitution-expr )
 seq        = "[" [ value { sep value } [ sep ] ] "]"
 sep        = "," | newline
-tag        = "!" identifier
+tag        = "@" name
+directive  = "#" name "(" [ arg { sep arg } [ sep ] ] ")"
 scalar     = null | bare-scalar | quoted-scalar | multiline-scalar
 ```
 
@@ -159,21 +160,26 @@ server {
 // value: "Welcome.\n  Indented line."
 ```
 
-**Tags** — `!name` before any value, including containers:
+**Tags** — `@name` before any value, including containers. They are to a value what annotations
+are to a Scala or Java class: metadata the parser carries and something else — a decoder, a later
+schema — reads.
 
 ```
-timeout: !duration 5s
-routes: !ordered { a: 1, b: 2 }
+timeout: @duration 5s
+routes: @ordered { a: 1, b: 2 }
 ```
+
+A tag is a name, not a call: `@name(` is an error, which keeps arguments to tags available for later
+without breaking a v1 file. A value starting with `@` is written in quotes (`user: "@john"`); inside
+an unquoted scalar `@` is ordinary (`admin@host`).
 
 A tag name follows the key rule: bare if it matches `Id.SafeKeyPattern`, in backticks otherwise.
 `ISome.tag` holds the name only — the prefix and the quotes are syntax of the format, not part of
-the tag: `!duration` gives `duration`, ``!`tag:yaml.org,2002:int` `` gives `tag:yaml.org,2002:int`,
+the tag: `@duration` gives `duration`, ``@`tag:yaml.org,2002:int` `` gives `tag:yaml.org,2002:int`,
 so there is no need for `!!`. `impl/yaml` follows the same rule and drops the leading `!` of a tag
 (`!postgres` gives `postgres`, `!!int` still `tag:yaml.org,2002:int`) — a breaking change to
 `cfg-yaml`, made in step 2 of the plan. It merges YAML's `!foo` and `!<foo>`, two different tags in
-YAML, into one name; the protocol accepts that. The prefix character is open (§13, item 3); `!` is
-used in examples meanwhile.
+YAML, into one name; the protocol accepts that.
 
 Only tags written in the source reach `ISome.tag`; nothing is ever inferred, and there is no
 non-specific tag that resolves to `None`. This matches the rule already settled for `impl/yaml`.
@@ -183,8 +189,13 @@ non-specific tag that resolves to `None`. This matches the rule already settled 
 The extension point, and the reason `include` is not a keyword. A directive is
 
 ```
-@name(arg = literal, arg = literal)
+#name(arg = literal, arg = literal)
 ```
+
+The `#` is the C preprocessor's, and for the same reason: directives are expanded while parsing,
+before merging and substitution (§8). A value starting with `#` is written in quotes
+(`color: "#fff"` — unquoted it is a call of an unknown directive `fff`); inside an unquoted scalar
+`#` is ordinary. A pasted YAML or HOCON comment fails loudly: `# text` is a directive with no name.
 
 and may appear in two positions:
 
@@ -206,13 +217,13 @@ Directives are an open set. The loader is built with a set of handlers; the form
 the call syntax. An unknown directive is an error, never a silently ignored field — otherwise a typo
 in a directive name becomes a config silently missing half its content.
 
-`@include` is the only built-in:
+`#include` is the only built-in:
 
 ```
-@include(file = "conf.d/extra")             // relative to the including file's URL
-@include(file = "local", optional = true)   // missing file is not an error
-@include(resource = "reference")            // classpath, JVM only
-@include(url = "https://…")
+#include(file = "conf.d/extra")             // relative to the including file's URL
+#include(file = "local", optional = true)   // missing file is not an error
+#include(resource = "reference")            // classpath, JVM only
+#include(url = "https://…")
 ```
 
 Exactly one of `file` / `resource` / `url` is required. Relative paths resolve against the URL of the
@@ -234,9 +245,9 @@ This follows the call already made for `impl/yaml`.
 and keeps the earlier one otherwise. Being untagged is not a reason to drop a tag:
 
 ```
-routes: !ordered { a: 1 }
-routes { b: 2 }            // !ordered { a: 1, b: 2 }
-routes: !sorted { c: 3 }   // !sorted { a: 1, b: 2, c: 3 }
+routes: @ordered { a: 1 }
+routes { b: 2 }            // @ordered { a: 1, b: 2 }
+routes: @sorted { c: 3 }   // @sorted { a: 1, b: 2, c: 3 }
 ```
 
 A replaced value carries only its own tag; with `:=` that holds for maps too.
@@ -259,7 +270,7 @@ in practice it matters for maps, and anywhere the author wants the intent to be 
 - With a dotted key the operator applies to the last key only: `a.b.c := { … }` replaces `c` and
   merges `a` and `b` as usual.
 - The operator is kept in the syntax tree until merging, and works in all three places listed above:
-  `:=` in an included file resets what the including block held before the `@include`, and `:=` in
+  `:=` in an included file resets what the including block held before the `#include`, and `:=` in
   the second URL resets what the first defined.
 - With no earlier value `:=` behaves like `:`.
 - `a := ${b}` is always allowed: whatever `${b}` resolves to, nothing before it survives.
@@ -294,7 +305,7 @@ cannot be expressed any other way.
 ## 8. Phase order
 
 1. Parse each source URL into a syntax tree, directives unexpanded.
-2. Expand directives depth-first. `@include` parses the referenced source recursively and merges it
+2. Expand directives depth-first. `#include` parses the referenced source recursively and merges it
    positionally. Cycle detection lives here.
 3. Merge the input sources, last wins.
 4. Resolve substitutions over the merged tree.
@@ -330,7 +341,7 @@ composed.
 the file by it:
 
 - a source passed to `DEF(urls*)` — the full URL, as the caller gave it (`file:/etc/app/app.def`);
-- a source pulled in by `@include` — the argument as written in the directive (`conf.d/extra`,
+- a source pulled in by `#include` — the argument as written in the directive (`conf.d/extra`,
   `reference`, `https://…`), not the URL it resolves to. A `file` argument is therefore relative to
   the including file, not to the working directory or the top-level source.
 
@@ -454,7 +465,7 @@ mistake is worse than stopping.
    - `key:` at the end of a line, followed by a deeper-indented line, opens a block — the Scala 3
      rule for `:` at the end of a line, and what `key:` would lead a reader to expect anyway. A bare
      key alone on a line stays an error.
-   - A container tag goes after `:`: `routes: !ordered`, block on the next line.
+   - A container tag goes after `:`: `routes: @ordered`, block on the next line.
    - Blank lines and comment-only lines do not take part in indentation.
 
    Open:
@@ -473,43 +484,11 @@ mistake is worse than stopping.
 
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
    indentation can claim it later.
-3. **Tag syntax: `#`, or no prefix at all.** Comments have moved to `//` and `/* */` and `ISome.tag`
-   holds the name only (§3, §5), so no candidate costs compatibility any more.
-   - **`#`** — reads like an annotation (`timeout: #duration 5s`). The user accepts the cost: a value
-     starting with `#` is quoted, `color: "#fff"` — unquoted it would be the tag `fff` with no value,
-     a loud error. Pasted YAML or HOCON comments fail loudly too: `# text` is a tag without a name.
-     `!` (YAML's) is the fallback, with no quoting cost but no other merit left.
-   - **No prefix**, `key: tag value` — reopened by the user after being rejected the same session
-     (§14). Unambiguous, since an unquoted scalar holds no whitespace. The objection stands as
-     recorded: it takes over the position the "stray word is an error" rule guards, so forgotten
-     quotes (`greeting: Hello world`) or a forgotten comma (`[a b]`) parse silently as a tag, and in
-     `level: debug info` a reader cannot tell the tag from the value. Ways to keep the form and get
-     the error back, offered for consideration:
-     - **Declared tags.** A bare word in tag position must name a tag the loader knows — registered
-       next to the directive handlers (§6, plan step 10), or declared in the file. An unknown one is
-       the old error, "unknown tag `Hello`, or quote the value". For a DSL, a closed set of tags is
-       natural; for a plain config with no tags declared, nothing changes from today. Cost: tags are
-       no longer free-form, and a loader call without the registry rejects a tagged file.
-     - **A backticked name in value position is a tag**, with no registry: ``timeout: `duration` 5s``.
-       Deliberate quoting cannot be a forgotten one, and it uses the slot §3 kept free for names in
-       value position. Cost: noisy for the common case, which is why it fits better as the escape
-       hatch of the declared form (undeclared or non-safe names) than on its own.
-     - **Tag between key and value, marked by `=`**, Scala's ascription order:
-       `timeout: duration = 5s`, `routes: ordered = { a: 1 }`. The stray word stays an error because
-       no `=` follows it. Cost: `=` gains a second role beside directive arguments
-       (`@include(file = "x")`), and `a := duration = 5s` reads poorly.
-
-   Context from the user, for whichever form is chosen: tags in DEF do not mean what they mean in
-   YAML. There a tag is unambiguously a type; in DEF it may select a variant. A schema for DEF is
-   planned later, working somewhat like CSS, with a tag as the analogue of a class. Two things
-   follow that the choice should keep open:
-   - A CSS element takes several classes, while `ISome.tag` is an `Option[String]`. Whether a node
-     may carry more than one tag is not decided; the syntax picked here should leave room for a
-     list (`#a #b value` extends naturally, the prefix-free form does not — `a b value` is already
-     ambiguous with one tag).
-   - Declared tags (above) fit a schema that knows its classes.
-
-   Decide before step 2 starts.
+3. **Several tags on one node.** Tags may select variants rather than types, and a later schema
+   for DEF is planned to work somewhat like CSS, with a tag as the analogue of a class. A CSS element
+   takes several classes, while `ISome.tag` is an `Option[String]`. The syntax already leaves room
+   for a list (`@a @b value`, like stacked annotations); allowing it is a change to `cfg`, best made
+   together with `cfg-yaml` dropping the `!` (plan step 2), so the API breaks once. Not decided.
 
 ## 14. Decision log
 
@@ -668,8 +647,7 @@ alternative listed here should not be re-proposed without new information.
   strictness, and a generator of configs need not reproduce `SafeKeyPattern`.
 - **No raw newline inside `` `…` `` or `"…"`.** Agreed on the recommendation.
 - **Tag names follow the key rule; a quoted tag is taken verbatim**, like YAML's `!<…>`. Agreed; the
-  prefix and the string in `ISome.tag` stay open (§13, item 3), with `#` and no prefix discussed
-  there.
+  prefix and the string in `ISome.tag` were settled later the same session (below).
 - **Backslash escapes inside backticks**, the same set as in `"…"` (§3). The user's call, on the
   recommendation: one escape grammar for the whole language, and every string representable, which
   the round-trip property of `Id.path` needs. Rejected: doubling as in SQL (``` `my ``key`` ``` for
@@ -692,4 +670,12 @@ alternative listed here should not be re-proposed without new information.
   whitespace, because it takes over the position the "stray word is an error" rule guards:
   `greeting: Hello world` with forgotten quotes would become tag `Hello`, `[a b]` with a forgotten
   comma one tagged element, and in `level: debug info` a reader cannot tell which word is the tag.
-  **Reopened** by the user later the same session, to think the prefix-free form over (§13, item 3).
+  **Reopened** by the user later the same session, then closed again: the prefix stays. Tags may
+  become several per node, as CSS classes are, and `a b value` cannot be read with more than one.
+- **Tags take `@`, directives take `#`** (§5, §6). The user's proposal, swapping the session 1
+  directive prefix. Tags are metadata on a value, as annotations are on a class (`@a @b value` reads
+  as stacked annotations); directives are expanded during parsing, as by the C preprocessor
+  (`#include`). Values starting with `@` or `#` are quoted, which the user accepted. `@name(` is an
+  error for now, so arguments to tags stay available. Rejected: `!` (YAML's, no merit left once the
+  tag string dropped it), `#` for tags with `@` directives, and no prefix (above). Pasted YAML
+  comments fail loudly either way.
