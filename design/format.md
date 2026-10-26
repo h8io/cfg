@@ -117,8 +117,8 @@ loader path.
   The rule also frees `- ` (dash, space) at the start of an indented line for the sequence element
   marker (§13): `- 5` can never be a scalar, `-5` and `"- 5"` always are.
 - **`null`** — the one reserved word. An unquoted scalar whose trimmed text is exactly `null`
-  becomes `Node.INull`; `"null"` in quotes stays a scalar. A tag is kept: `@secret null` is an
-  `INull` with `tag = Some("secret")`. `true`, `false` and every other word remain plain scalars.
+  becomes `Node.INull`; `"null"` in quotes stays a scalar. Tags are kept: `@secret null` is an
+  `INull` with `tags = Set("secret")`. `true`, `false` and every other word remain plain scalars.
   `null` is reserved only in value position — as a key it is an ordinary bare key.
 
 ## 4. Grammar sketch
@@ -174,15 +174,28 @@ without breaking a v1 file. A value starting with `@` is written in quotes (`use
 an unquoted scalar `@` is ordinary (`admin@host`).
 
 A tag name follows the key rule: bare if it matches `Id.SafeKeyPattern`, in backticks otherwise.
-`ISome.tag` holds the name only — the prefix and the quotes are syntax of the format, not part of
+`ISome.tags` holds names only — the prefix and the quotes are syntax of the format, not part of
 the tag: `@duration` gives `duration`, ``@`tag:yaml.org,2002:int` `` gives `tag:yaml.org,2002:int`,
 so there is no need for `!!`. `impl/yaml` follows the same rule and drops the leading `!` of a tag
 (`!postgres` gives `postgres`, `!!int` still `tag:yaml.org,2002:int`) — a breaking change to
 `cfg-yaml`, made in step 2 of the plan. It merges YAML's `!foo` and `!<foo>`, two different tags in
 YAML, into one name; the protocol accepts that.
 
-Only tags written in the source reach `ISome.tag`; nothing is ever inferred, and there is no
-non-specific tag that resolves to `None`. This matches the rule already settled for `impl/yaml`.
+Only tags written in the source reach `ISome.tags`; nothing is ever inferred, and there is no
+non-specific tag that resolves to nothing. This matches the rule already settled for `impl/yaml`.
+
+**A value takes any number of tags, and they form a set** — as an element takes CSS classes, which
+is the role tags are meant to play for a later DEF schema. They are written stacked, like
+annotations: `@pooled @readonly { … }`. Order carries no meaning, `@a @b` is the same as `@b @a`.
+In the protocol `ISome.tag: Option[String]` becomes `ISome.tags: Set[String]`, empty when nothing
+was written — a change to `cfg` and every loader, made in step 2 of the plan together with the `!`
+above, so the API breaks once. `impl/hocon` always gives the empty set, `impl/yaml` at most one
+element, YAML allowing one tag per node.
+
+**`@-name` is reserved** for removing an inherited tag (§7) and is an error in v1. It costs nothing:
+a bare tag name follows `Id.SafeKeyPattern`, which cannot start with `-`, so `@-` never begins a
+legal tag. A tag whose name starts with `-` is written in backticks, ``@`-name` ``, and is an
+ordinary tag.
 
 ## 6. Directives
 
@@ -241,19 +254,21 @@ The same rule applies in all three places it is needed, so there is one behaviou
 
 This follows the call already made for `impl/yaml`.
 
-**Tags in a merge.** When two maps merge, the result takes the later map's tag if one was written there,
-and keeps the earlier one otherwise. Being untagged is not a reason to drop a tag:
+**Tags in a merge.** When two maps merge, the result carries the union of their tags, as classes
+accumulate in CSS. Being untagged is not a reason to drop a tag:
 
 ```
 routes: @ordered { a: 1 }
 routes { b: 2 }            // @ordered { a: 1, b: 2 }
-routes: @sorted { c: 3 }   // @sorted { a: 1, b: 2, c: 3 }
+routes: @sorted { c: 3 }   // @ordered @sorted { a: 1, b: 2, c: 3 }
 ```
 
-A replaced value carries only its own tag; with `:=` that holds for maps too.
+A replaced value carries only its own tags; with `:=` that holds for maps too. `:=` is also the
+only way to drop an inherited tag in v1 — it drops the fields with it. A finer tool is reserved,
+not designed: `@-name` (§5).
 
 **Explicit replacement — `:=`.** A field written with `:=` discards whatever the key held before and
-takes the new value as is, with its own tag:
+takes the new value as is, with its own tags:
 
 ```
 // reference.conf
@@ -319,6 +334,9 @@ from a substitution.
 
 - `${path}` in place of a whole value grafts the referenced node, whatever it is — scalar, block or
   sequence.
+- Tags written before a whole-value `${…}` are added to the grafted node's own: with
+  `b: @x { … }`, `a: @y ${b}` gives `a` the tags `x` and `y`. The union is the same as in a merge
+  (§7), so a graft and a merge never disagree about tags.
 - `prefix${path}suffix` concatenates; the referenced node must then be a scalar, and the result is a
   scalar. The parts touch: `"a" ${b}` with a space between is an error, not a concatenation with a
   space as in HOCON — whitespace never joins or separates values.
@@ -484,63 +502,12 @@ mistake is worse than stopping.
 
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
    indentation can claim it later.
-3. **Several tags on one node — and with it, what tags do when values are inherited.** Tags may
-   select variants rather than types, and a later schema for DEF is planned to work somewhat like
-   CSS, with a tag as the analogue of a class. A CSS element takes several classes, while
-   `ISome.tag` is an `Option[String]`. The syntax already leaves room for a list (`@a @b value`, like
-   stacked annotations).
-
-   The answer matters beyond the syntax: "yes" may also settle the tags of inherited values, which
-   today rest on a rule that exists only because a node has at most one tag. §7 has a merged map
-   take the later tag if one was written and keep the earlier one otherwise — with one slot, the
-   two sides can only compete. With a set they can accumulate, as classes do:
-
-   ```
-   routes: @ordered { a: 1 }
-   routes: @sorted { b: 2 }    // today: @sorted; with sets: @ordered @sorted
-   ```
-
-   What a set would need answered:
-   - **Merge**: union, in order of appearance, duplicates collapsed — or keep "later wins" per
-     node and use sets only for what one source writes.
-   - **Removing an inherited tag.** Union alone can only add; `:=` drops the whole value, tags and
-     fields together. Either that is enough, or a way to drop one tag is wanted (a syntax such as
-     `@-ordered` was not discussed and is only an illustration).
-   - **Order.** A set or a sequence — does `@a @b` differ from `@b @a`? CSS says no; a decoder
-     choosing a variant by the first tag would say yes.
-   - **Grafts.** `a: @x ${b}` where the node at `b` carries tags of its own: add `x` to them, or
-     replace them. §9 does not say today even for a single tag.
-   - **The protocol.** `ISome.tag: Option[String]` becomes a collection (`tags`), a change to `cfg`
-     and every loader. Best made together with `cfg-yaml` dropping the `!` (plan step 2), so the API
-     breaks once. YAML allows one tag per node, so `cfg-yaml` would produce at most one.
-
-   If the answer is "no", §7 stays as it is and the grafting question still needs its own answer.
-
-   **Candidate, from the user: the tag is a collection** — one tag per node, whose value is a list
-   rather than a name: `@[ordered, sorted] value`, with `@ordered` short for a one-element list. Its
-   appeal is that tags would need no rules of their own: a tag is a value, and merges as DEF values
-   already do. Consequences, as discussed so far:
-   - **Merge follows §7 for sequences**: a tag written later replaces the earlier one, an absent tag
-     keeps it — today's rule, now derived instead of special. No accumulation: sequences are
-     replaced wholesale and there is no append operator, so union comes, if ever, with value
-     expressions (item 1), as appending to any sequence would.
-   - **Removal is free**: `@[]` writes an empty tag and drops the inherited one. Whether `@[]` on a
-     fresh node is the same as no tag (`None` vs an empty list) needs a word.
-   - **One spelling**: with `@[a, b]` available, stacked `@a @b` would be a second one, so a value
-     takes at most one `@`.
-   - **Order is kept**, being a list. CSS classes are a set; a decoder choosing a variant by the
-     first tag wants order. If set semantics are wanted, the decoder can ignore order, not the
-     other way round.
-   - **Further out**: the same shape stretches to a map, `@{ variant: postgres }`, which would merge
-     key by key as maps do — a home for "arguments to tags" (§5 keeps `@name(` an error for that).
-     Not proposed, only noted as where this leads.
-   - **Protocol**: `ISome.tag` becomes a list of names (`Vector[String]`, empty for none) — or, if
-     the map form is ever wanted, a node of its own, which raises what `Id` and `Location` a tag
-     node has.
-   - **Grafts** (`a: @x ${b}`) read naturally as "the written tag replaces the grafted node's", by
-     the same rule; still to be confirmed.
-
-   Not decided.
+3. **Leftovers of several tags per node** (settled in session 6: §5, §7, §9).
+   - **A tag written twice on one value**, `@a @a x`: collapsed into one, or an error, as a
+     duplicate argument name may be (plan step 4)?
+   - **Tags of a concatenation.** `"jdbc:"${host}` builds a new scalar; does it carry only the tags
+     written before it, or also those of the referenced scalars? The first reads as a new value,
+     the second as a graft.
 
 ## 14. Decision log
 
@@ -731,3 +698,18 @@ alternative listed here should not be re-proposed without new information.
   error for now, so arguments to tags stay available. Rejected: `!` (YAML's, no merit left once the
   tag string dropped it), `#` for tags with `@` directives, and no prefix (above). Pasted YAML
   comments fail loudly either way.
+
+### Session 6 — 2026-10-26
+
+- **Several tags per node, as a set** (§5). The user's call. Order carries no meaning, as with CSS
+  classes; `ISome.tag: Option[String]` becomes `ISome.tags: Set[String]` in step 2 of the plan,
+  together with the `!` change, so the API breaks once. Rejected: the user's own candidate from
+  session 5, a tag that is one collection-valued annotation (`@[a, b]`) merging as a sequence does
+  — it keeps "later wins" and order, and the user preferred classes that accumulate.
+- **A merge takes the union of tags** (§7), replacing session 3's "the later tag if written, the
+  earlier one otherwise", which existed only because a node had one slot.
+- **A graft adds the written tags to the grafted node's** (§9). The user's call: the same union as
+  in a merge.
+- **`:=` is the only way to drop an inherited tag in v1; `@-name` is reserved** for a finer way
+  (§5). The user's call. Free because a bare tag name cannot start with `-`; a backticked one can
+  and stays an ordinary tag.

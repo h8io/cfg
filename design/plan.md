@@ -102,7 +102,8 @@ at the phase gate.
   `Id.quote`, triple-quoted
   string (raw, first newline dropped, common indent stripped, §5), `${`/`${?` … `}`.
 - Value mode: an unquoted scalar runs to whitespace, `,`, `}` or `]`; may not start with `'`
-  (§3), and `@` or `#` at its start opens a tag or a directive (§5, §6); `@name(` is an error. Inside
+  (§3), and `@` or `#` at its start opens a tag or a directive (§5, §6); `@name(` is an error, so is
+  `@-`, reserved (§5). Inside
   it `//` and `/*` are ordinary characters; anywhere else they open a comment. Key mode: `:` must be
   followed by whitespace or end of line, so must `:=`.
 - Fatal lexical errors (unterminated `"…"`/`` `…` ``/`"""…"""`/`/*`) end the source (§11); others
@@ -111,10 +112,12 @@ at the phase gate.
   YAML loaders print changes with it, so the release notes say so.
 - `impl/yaml`: `tagOf` drops the leading `!` of a tag (`format.md` §5), `TagOfTest` updated, the
   YAML section of `CLAUDE.md` with it. A breaking change to `cfg-yaml`, in the release notes too.
+- `cfg`: `ISome.tag: Option[String]` becomes `ISome.tags: Set[String]` (`format.md` §5) — `INull`,
+  `IScalar`, their extractors, both loaders (`impl/hocon` empty, `impl/yaml` at most one) and their
+  tests. Made in the same release as the `!`, so the API breaks once; in the release notes.
 - Property test: for any string `k`, `Id.Key(k, Id.Root).path` lexes in key mode to exactly one key
   token with value `k` — the round-trip promise of §3.
-- **Spec gaps:** several tags per node, and with it tags in a merge and on a graft (`format.md` §13,
-  item 3) — it decides the shape of `ISome.tag`; the character set of a directive name; how a literal
+- **Spec gaps:** the character set of a directive name; how a literal
   `${` is written — is `${` inside an unquoted scalar always a substitution, and is it literal inside
   quotes (as in HOCON)? Byte order mark at the start of a file — skip or error? Can a tag be
   followed directly by a triple-quoted string?
@@ -151,8 +154,8 @@ at the phase gate.
 
 - Ast → Tree for one source: duplicate keys merge in order, dotted keys merge into nested blocks,
   `:=` drops the earlier value, block form merges (§4, §7).
-- Tags in a merge: the later written tag wins, otherwise the earlier is kept; a replaced value keeps
-  only its own tag (§7).
+- Tags in a merge: merged maps take the union of their tags; a replaced value keeps only its own
+  (§7).
 - No merging over a substitution: a `:` merge with a whole-value `${…}` on one side and a map or
   `${…}` on the other is an error suggesting `:=`, at any depth (§7).
 - Merging N trees in order — the same function.
@@ -184,6 +187,7 @@ at the phase gate.
   the field, concatenation of scalars only, lookup order tree → system properties → environment.
   System properties and the environment are injected as functions, so tests do not touch the real
   ones.
+- Tags written before a whole-value `${…}` are added to the grafted node's (§9).
 - Cycles are errors naming the path; self-reference is a cycle (§9).
 - Root causes only: a node depending on a failed one is dropped silently (§11).
 - Locations (§10): `ReferenceLocation` on every node of a grafted subtree, chains for chained
