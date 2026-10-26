@@ -187,7 +187,8 @@ at the phase gate.
   the field, concatenation of scalars only, lookup order tree → system properties → environment.
   System properties and the environment are injected as functions, so tests do not touch the real
   ones.
-- Tags written before a whole-value `${…}` are added to the grafted node's (§9).
+- Tags written before a whole-value `${…}` are added to the grafted node's (§9).; a concatenation carries only
+  the tags written before it.
 - Cycles are errors naming the path; self-reference is a cycle (§9).
 - Root causes only: a node depending on a failed one is dropped silently (§11).
 - Locations (§10): `ReferenceLocation` on every node of a grafted subtree, chains for chained

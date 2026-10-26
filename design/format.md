@@ -186,7 +186,8 @@ non-specific tag that resolves to nothing. This matches the rule already settled
 
 **A value takes any number of tags, and they form a set** — as an element takes CSS classes, which
 is the role tags are meant to play for a later DEF schema. They are written stacked, like
-annotations: `@pooled @readonly { … }`. Order carries no meaning, `@a @b` is the same as `@b @a`.
+annotations: `@pooled @readonly { … }`. Order carries no meaning, `@a @b` is the same as `@b @a`,
+and a tag written twice counts once: `@a @a x` is `@a x`, not an error.
 In the protocol `ISome.tag: Option[String]` becomes `ISome.tags: Set[String]`, empty when nothing
 was written — a change to `cfg` and every loader, made in step 2 of the plan together with the `!`
 above, so the API breaks once. `impl/hocon` always gives the empty set, `impl/yaml` at most one
@@ -337,6 +338,8 @@ from a substitution.
 - Tags written before a whole-value `${…}` are added to the grafted node's own: with
   `b: @x { … }`, `a: @y ${b}` gives `a` the tags `x` and `y`. The union is the same as in a merge
   (§7), so a graft and a merge never disagree about tags.
+- A concatenation builds a new scalar, which carries only the tags written before it: in
+  `@t "jdbc:"${host}` the result is tagged `t` alone, whatever `host` carries.
 - `prefix${path}suffix` concatenates; the referenced node must then be a scalar, and the result is a
   scalar. The parts touch: `"a" ${b}` with a space between is an error, not a concatenation with a
   space as in HOCON — whitespace never joins or separates values.
@@ -502,13 +505,6 @@ mistake is worse than stopping.
 
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
    indentation can claim it later.
-3. **Leftovers of several tags per node** (settled in session 6: §5, §7, §9).
-   - **A tag written twice on one value**, `@a @a x`: collapsed into one, or an error, as a
-     duplicate argument name may be (plan step 4)?
-   - **Tags of a concatenation.** `"jdbc:"${host}` builds a new scalar; does it carry only the tags
-     written before it, or also those of the referenced scalars? The first reads as a new value,
-     the second as a graft.
-
 ## 14. Decision log
 
 Each entry records what was chosen, and — where it matters — what was rejected and why. A rejected
@@ -713,3 +709,7 @@ alternative listed here should not be re-proposed without new information.
 - **`:=` is the only way to drop an inherited tag in v1; `@-name` is reserved** for a finer way
   (§5). The user's call. Free because a bare tag name cannot start with `-`; a backticked one can
   and stays an ordinary tag.
+- **A tag written twice on one value collapses into one** (§5). The user's call; a set has no
+  duplicates to report.
+- **A concatenation carries only the tags written before it** (§9). The user's call: it is a new
+  value, not a graft, so the tags of the referenced scalars do not reach it.
