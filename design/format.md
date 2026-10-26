@@ -188,6 +188,13 @@ non-specific tag that resolves to nothing. This matches the rule already settled
 is the role tags are meant to play for a later DEF schema. They are written stacked, like
 annotations: `@pooled @readonly { … }`. Order carries no meaning, `@a @b` is the same as `@b @a`,
 and a tag written twice counts once: `@a @a x` is `@a x`, not an error.
+
+**Tags mean nothing at this level.** DEF and `cfg` are the low-level protocol; what a tag means,
+and how particular tags combine when values merge, is for the level above — the `schema` layer and
+the planned DEF schema — to define. So the rules below are deliberately the neutral ones: a set,
+union on merge and graft, nothing dropped except by `:=`. They lose no tag a higher level might
+need, and they pre-empt none of its choices — that level can still give two tags a conflict, an
+order or a "later wins" of its own.
 In the protocol `ISome.tag: Option[String]` becomes `ISome.tags: Set[String]`, empty when nothing
 was written — a change to `cfg` and every loader, made in step 2 of the plan together with the `!`
 above, so the API breaks once. `impl/hocon` always gives the empty set, `impl/yaml` at most one
@@ -698,6 +705,9 @@ alternative listed here should not be re-proposed without new information.
 
 ### Session 6 — 2026-10-26
 
+- **The reason behind all of the below** (§5): the low-level protocol gives tags no meaning; the
+  meaning of tags and how different tags merge are left to the higher level, so the rules here are
+  the neutral, lossless ones. The user's statement, recorded so it is not forgotten.
 - **Several tags per node, as a set** (§5). The user's call. Order carries no meaning, as with CSS
   classes; `ISome.tag: Option[String]` becomes `ISome.tags: Set[String]` in step 2 of the plan,
   together with the `!` change, so the API breaks once. Rejected: the user's own candidate from
