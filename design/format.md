@@ -505,6 +505,7 @@ mistake is worse than stopping.
 
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
    indentation can claim it later.
+
 ## 14. Decision log
 
 Each entry records what was chosen, and — where it matters — what was rejected and why. A rejected
