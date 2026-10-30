@@ -217,6 +217,9 @@ server {
 
 A width with any other marker is an error: `<` and `=` fix the indent themselves.
 
+**Every newline in a block is LF** in the value, whether the file has LF or CRLF, so the value does
+not depend on the editor or on git's `core.autocrlf`. A substituted value keeps its own newlines.
+
 **Trailing whitespace** is stripped from every line of a block, under any marker and before folding,
 so a line holding only whitespace becomes empty. It is stripped from the source text, before
 substitution: a substituted value keeps its own. The one-line form keeps it, its closing delimiter
@@ -626,8 +629,7 @@ mistake is worse than stopping.
      YAML, an explicit width relative to the opening line.
    - ~~**Text right after the opening `"""`**~~ Settled (§5): a block starts on the next line; text
      after the delimiter makes a one-line string, which must close on its line.
-   - **CRLF in the value**: normalised to LF, or kept as in the file, which makes the value depend on
-     the editor.
+   - ~~**CRLF in the value**~~ Settled (§5): normalised to LF.
    - **What may follow the closing `"""`**: whether it can be a part of a concatenation
      (`"""…"""${x}`).
 
@@ -933,3 +935,6 @@ alternative listed here should not be re-proposed without new information.
   marker, `=` included, which is about leading whitespace only; before folding; in the source text,
   so a substituted value keeps its own. The one-line form keeps it. The user's call: a value that
   needs trailing whitespace is exotic, and invisible spaces are a common source of bugs.
+- **A CRLF in a block becomes LF in the value** (§5), as in Java; a substituted value keeps its own.
+  The user's call. Rejected: keeping the file's newlines, which makes the value depend on the
+  editor and on git's `core.autocrlf`.
