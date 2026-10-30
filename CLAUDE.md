@@ -16,6 +16,7 @@ sbt cfg/testFull
 sbt schema/testFull
 sbt hocon/testFull
 sbt yaml/testFull
+sbt defg/testFull
 
 # Run a single test class
 sbt "schema/testOnly h8io.cfg.schema.DecoderTest"
@@ -49,6 +50,9 @@ Two-layer design: `cfg` is the low-level protocol (a format-agnostic ADT for con
 - **`schema`** (artifact `cfg-schema`) — high-level API: `Decoder` and `Property` abstractions that hide ADT manipulation. Depends on `cfg` + Cats + `io.h8:reflect`.
 - **`impl/hocon`** (artifact `cfg-hocon`) — loads HOCON and YAML into the `cfg` AST using `typesafe-config` + `typesafe-config-yaml`.
 - **`impl/yaml`** (artifact `cfg-yaml`) — loads YAML into the `cfg` AST using `snakeyaml-engine` directly, propagating tags.
+- **`impl/def`** (sbt project `defg`, artifact `cfg-def`, package `h8io.cfg.impl.defg`) — DEF, the project's own format
+  with a hand-written parser and no dependencies beyond `cfg`. Being built step by step: the spec is `design/format.md`,
+  the plan with each step's status is `design/plan.md`. `publish / skip` until the plan's last step.
 - **root** (artifact `cfg-all`) — aggregate; not published.
 - **pages** — documentation site (sources in `docs/`); not aggregated in root. Two halves: sbt runs mdoc and unidoc,
   then Docusaurus (`pages/package.json`, Node ≥ 20) renders mdoc's output. The navigation is `pages/sidebars.js` — a new
