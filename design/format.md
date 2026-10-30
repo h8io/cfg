@@ -61,14 +61,17 @@ loader path.
 
 ## 3. Lexical structure
 
-- Encoding is UTF-8. A byte order mark at the start of a source is skipped. A newline is LF or
-  CRLF; a lone CR is an error.
+- Encoding is UTF-8. A byte order mark at the start of a source is skipped. A byte sequence that is
+  not UTF-8 ends the source as unreadable, pointing at the first bad byte; nothing is replaced. A
+  newline is LF or CRLF; a lone CR is an error.
 - **Comments** are `//` to the end of the line and `/* … */`, which nest, as in Scala: commenting out
   a block that already holds a comment is safe. An unterminated `/*` is reported at its opening, a
   stray `*/` is an error, and `/**/` is an empty ordinary comment. Inside an unquoted scalar `//`
   and `/*` are ordinary characters; anywhere else they open a comment. So `url: http://host` is one
   scalar — and so is `a: 1//x`, the price of the rule — while `pattern: /*.log` opens a comment, and
   a value starting with `//` or `/*` is written in quotes. `#` has no meaning of its own here.
+  A comment counts as whitespace, so it never separates: a newline inside `/* … */` is not a
+  newline, and `a: 1 /*⏎*/ b: 2` needs a `,`. A `//` comment ends before its newline, which stays.
 - **Doc comments** — `/** … */` is reserved for documentation that DSLs built on DEF may one day
   want in the source. v1 ignores it, but accepts it only before a field, a sequence element or a
   directive; anywhere else (between a tag and its value, after a value on the same line) it is an
@@ -99,7 +102,8 @@ loader path.
   loaders print as well. Any later change to `Id.quote` has to be mirrored here, and vice versa.
 - **Unquoted scalars** contain no whitespace. One runs to the first whitespace, `,`, `}` or `]`;
   after it only a separator, a comment or the end of the block may follow, so `a: foo bar` is an
-  error that says to quote the value. What was read becomes `IScalar.value` verbatim — `1e5` stays
+  error that says to quote the value. A `"` or `` ` `` inside one is an error with the same hint:
+  `abc"def"` would otherwise silently keep its quotes, as YAML's `'x'` would. What was read becomes `IScalar.value` verbatim — `1e5` stays
   `"1e5"`, `true` stays `"true"`, `007` stays `"007"`. There is no type inference anywhere in the
   parser. A value with spaces is written quoted: `greeting: "Hello, world"`.
 
@@ -171,8 +175,7 @@ content rules above are the same in both:
 
 A run of more than three quotes closes the string at its last three, so a value may end in `"`:
 `"""say "hi""""` is `say "hi"`. After the closing delimiter comes what follows any value — a
-separator, a comment, the end of the block; a triple-quoted string takes no part in a concatenation
-(§9), a substitution belonging inside it.
+separator, a comment, the end of the block; a substitution belongs inside the quotes (§9).
 
 In a block, the newline immediately after the opening delimiter is dropped, and so is the one
 immediately before the closing delimiter, together with the whitespace between it and the
@@ -420,7 +423,7 @@ c: ${x}
 c: 5               // fine: a scalar replaces whatever ${x} turns out to be
 ```
 
-A concatenation such as `"jdbc:"${host}` is always a scalar and never triggers the rule; `${?x}` does,
+A concatenation such as `"jdbc:${host}"` is always a scalar and never triggers the rule; `${?x}` does,
 since whether it resolves is not known in phase 3 either. The rule applies at every depth of a
 recursive merge, and the error offers `:=` as the fix. Merge errors are reported in the same batch as
 substitution errors (§11); the key is dropped, and nodes depending on it are silenced by the
@@ -447,7 +450,8 @@ from a substitution.
 
 - `${path}` in place of a whole value grafts the referenced node, whatever it is — scalar, block or
   sequence.
-- **A path is written as `Id.path` renders one** (§3): keys joined by dots, quoted in backticks when
+- **A path is written as `Id.path` renders one** (§3), right after `${` or `${?` and right up to
+  `}`, with no whitespace: keys joined by dots, quoted in backticks when
   not bare, and indices into sequences in brackets — `${x.y[7].z}`, `${a[0][1]}`,
   ``${server.`odd key`[0]}``. An index is a decimal with no sign and no leading zeros, as `Id.path`
   prints it, so `[07]` and `[-1]` are errors. An index past the end of a sequence resolves to
@@ -456,13 +460,14 @@ from a substitution.
   `b: @x { … }`, `a: @y ${b}` gives `a` the tags `x` and `y`. The union is the same as in a merge
   (§7), so a graft and a merge never disagree about tags.
 - A concatenation builds a new scalar, which carries only the tags written before it: in
-  `@t "jdbc:"${host}` the result is tagged `t` alone, whatever `host` carries.
-- `prefix${path}suffix` concatenates, and so does a `${…}` inside quotes, even alone: `"${a}"` is
+  `@t "jdbc:${host}/db"` the result is tagged `t` alone, whatever `host` carries.
+- **A concatenation is one scalar with `${…}` inside it**: unquoted, `jdbc:${host}/db`, or quoted,
+  `"jdbc:${host}/db"` and `"""…${x}…"""`. A `${…}` inside quotes concatenates even alone: `"${a}"` is
   a concatenation, not a graft. The referenced node must then be a scalar, and the result is a
-  scalar. The parts touch: `"a" ${b}` with a space between is an error, not a concatenation with a
-  space as in HOCON — whitespace never joins or separates values.
-- A triple-quoted string is never a part: nothing may touch it on either side, so `"""…"""${x}` and
-  `${x}"""…"""` are errors with a hint to move the substitution inside the quotes (§5).
+  scalar. Values never join: `"jdbc:"${host}"/db"`, HOCON's spelling, is an error with a hint to move
+  the substitution inside the quotes — it follows from the rule that after a value comes only a
+  separator, a comment or a closing bracket (§3), and so does `"a" ${b}`, whitespace never joining
+  values.
 - `${?path}` is optional: when it does not resolve, the field is omitted entirely, so a later lookup
   yields `Node.INone` rather than an error.
 - Lookup order is the merged tree, then system properties, then environment variables — the HOCON
@@ -538,7 +543,7 @@ the part's `ReferenceLocation` still holds it.
 node's own origin. Marking only the root would leave an error at `a.port` pointing at `server`'s
 line with no hint of how it ended up under `a`.
 
-**Concatenation.** `url: "jdbc:"${host}"/db"` is a new scalar written at the reference site, so its
+**Concatenation.** `url: "jdbc:${host}/db"` is a new scalar written at the reference site, so its
 primary coordinates are that site, and it carries one `ReferenceLocation` per `${…}` in the order
 written — every source the value was assembled from.
 
@@ -960,3 +965,15 @@ alternative listed here should not be re-proposed without new information.
   does, comma-separated in one pair of parentheses; the environment and system properties are named
   in words. The user's call, on a proposal, at the start of step 1. Rejected: one part per line,
   which makes `description` multi-line.
+- **Values never join into a concatenation** (§9): a concatenation is one scalar with `${…}` inside,
+  and `"jdbc:"${host}"/db"` is an error. The user's call at the start of step 2b: the form reads
+  badly and `"jdbc:${host}/db"` says the same. Supersedes session 2's touching parts and session 7's
+  rule for `"""`, which now follows from the general one.
+- **A `"` or `` ` `` inside an unquoted scalar is an error** (§3), with a hint to quote the value.
+  The user's call: kept, `abc"def"` would silently carry its quotes.
+- **A source that is not UTF-8 ends as unreadable** (§3), at the first bad byte. The user's call.
+  Rejected: replacing it with U+FFFD, which corrupts a value silently.
+- **A comment counts as whitespace** (§3), so a newline inside `/* … */` does not separate. The
+  user's call. Rejected: such a comment counting as a newline.
+- **No whitespace inside `${…}`** (§9): `${ a }` is an error with a hint. The user's call, on the
+  recommendation — the path is written as `Id.path` renders it.
