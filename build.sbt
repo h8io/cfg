@@ -89,6 +89,9 @@ Test / scalacOptions ++=
     case _ => unsupportedScala(scalaVersion.value)
   })
 
+// DEF's tests write `${…}` in plain string literals, which Scala 2's lint takes for a forgotten `s`
+Test / scalacOptions += "-Wconf:msg=possible missing interpolator:s"
+
 libraryDependencies ++= TestBundle % Test
 libraryDependencies ++=
   (CrossVersion.partialVersion(scalaVersion.value) match {

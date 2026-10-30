@@ -63,7 +63,7 @@ at the phase gate.
 | 0 | This plan | done |
 | 1 | Module skeleton, locations, errors | done |
 | 2a | Protocol: tags as a set, backticked keys, YAML tags without `!` | done |
-| 2b | Source and lexer | todo |
+| 2b | Source and lexer | done |
 | 2c | Lexer: triple-quoted strings | todo |
 | 3 | Ast and parser: core syntax | todo |
 | 4 | Parser: substitutions and directives | todo |

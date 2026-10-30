@@ -60,7 +60,7 @@ object Id {
     def path: String = parent.path + '[' + index + ']'
   }
 
-  private val SafeKeyPattern = Pattern.compile("^[\\p{L}_][\\p{L}\\p{N}_-]*$")
+  private[cfg] val SafeKeyPattern: Pattern = Pattern.compile("^[\\p{L}_][\\p{L}\\p{N}_-]*$")
   @inline private def quote(key: String): String =
     if (SafeKeyPattern.matcher(key).matches()) key
     else ((key foldLeft new StringBuilder(key.length + 1, "`")) { (builder, char) =>
