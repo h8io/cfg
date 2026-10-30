@@ -156,10 +156,11 @@ so it merges; replacing a block is written `key := { … }`.
 **Triple-quoted scalars** — `"""…"""`, taken raw: no escape processing, so PEM blocks, regexes
 and SQL survive untouched — except `${…}`, which is substituted here as in any scalar (§3, §9), and
 two escapes: `\"""` for a literal `"""` and `\${` for a literal `${`, the latter as in `"…"`. Any
-other `\` is an ordinary character. A `\` right before the closing delimiter therefore escapes it: a value ending in `\` is
-written as a block with the delimiter on its own line, or as `"…\\"`.
-What follows the opening delimiter picks one of two
-forms, which differ in layout only — the content rules above are the same in both:
+other `\` is an ordinary character. A `\` right before the closing delimiter therefore escapes it:
+a value ending in `\` is written as a block with the delimiter on its own line, or as `"…\\"`.
+
+What follows the opening delimiter picks one of two forms, which differ in layout only — the
+content rules above are the same in both:
 
 - **Block**: the end of the line right after the delimiter. Whitespace before it is an error, though
   not a fatal one: it is reported and the block is read on. The rules below apply.
