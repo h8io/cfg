@@ -50,7 +50,7 @@ loader path.
 | Include placement | Anywhere in the tree, not just at file top level |
 | Include sources | Relative paths, classpath resources; optional variant that tolerates a missing file |
 | Comments | `//` and nesting `/* */`; `/** */` reserved for doc comments (§3) |
-| Multi-line strings | Triple quotes, raw but for `${…}`, with the common leading indent stripped; under revision (§13) |
+| Multi-line strings | Triple quotes, raw but for `${…}` and two escapes; a block or a one-line form; indent markers, Java's rule by default (§5) |
 | Special words | Avoided — `#`-prefixed directives instead, as an open, extensible set. `null` is the one exception |
 | Error model | `Either`, no Cats; as many errors per run as can be reported honestly (§11) |
 | Dotted keys | Sugar for nesting; a quoted key is indivisible, dots included |
@@ -85,9 +85,9 @@ loader path.
   second spelling. Both forms share one escape set: `\"`, ``\` ``, `\\`, `\b`, `\f`, `\n`, `\r`, `\t`
   and `\uXXXX` — the set `Id.quote` produces today, plus ``\` `` and `\$`. Both quotes are
   escapable in both forms, so there is one escape grammar rather than one per delimiter; `Id.quote`
-  itself only needs ``\` `` and `\\`. Any other `\` is an error. Neither form may hold a raw newline — that is what `\n`
-  and `"""…"""` are for — so an unterminated quote is reported on its own line rather than at the end
-  of the file.
+  itself only needs ``\` `` and `\\`. Any other `\` is an error. Neither form may hold a raw
+  newline — that is what `\n` and `"""…"""` are for — so an unterminated quote is reported on its own
+  line rather than at the end of the file.
 - **Dotted keys** — `a.b.c: v` is sugar for `a { b { c: v } }`. The split happens only on dots
   *between* key tokens: a quoted key is indivisible, so `` `io.h8`: v `` is one key named `io.h8`,
   and ``x.`a.b`.c`` is three levels. This is also what `Id.path` produces — a key containing a dot
@@ -140,7 +140,7 @@ seq        = "[" [ value { sep value } [ sep ] ] "]"
 sep        = "," | newline
 tag        = "@" name
 directive  = "#" name "(" [ arg { sep arg } [ sep ] ] ")"
-scalar     = null | bare-scalar | quoted-scalar | multiline-scalar
+scalar     = null | bare-scalar | quoted-scalar | triple-quoted
 ```
 
 Fields are separated by a newline or a `,` (§3). `key { … }` needs no `:`, and the `{` must be on the
@@ -174,9 +174,9 @@ A run of more than three quotes closes the string at its last three, so a value 
 separator, a comment, the end of the block; a triple-quoted string takes no part in a concatenation
 (§9), a substitution belonging inside it.
 
-In a block, the newline immediately after the opening delimiter is
-dropped, and so is the one immediately before the closing delimiter, together with the whitespace
-between it and the delimiter. These newline rules hold whatever the indent rule is.
+In a block, the newline immediately after the opening delimiter is dropped, and so is the one
+immediately before the closing delimiter, together with the whitespace between it and the
+delimiter. These newline rules hold whatever the indent rule is.
 
 A final newline is therefore written as one, by an empty line before the closing delimiter:
 
@@ -201,8 +201,8 @@ The indent rule is picked by a marker between the opening delimiter and the end 
 A marker must end its line, so `"""<x"""` is a one-line string holding `<x`, and an unknown one is
 an error. Markers do not combine, with one exception: an explicit width, below.
 
-**Folding** under `""">` comes after the indent is stripped by the rule for no marker. As in YAML,
-a newline between two lines at the common indent becomes a space, an empty line becomes a newline,
+**Folding** under `""">` comes after the indent is stripped, by the rule for no marker or by an
+explicit width. As in YAML, a newline between two lines left with no indent becomes a space, an empty line becomes a newline,
 and a line indented deeper is not folded — neither it nor the newlines around it — so a list or a
 code sample inside prose survives.
 
@@ -274,9 +274,10 @@ an unquoted scalar `@` is ordinary (`admin@host`).
 A tag name follows the key rule: bare if it matches `Id.SafeKeyPattern`, in backticks otherwise.
 `ISome.tags` holds names only — the prefix and the quotes are syntax of the format, not part of
 the tag: `@duration` gives `duration`, ``@`tag:yaml.org,2002:int` `` gives `tag:yaml.org,2002:int`,
-so there is no need for `!!`.
-A tag may precede any value, a multi-line string included: `query: @sql """…"""`. `impl/yaml` follows the same rule and drops the leading `!` of a tag
-(`!postgres` gives `postgres`, `!!int` still `tag:yaml.org,2002:int`) — a breaking change to
+so there is no need for `!!`. A tag may precede any value, a multi-line string included:
+`query: @sql """…"""`.
+
+`impl/yaml` follows the same rule and drops the leading `!` of a tag (`!postgres` gives `postgres`, `!!int` still `tag:yaml.org,2002:int`) — a breaking change to
 `cfg-yaml`, made in step 2 of the plan. It merges YAML's `!foo` and `!<foo>`, two different tags in
 YAML, into one name; the protocol accepts that.
 
@@ -294,6 +295,7 @@ the planned DEF schema — to define. So the rules below are deliberately the ne
 union on merge and graft, nothing dropped except by `:=`. They lose no tag a higher level might
 need, and they pre-empt none of its choices — that level can still give two tags a conflict, an
 order or a "later wins" of its own.
+
 In the protocol `ISome.tag: Option[String]` becomes `ISome.tags: Set[String]`, empty when nothing
 was written — a change to `cfg` and every loader, made in step 2 of the plan together with the `!`
 above, so the API breaks once. `impl/hocon` always gives the empty set, `impl/yaml` at most one
@@ -317,15 +319,15 @@ before merging and substitution (§8). A value starting with `#` is written in q
 (`color: "#fff"` — unquoted it is a call of an unknown directive `fff`); inside an unquoted scalar
 `#` is ordinary. A pasted YAML or HOCON comment fails loudly: `# text` is a directive with no name.
 
-A directive name follows the key rule, as a tag name does (§5): bare if it matches
-`Id.SafeKeyPattern`, in backticks otherwise — ``#`my.directive`(…)``. One rule covers every name
-in the language: keys, path segments, tags and directives.
-
-and may appear in two positions:
+A directive may appear in two positions:
 
 - **statement position**, inside any block or at the top of a file — it must produce a map, which is
   merged into the enclosing block at the point where it appears, so fields below it override it;
 - **value position**, on the right of `:` or as a sequence element — it produces a single node.
+
+A directive name follows the key rule, as a tag name does (§5): bare if it matches
+`Id.SafeKeyPattern`, in backticks otherwise — ``#`my.directive`(…)``. One rule covers every name
+in the language: keys, path segments, tags and directives.
 
 Arguments are separated like everything else, by `,` or a newline, so a long directive can be split
 across lines. They keep `name = literal`, not `name: literal`: a directive is a call with named
@@ -561,8 +563,8 @@ mistake is worse than stopping.
 - Cross-built for 2.13, 2.12 and 3.9, from one source tree in Scala 2 style that Scala 3 accepts. A
   hand-written lexer is exactly the kind of code that reaches for 2.13-only collection methods;
   `scala-collection-compat` is already wired in for 2.12.
-- Warnings are fatal on every version (`-Xfatal-warnings` on 2.x, `-Werror` on 3), so exhaustiveness in the parser's pattern matches is enforced rather
-  than merely intended.
+- Warnings are fatal on every version (`-Xfatal-warnings` on 2.x, `-Werror` on 3), so exhaustiveness
+  in the parser's pattern matches is enforced rather than merely intended.
 
 ## 13. Open questions
 
@@ -616,13 +618,15 @@ mistake is worse than stopping.
      mitigation (fixed width above is one).
    - **Opt-in.** Enabled everywhere automatically, or per file (a directive, or a separate extension).
 
-   Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
-   indentation can claim it later.
+   Constraint on v1 meanwhile: leading whitespace must carry no meaning for the structure, so that
+   indentation can claim it later without changing what a v1 file means. Inside a triple-quoted
+   string it is content (§5); the explicit width reads the indent of its opening line, which keeps
+   meaning the same under either syntax.
 3. ~~**Multi-line strings**~~ — closed in session 7: reopened by the user and settled point by
    point (§5, §14).
 4. **Templates in the direction of StringTemplate 4.** Raised by the user in session 7: substitutions
    stay as they are in v1, but the way forward is to look at ST4's ideas. Nothing is decided yet.
-   Two of them bear on open questions here:
+   Noted so far:
    - **Delimiters chosen per template.** ST4 lets a template use `<…>` or `$…$`, whichever does not
      clash with its content. The case for it: a shell script, a Helm template or a Spring config in
      a `"""` block is full of `${`, each of which needs `\${` in v1. A marker on the opening quotes
@@ -631,7 +635,6 @@ mistake is worse than stopping.
    - **A template applied to a collection with a separator**, `<hosts; separator=",">`. This is the
      job parked as value expressions (item 1, `${b} + ${c}`), so both may end up as one
      mechanism.
-
    - **Options inside `${…}`**, the user's idea: `${array; null="-1", separator=", "}`. Not in v1;
      the syntax stays free, `;` being outside `Id.SafeKeyPattern`, so `${a; …}` is an error today.
 
@@ -877,8 +880,7 @@ alternative listed here should not be re-proposed without new information.
   a stray `key: "` would swallow the file up to the next quote instead of failing on its own line
   (§3, §11); and a space after the `"` would decide the mode invisibly.
 - **Two forms of `"""`, block and one line** (§5). A block needs the end of the line right after the
-  opening delimiter; text there makes a one-line string, which must
-  close on the same line, and a newline in it is an error. The user's call, on a proposal: a first
+  opening delimiter; text there makes a one-line string, which must close on the same line, and a newline in it is an error. The user's call, on a proposal: a first
   line after the delimiter has no column in common with the rest, which is what forces
   `stripMargin` on Scala and `dedent` on Python, while forbidding the one-line form outright would
   leave a regex with no way to be written without escapes. **Both forms substitute `${…}`** — the
