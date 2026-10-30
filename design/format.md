@@ -166,7 +166,9 @@ forms, which differ in layout only — the content rules above are the same in b
   after the delimiter has no column in common with the lines below it.
 
 A run of more than three quotes closes the string at its last three, so a value may end in `"`:
-`"""say "hi""""` is `say "hi"`.
+`"""say "hi""""` is `say "hi"`. After the closing delimiter comes what follows any value — a
+separator, a comment, the end of the block; a triple-quoted string takes no part in a concatenation
+(§9), a substitution belonging inside it.
 
 In a block, the newline immediately after the opening delimiter is
 dropped, and so is the one immediately before the closing delimiter, together with the whitespace
@@ -448,6 +450,8 @@ from a substitution.
   a concatenation, not a graft. The referenced node must then be a scalar, and the result is a
   scalar. The parts touch: `"a" ${b}` with a space between is an error, not a concatenation with a
   space as in HOCON — whitespace never joins or separates values.
+- A triple-quoted string is never a part: nothing may touch it on either side, so `"""…"""${x}` and
+  `${x}"""…"""` are errors with a hint to move the substitution inside the quotes (§5).
 - `${?path}` is optional: when it does not resolve, the field is omitted entirely, so a later lookup
   yields `Node.INone` rather than an error.
 - Lookup order is the merged tree, then system properties, then environment variables — the HOCON
@@ -630,8 +634,8 @@ mistake is worse than stopping.
    - ~~**Text right after the opening `"""`**~~ Settled (§5): a block starts on the next line; text
      after the delimiter makes a one-line string, which must close on its line.
    - ~~**CRLF in the value**~~ Settled (§5): normalised to LF.
-   - **What may follow the closing `"""`**: whether it can be a part of a concatenation
-     (`"""…"""${x}`).
+   - ~~**What may follow the closing `"""`**~~ Settled (§5, §9): what follows any value; no
+     concatenation.
 
    A starting point offered in session 7, not discussed: the Java text block model — the opening
    `"""` ends its line, the closing `"""`'s column sets the indent, the final `\n` is there when the
@@ -938,3 +942,7 @@ alternative listed here should not be re-proposed without new information.
 - **A CRLF in a block becomes LF in the value** (§5), as in Java; a substituted value keeps its own.
   The user's call. Rejected: keeping the file's newlines, which makes the value depend on the
   editor and on git's `core.autocrlf`.
+- **A triple-quoted string takes no part in a concatenation** (§5, §9), in either form and on either
+  side; what may follow it is what follows any value. The user's call: a substitution goes inside
+  the quotes, which substitute anyway, and nothing else was seen to need the slot. An error with
+  that hint, rather than silence, so the slot stays free.
