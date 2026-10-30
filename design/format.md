@@ -519,7 +519,19 @@ ReferenceLocation(b-site, "c", SourceLocation(c-site)))`. The environment and sy
 a location of their own instead of a fake file position.
 
 `description` puts the reference site first, because that is where the reader has to go:
-`file:/etc/app/app.def:12:9 (${db.url} from base.def:3:7)`.
+`file:/etc/app/app.def:12:9 (${db.url} from base.def:3:7)`. The other cases follow the same shape:
+
+| Location | `description` |
+|---|---|
+| `SourceLocation` | `app.def:12:9` |
+| `ReferenceLocation` | `app.def:12:9 (${db.url} from base.def:3:7)` |
+| — in a chain | `app.def:1:4 (${b} from app.def:2:4 (${c} from app.def:3:4))` |
+| `ConcatenationLocation` | `app.def:12:9 (${host} from base.def:3:7, ${port} from env DB_PORT)` |
+| `SystemPropertyLocation` | `system property db.url` |
+| `EnvLocation` | `env DB_PORT` |
+
+A part of a concatenation is rendered without its own site, which shares the concatenation's line;
+the part's `ReferenceLocation` still holds it.
 
 **Grafted containers.** With `a: ${server}`, *every* node in the grafted subtree gets a
 `ReferenceLocation` — the reference site of `a`, the path it was taken by (`server.port`), and that
@@ -944,3 +956,7 @@ alternative listed here should not be re-proposed without new information.
   step 4. The rest follows from the round-trip promise of §3 — a path inside `${…}` is exactly what
   `Id.path` renders, so an index has no sign and no leading zeros; an index out of range is treated
   as a missing key.
+- **The `description` of every location** (§10): a concatenation lists its parts as a reference
+  does, comma-separated in one pair of parentheses; the environment and system properties are named
+  in words. The user's call, on a proposal, at the start of step 1. Rejected: one part per line,
+  which makes `description` multi-line.

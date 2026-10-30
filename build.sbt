@@ -112,10 +112,15 @@ val yaml = (project in file("impl/yaml"))
   .settings(name := "cfg-yaml", libraryDependencies += SnakeYaml)
   .dependsOn(cfg)
 
+// DEF, the format of our own (design/plan.md); not published until the plan's last step
+val defg = (project in file("impl/def"))
+  .settings(name := "cfg-def", publish / skip := true)
+  .dependsOn(cfg)
+
 val root = (project in file("."))
   .enablePlugins(ScoverageSummaryPlugin)
   .settings(name := "cfg-all", publish / skip := true)
-  .aggregate(cfg, hocon, schema, yaml)
+  .aggregate(cfg, defg, hocon, schema, yaml)
 
 val pages = (project in file("pages"))
   .settings(

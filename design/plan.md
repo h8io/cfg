@@ -61,7 +61,7 @@ at the phase gate.
 | # | Step | Status |
 |---|---|---|
 | 0 | This plan | done |
-| 1 | Module skeleton, locations, errors | todo |
+| 1 | Module skeleton, locations, errors | done |
 | 2 | Source and lexer | todo |
 | 3 | Ast and parser: core syntax | todo |
 | 4 | Parser: substitutions and directives | todo |
@@ -90,7 +90,8 @@ at the phase gate.
   line and column as decided in `format.md` §10.
 - `DefError` (sealed, every case has a `location`), `DefErrors` (head + tail, `CfgError`), and the
   private result type. Start with the error cases this step can test; later steps add theirs.
-- **Spec gaps:** none left — `<source>` and column counting were settled in session 4
+- **Spec gaps:** none left — `<source>` and column counting were settled in session 4, the
+  `description` of the other locations and the first error case (an unreadable source) in session 7
   (`format.md` §10, §14).
 
 ### 2. Source and lexer
