@@ -166,22 +166,11 @@ forms, which differ in layout only — the content rules above are the same in b
   after the delimiter has no column in common with the lines below it.
 
 A run of more than three quotes closes the string at its last three, so a value may end in `"`:
-`"""say "hi"""""` is `say "hi"`.
+`"""say "hi""""` is `say "hi"`.
 
 In a block, the newline immediately after the opening delimiter is
 dropped, and so is the one immediately before the closing delimiter, together with the whitespace
-between it and the delimiter. The longest common leading whitespace across the non-blank lines is
-stripped:
-
-```
-server {
-  banner: """
-    Welcome.
-      Indented line.
-  """
-}
-// value: "Welcome.\n  Indented line."
-```
+between it and the delimiter. These newline rules hold whatever the indent rule is.
 
 A final newline is therefore written as one, by an empty line before the closing delimiter:
 
@@ -192,6 +181,47 @@ key: """
 
   """
 // value: "abc\ndef\n"
+```
+
+The indent rule is picked by a marker between the opening delimiter and the end of its line:
+
+| Opening | Leading whitespace of each line |
+|---|---|
+| `"""` | the common indent is stripped, Java's rule (below) |
+| `"""<` | all of it is stripped |
+| `"""\|` | the first non-blank line's indent is stripped |
+| `"""=` | kept as written |
+| `""">` | folded, as YAML's `>` — details open (§13) |
+
+A marker must end its line, so `"""<x"""` is a one-line string holding `<x`, and an unknown one is
+an error. An explicit indent width is given as in YAML (§13).
+
+Indents are compared character by character, so a tab never matches a space. Under `"""|`, a line
+whose indent does not start with the first line's is an error. Under no marker, two indents of
+which neither is a prefix of the other (a tab where the other has a space) are an error too, rather
+than a common indent silently shorter than intended.
+
+With no marker, the common indent is the longest leading whitespace shared by the non-blank lines
+and by the line of the closing delimiter, when that delimiter stands on a line of its own:
+
+```
+server {
+  banner: """
+    Welcome.
+      Indented line.
+    """
+}
+// value: "Welcome.\n  Indented line."
+```
+
+Moving the closing delimiter left keeps an indent in the value:
+
+```
+key: """
+    abc
+    def
+  """
+// value: "  abc\n  def"
 ```
 
 **Tags** — `@name` before any value, including containers. They are to a value what annotations
@@ -562,18 +592,21 @@ mistake is worse than stopping.
      the one after the opening, so a final newline is an explicit empty line. The closing
      delimiter's position no longer decides it, which takes that half of the Java model off the
      table.
-   - **Deliberate indentation.** The common indent is computed over the non-blank lines only, so a
-     value cannot keep an indent of its own. Java text blocks count the closing delimiter's column
-     as well: moving it left keeps an indent. That half still works with the rule above.
-   - **Tabs mixed with spaces** in the indent: what the common prefix is — an error, or a
-     character-by-character comparison.
+   - ~~**Deliberate indentation.**~~ Settled (§5): with no marker the closing delimiter's column
+     counts, as in Java; an explicit width as in YAML is to come (below).
+   - ~~**Tabs mixed with spaces**~~ Settled (§5): compared character by character, a mismatch is an
+     error.
    - **Trailing whitespace** on a line: kept, the string being raw, or stripped, as Java does.
      Invisible spaces in a value are a common source of bugs.
-   - **Indent markers on the opening delimiter**, proposed by the user in session 7: `"""<` strips
-     all leading whitespace, `"""|` strips the first line's indent, `""">` keeps it all; no marker
-     strips the common indent. A marker must end its line, so `"""<x"""` stays a one-line string.
-     Under discussion: `>` and `|` mean something else in YAML; a line indented less than the
-     first under `|`; whether the newline rules hold under `>`.
+   - ~~**Indent markers**~~ Settled (§5): `<`, `|`, `=`, `>` after the opening `"""`. Still open:
+     - **Folding under `>`**: which indent rule it folds after; whether more-indented lines stay
+       unfolded, as in YAML; how an empty line folds.
+     - **Explicit width, as YAML's `|2`**: how it is written (a digit alone, `"""2`, or after a
+       marker, `""">2`), and what it counts from. YAML counts from the parent node's indent; DEF
+       cannot without giving leading whitespace outside a string a meaning (§13 item 2), so the
+       count would be absolute — exactly that many leading characters stripped, a shorter
+       non-blank line an error.
+     - **Combining markers** at all, beyond the width.
    - ~~**Text right after the opening `"""`**~~ Settled (§5): a block starts on the next line; text
      after the delimiter makes a one-line string, which must close on its line.
    - **CRLF in the value**: normalised to LF, or kept as in the file, which makes the value depend on
@@ -584,7 +617,9 @@ mistake is worse than stopping.
    A starting point offered in session 7, not discussed: the Java text block model — the opening
    `"""` ends its line, the closing `"""`'s column sets the indent, the final `\n` is there when the
    closing `"""` stands on its own line, newlines are normalised to LF — with `\"""` as the single
-   escape. Its rule for the final `\n` is superseded by the explicit empty line.
+   escape. Its rule for the final `\n` is superseded by the explicit empty line; its indent rule is
+   adopted for `"""` with no marker. Its stripping of trailing whitespace is not, so far — that is
+   the trailing whitespace question above.
 4. **Templates in the direction of StringTemplate 4.** Raised by the user in session 7: substitutions
    stay as they are in v1, but the way forward is to look at ST4's ideas. Nothing is decided yet.
    Two of them bear on open questions here:
@@ -852,3 +887,13 @@ alternative listed here should not be re-proposed without new information.
 - **Whitespace between the opening `"""` of a block and the end of its line is an error** (§5), not
   fatal. The user's call, replacing the proposal to ignore it: it is invisible, and the slot after
   the delimiter is wanted for markers (§13).
+- **Indent markers after the opening `"""` of a block** (§5): `<` strips all leading whitespace, `|`
+  the first line's indent, `=` none, `>` folds as in YAML; no marker is Java's rule, the closing
+  delimiter's column counting. The user's idea and choice of symbols. Rejected: `>` for keeping
+  whitespace, which a YAML reader would take for folding.
+- **The newline rules hold under every marker** (§5) — markers change leading whitespace only. The
+  user's call, on a proposal.
+- **Indents compare character by character; a mismatch is an error** (§5), including a line under
+  `|` indented less than the first. The user's call, on a proposal.
+- **An explicit indent width as in YAML** (§13): the user's pick over the closing delimiter's column
+  for keeping a deliberate indent — which is kept as well, as the rule for no marker.
