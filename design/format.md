@@ -156,7 +156,9 @@ so it merges; replacing a block is written `key := { … }`.
 **Multi-line scalars** — `"""…"""`, taken raw: no escape processing, so PEM blocks, regexes
 and SQL survive untouched — except `${…}`, which is substituted here as in any scalar (§3, §9).
 The whole section is under revision (§13). The newline immediately after the opening delimiter is
-dropped, and the longest common leading whitespace across the non-blank lines is stripped:
+dropped, and so is the one immediately before the closing delimiter, together with the whitespace
+between it and the delimiter. The longest common leading whitespace across the non-blank lines is
+stripped:
 
 ```
 server {
@@ -166,6 +168,17 @@ server {
   """
 }
 // value: "Welcome.\n  Indented line."
+```
+
+A final newline is therefore written as one, by an empty line before the closing delimiter:
+
+```
+key: """
+  abc
+  def
+
+  """
+// value: "abc\ndef\n"
 ```
 
 **Tags** — `@name` before any value, including containers. They are to a value what annotations
@@ -532,12 +545,13 @@ mistake is worse than stopping.
    - **A literal `${`**: `"""` substitutes but has no escapes. Possibly answered by item 4.
    - **A literal `"""`** inside the string: raw means there is no way to write it today, the same
      gap Scala has.
-   - **The final newline.** §5's example drops it, and nothing can keep it, while a PEM block or a
-     script often needs one. YAML offers `|`, `|-` and `|+` for the choice.
+   - ~~**The final newline.**~~ Settled (§5): the newline before the closing `"""` is dropped like
+     the one after the opening, so a final newline is an explicit empty line. The closing
+     delimiter's position no longer decides it, which takes that half of the Java model off the
+     table.
    - **Deliberate indentation.** The common indent is computed over the non-blank lines only, so a
      value cannot keep an indent of its own. Java text blocks count the closing delimiter's column
-     as well: moving it left keeps an indent, and putting it on its own line keeps the final
-     newline, which answers the previous question too.
+     as well: moving it left keeps an indent. That half still works with the rule above.
    - **Tabs mixed with spaces** in the indent: what the common prefix is — an error, or a
      character-by-character comparison.
    - **Trailing whitespace** on a line: kept, the string being raw, or stripped, as Java does.
@@ -552,7 +566,7 @@ mistake is worse than stopping.
    A starting point offered in session 7, not discussed: the Java text block model — the opening
    `"""` ends its line, the closing `"""`'s column sets the indent, the final `\n` is there when the
    closing `"""` stands on its own line, newlines are normalised to LF — with `\"""` as the single
-   escape.
+   escape. Its rule for the final `\n` is superseded by the explicit empty line.
 4. **Templates in the direction of StringTemplate 4.** Raised by the user in session 7: substitutions
    stay as they are in v1, but the way forward is to look at ST4's ideas. Nothing is decided yet.
    Two of them bear on open questions here:
@@ -796,3 +810,8 @@ alternative listed here should not be re-proposed without new information.
   already, the plan asked to confirm it.
 - **Multi-line strings reopened** by the user, to be thought through again before step 2 lexes
   them (§13).
+- **The final newline of a multi-line string is explicit** (§5): the newline before the closing
+  `"""` is dropped, symmetrically with the one after the opening, and a value that ends in `\n`
+  has an empty line before the delimiter. The user's idea. Rejected: YAML's `|` / `|-` / `|+`
+  markers, and Java's rule that the closing `"""` on its own line keeps the newline — both make an
+  invisible detail decide the value.
