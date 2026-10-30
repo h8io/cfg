@@ -527,10 +527,44 @@ mistake is worse than stopping.
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
    indentation can claim it later.
 3. **Multi-line strings** (§5) — reopened by the user in session 7. The design in §5 stands until
-   it is revised, but step 2 of the plan does not lex `"""` before this is settled. Open within it:
-   how a literal `${` is written, since `"""` substitutes but has no escapes.
+   it is revised, but step 2 of the plan does not lex `"""` before this is settled. Questions
+   collected so far, none discussed yet:
+   - **A literal `${`**: `"""` substitutes but has no escapes. Possibly answered by item 4.
+   - **A literal `"""`** inside the string: raw means there is no way to write it today, the same
+     gap Scala has.
+   - **The final newline.** §5's example drops it, and nothing can keep it, while a PEM block or a
+     script often needs one. YAML offers `|`, `|-` and `|+` for the choice.
+   - **Deliberate indentation.** The common indent is computed over the non-blank lines only, so a
+     value cannot keep an indent of its own. Java text blocks count the closing delimiter's column
+     as well: moving it left keeps an indent, and putting it on its own line keeps the final
+     newline, which answers the previous question too.
+   - **Tabs mixed with spaces** in the indent: what the common prefix is — an error, or a
+     character-by-character comparison.
+   - **Trailing whitespace** on a line: kept, the string being raw, or stripped, as Java does.
+     Invisible spaces in a value are a common source of bugs.
+   - **Text right after the opening `"""`**, and a one-line `"""abc"""`: allowed or not, and how such
+     a first line takes part in the indent computation.
+   - **CRLF in the value**: normalised to LF, or kept as in the file, which makes the value depend on
+     the editor.
+   - **What may follow the closing `"""`**: whether it can be a part of a concatenation
+     (`"""…"""${x}`).
+
+   A starting point offered in session 7, not discussed: the Java text block model — the opening
+   `"""` ends its line, the closing `"""`'s column sets the indent, the final `\n` is there when the
+   closing `"""` stands on its own line, newlines are normalised to LF — with `\"""` as the single
+   escape.
 4. **Templates in the direction of StringTemplate 4.** Raised by the user in session 7: substitutions
    stay as they are in v1, but the way forward is to look at ST4's ideas. Nothing is decided yet.
+   Two of them bear on open questions here:
+   - **Delimiters chosen per template.** ST4 lets a template use `<…>` or `$…$`, whichever does not
+     clash with its content. For a raw `"""` this could settle the literal `${` without escapes —
+     a marker on the opening quotes that turns substitution off or changes its syntax.
+   - **A template applied to a collection with a separator**, `<hosts; separator=",">`. This is the
+     job parked as value expressions (item 1, `${b} + ${c}`), so both may end up as one
+     mechanism.
+
+   Whether substitutions inside `"""` are settled before or after looking at ST4 as a whole is
+   itself open, since ST4 may change how they are written there.
 
 ## 14. Decision log
 
