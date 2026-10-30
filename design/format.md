@@ -61,7 +61,8 @@ loader path.
 
 ## 3. Lexical structure
 
-- Encoding is UTF-8. A newline is LF or CRLF; a lone CR is an error.
+- Encoding is UTF-8. A byte order mark at the start of a source is skipped. A newline is LF or
+  CRLF; a lone CR is an error.
 - **Comments** are `//` to the end of the line and `/* … */`, which nest, as in Scala: commenting out
   a block that already holds a comment is safe. An unterminated `/*` is reported at its opening, a
   stray `*/` is an error, and `/**/` is an empty ordinary comment. Inside an unquoted scalar `//`
@@ -104,6 +105,10 @@ loader path.
 
   An unquoted scalar may not start with `'`: YAML's `a: 'x'` would otherwise parse silently to a
   value with the quotes kept. `~` gets no rule — it is the string `~`, and `null` is written out.
+
+  `${` inside an unquoted scalar always opens a substitution (§9): `jdbc:${host}/db` is a
+  concatenation. Inside `"…"` and `"""…"""` it is two ordinary characters, as in HOCON, so a
+  literal `${` is written in quotes: `"${not.a.substitution}"`.
 - **`:` after a key** must be followed by whitespace or the end of the line, so `a:b` in a block is an
   error with a hint rather than a field. Inside a value `:` is ordinary: `url: http://host:8080`.
   `:=` is the replacing form of `:` (§7) and follows the same rule: `a:=b` is an error.
@@ -176,7 +181,8 @@ an unquoted scalar `@` is ordinary (`admin@host`).
 A tag name follows the key rule: bare if it matches `Id.SafeKeyPattern`, in backticks otherwise.
 `ISome.tags` holds names only — the prefix and the quotes are syntax of the format, not part of
 the tag: `@duration` gives `duration`, ``@`tag:yaml.org,2002:int` `` gives `tag:yaml.org,2002:int`,
-so there is no need for `!!`. `impl/yaml` follows the same rule and drops the leading `!` of a tag
+so there is no need for `!!`.
+A tag may precede any value, a multi-line string included: `query: @sql """…"""`. `impl/yaml` follows the same rule and drops the leading `!` of a tag
 (`!postgres` gives `postgres`, `!!int` still `tag:yaml.org,2002:int`) — a breaking change to
 `cfg-yaml`, made in step 2 of the plan. It merges YAML's `!foo` and `!<foo>`, two different tags in
 YAML, into one name; the protocol accepts that.
@@ -217,6 +223,10 @@ The `#` is the C preprocessor's, and for the same reason: directives are expande
 before merging and substitution (§8). A value starting with `#` is written in quotes
 (`color: "#fff"` — unquoted it is a call of an unknown directive `fff`); inside an unquoted scalar
 `#` is ordinary. A pasted YAML or HOCON comment fails loudly: `# text` is a directive with no name.
+
+A directive name follows the key rule, as a tag name does (§5): bare if it matches
+`Id.SafeKeyPattern`, in backticks otherwise — ``#`my.directive`(…)``. One rule covers every name
+in the language: keys, path segments, tags and directives.
 
 and may appear in two positions:
 
@@ -512,6 +522,8 @@ mistake is worse than stopping.
 
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
    indentation can claim it later.
+3. **Multi-line strings** (§5) — reopened by the user in session 7. The design in §5 stands until
+   it is revised, but step 2 of the plan does not lex `"""` before this is settled.
 
 ## 14. Decision log
 
@@ -724,3 +736,16 @@ alternative listed here should not be re-proposed without new information.
   duplicates to report.
 - **A concatenation carries only the tags written before it** (§9). The user's call: it is a new
   value, not a graft, so the tags of the referenced scalars do not reach it.
+
+### Session 7 — 2026-10-30
+
+- **A directive name follows the key rule** (§6): bare when it matches `Id.SafeKeyPattern`, in
+  backticks otherwise. The user's call — the same rule as for every other name.
+- **`${` in an unquoted scalar is always a substitution; inside quotes it is literal** (§3), as in
+  HOCON. The user's call. A literal `${` therefore needs quotes, and needs no escape of its own.
+- **A byte order mark at the start of a source is skipped** (§3). The user's call. Rejected: an
+  error — editors on Windows still write one, and it carries no meaning in UTF-8.
+- **A tag may precede a multi-line string** (§5). The user's call; the grammar in §4 allowed it
+  already, the plan asked to confirm it.
+- **Multi-line strings reopened** by the user, to be thought through again before step 2 lexes
+  them (§13).

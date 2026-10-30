@@ -117,10 +117,9 @@ at the phase gate.
   tests. Made in the same release as the `!`, so the API breaks once; in the release notes.
 - Property test: for any string `k`, `Id.Key(k, Id.Root).path` lexes in key mode to exactly one key
   token with value `k` — the round-trip promise of §3.
-- **Spec gaps:** the character set of a directive name; how a literal
-  `${` is written — is `${` inside an unquoted scalar always a substitution, and is it literal inside
-  quotes (as in HOCON)? Byte order mark at the start of a file — skip or error? Can a tag be
-  followed directly by a triple-quoted string?
+- **Spec gaps:** multi-line strings are reopened (`format.md` §13) — settle them before lexing
+  `"""`. Directive names, `${` in and out of quotes, the byte order mark and a tag before `"""`
+  were settled in session 7 (`format.md` §3, §5, §6, §14).
 
 ### 3. Ast and parser: core syntax
 
