@@ -139,8 +139,9 @@ at the phase gate.
 - Directives in statement and value position, arguments `name = literal` separated by `,`/newline,
   literals: strings, bare identifiers, `true`/`false`, integers; `${…}` in an argument is an error
   (§6). The Ast only — nothing is expanded yet.
-- **Spec gaps:** the path syntax inside `${…}` — dotted keys with quoted segments as in `Id.path`,
-  and are indices (`${a.b[0]}`) allowed? Integer literal syntax (sign, leading zeros). Duplicate
+- Paths inside `${…}` are `Id.path` syntax, indices included (`${x.y[7].z}`, settled in session 7,
+  `format.md` §9). Property test: `Id.path` of any `Id` below the root parses back to the same `Id`.
+- **Spec gaps:** integer literal syntax of directive arguments (sign, leading zeros). Duplicate
   argument names.
 
 ### 5. Parser: error recovery

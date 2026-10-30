@@ -447,6 +447,11 @@ from a substitution.
 
 - `${path}` in place of a whole value grafts the referenced node, whatever it is — scalar, block or
   sequence.
+- **A path is written as `Id.path` renders one** (§3): keys joined by dots, quoted in backticks when
+  not bare, and indices into sequences in brackets — `${x.y[7].z}`, `${a[0][1]}`,
+  ``${server.`odd key`[0]}``. An index is a decimal with no sign and no leading zeros, as `Id.path`
+  prints it, so `[07]` and `[-1]` are errors. An index past the end of a sequence resolves to
+  nothing, as a missing key does: an error for `${…}`, an omitted field for `${?…}`.
 - Tags written before a whole-value `${…}` are added to the grafted node's own: with
   `b: @x { … }`, `a: @y ${b}` gives `a` the tags `x` and `y`. The union is the same as in a merge
   (§7), so a graft and a merge never disagree about tags.
@@ -935,3 +940,7 @@ alternative listed here should not be re-proposed without new information.
   wants, is left to templating (§13 item 4). With this §13 item 3 is closed.
 - **Options inside `${…}` noted for later** (§13 item 4): `${array; null="-1", separator=", "}`. The
   user's idea, explicitly not in v1.
+- **Indices in substitution paths** (§9): `${x.y[7].z}` is valid. The user's call, closing a gap of
+  step 4. The rest follows from the round-trip promise of §3 — a path inside `${…}` is exactly what
+  `Id.path` renders, so an index has no sign and no leading zeros; an index out of range is treated
+  as a missing key.
