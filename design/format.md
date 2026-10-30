@@ -217,6 +217,11 @@ server {
 
 A width with any other marker is an error: `<` and `=` fix the indent themselves.
 
+**Trailing whitespace** is stripped from every line of a block, under any marker and before folding,
+so a line holding only whitespace becomes empty. It is stripped from the source text, before
+substitution: a substituted value keeps its own. The one-line form keeps it, its closing delimiter
+making it visible. A block value cannot end a line in whitespace; `"…"` with its escapes can.
+
 Indents are compared character by character, so a tab never matches a space. Under no marker, two
 indents of which neither is a prefix of the other (a tab where the other has a space) are an error,
 rather than a common indent silently shorter than intended.
@@ -616,8 +621,7 @@ mistake is worse than stopping.
      counts, as in Java; or an explicit width, as in YAML.
    - ~~**Tabs mixed with spaces**~~ Settled (§5): compared character by character, a mismatch is an
      error.
-   - **Trailing whitespace** on a line: kept, the string being raw, or stripped, as Java does.
-     Invisible spaces in a value are a common source of bugs.
+   - ~~**Trailing whitespace**~~ Settled (§5): stripped from every line of a block.
    - ~~**Indent markers**~~ Settled (§5): `<`, `=`, `>` after the opening `"""`, folding as in
      YAML, an explicit width relative to the opening line.
    - ~~**Text right after the opening `"""`**~~ Settled (§5): a block starts on the next line; text
@@ -925,3 +929,7 @@ alternative listed here should not be re-proposed without new information.
   whose only gain — independence from the closing delimiter — the explicit width gives more
   robustly. The user's call. `|` stays free, being an unknown marker; the candidate for it later is
   a margin as in Scala's `stripMargin`, each line starting with `|` after its indent.
+- **Trailing whitespace is stripped from every line of a block** (§5), as Java does — under every
+  marker, `=` included, which is about leading whitespace only; before folding; in the source text,
+  so a substituted value keeps its own. The one-line form keeps it. The user's call: a value that
+  needs trailing whitespace is exotic, and invisible spaces are a common source of bugs.
