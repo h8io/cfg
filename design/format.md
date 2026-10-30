@@ -815,3 +815,9 @@ alternative listed here should not be re-proposed without new information.
   has an empty line before the delimiter. The user's idea. Rejected: YAML's `|` / `|-` / `|+`
   markers, and Java's rule that the closing `"""` on its own line keeps the newline — both make an
   invisible detail decide the value.
+- **Multi-line strings keep `"""`** (§5). Considered at the user's suggestion: a single `"` followed
+  by the end of the line opening a multi-line string, since that newline is dropped anyway.
+  Rejected, with the user's agreement: a `"` in the value would then close it, so the string either
+  needs `\"` and loses being raw (a regex's `\d` becomes an error, §3) or cannot hold a `"` at all;
+  a stray `key: "` would swallow the file up to the next quote instead of failing on its own line
+  (§3, §11); and a space after the `"` would decide the mode invisibly.
