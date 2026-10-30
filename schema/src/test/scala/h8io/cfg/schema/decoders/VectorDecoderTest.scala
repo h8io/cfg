@@ -14,7 +14,7 @@ class VectorDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
     val seq = mock[Node.Seq]
     (() => seq.iterator).expects().returns(
       Iterator("abc", "def", "ghi").zipWithIndex.map { case (v, i) =>
-        Node.Scalar(Id.Index(i, Id.Root), None, v, MockLocation(s"$v location ($i)"))
+        Node.Scalar(Id.Index(i, Id.Root), Set.empty, v, MockLocation(s"$v location ($i)"))
       })
     // Shadows the built-in stringDecoder of the package, which would otherwise be ambiguous with it on Scala 2
     implicit def stringDecoder: Decoder[String] = {
@@ -28,15 +28,15 @@ class VectorDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
     val seq = mock[Node.Seq]
     val mapItem = mock[Node.IMap[Id.Index]]
     val seqItem = mock[Node.ISeq[Id.Index]]
-    val nullItem = Node.Null(Id.Index(6, Id.Root), None, MockLocation(s"null location (6)"))
+    val nullItem = Node.Null(Id.Index(6, Id.Root), Set.empty, MockLocation(s"null location (6)"))
     (() => seq.iterator).expects().returns(
       Iterator(
-        Node.Scalar(Id.Index(0, Id.Root), None, "first", MockLocation(s"first location (0)")),
+        Node.Scalar(Id.Index(0, Id.Root), Set.empty, "first", MockLocation(s"first location (0)")),
         mapItem,
-        Node.Scalar(Id.Index(2, Id.Root), None, "third", MockLocation(s"third location (2)")),
+        Node.Scalar(Id.Index(2, Id.Root), Set.empty, "third", MockLocation(s"third location (2)")),
         seqItem,
-        Node.Scalar(Id.Index(4, Id.Root), None, "fifth", MockLocation(s"fifth location (4)")),
-        Node.Scalar(Id.Index(5, Id.Root), None, "sixth", MockLocation(s"sixth location (5)")),
+        Node.Scalar(Id.Index(4, Id.Root), Set.empty, "fifth", MockLocation(s"fifth location (4)")),
+        Node.Scalar(Id.Index(5, Id.Root), Set.empty, "sixth", MockLocation(s"sixth location (5)")),
         nullItem
       ))
     // Shadows the built-in stringDecoder of the package, which would otherwise be ambiguous with it on Scala 2
@@ -49,7 +49,7 @@ class VectorDecoderTest extends AnyFlatSpec with Matchers with MockFactory {
   }
 
   it should "return UnexpectedNode[Vector[String]] if node is not a Seq" in {
-    val scalar = Node.Scalar(Id.Root, None, "value", MockLocation("loc"))
+    val scalar = Node.Scalar(Id.Root, Set.empty, "value", MockLocation("loc"))
     // Shadows the built-in stringDecoder of the package, which would otherwise be ambiguous with it on Scala 2
     implicit def stringDecoder: Decoder[String] = { case node: Node => UnexpectedNode[String](node).invalid }
     vectorDecoder[String].apply(scalar) shouldBe UnexpectedNode[Vector[String]](scalar).invalid

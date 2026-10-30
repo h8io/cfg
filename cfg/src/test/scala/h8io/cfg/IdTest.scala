@@ -4,7 +4,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class IdTest extends AnyFlatSpec with Matchers {
-  "Root.description" should "return the \"root\" string" in {
+  "Root.description" should "return the `root` string" in {
     Id.Root.path shouldBe empty
   }
 
@@ -21,53 +21,53 @@ class IdTest extends AnyFlatSpec with Matchers {
   }
 
   it should "quote keys with periods" in {
-    Id.Key("property.key", Id.Root).path shouldBe "\"property.key\""
-    Id.Key("property.key", Id.Index(1024, Id.Root)).path shouldBe "[1024].\"property.key\""
-    Id.Key("property.key", Id.Key("parent.key", Id.Root)).path shouldBe "\"parent.key\".\"property.key\""
-    Id.Key("property.", Id.Key(".key", Id.Root)).path shouldBe "\".key\".\"property.\""
-    Id.Key(".key", Id.Key("parent.", Id.Root)).path shouldBe "\"parent.\".\".key\""
-    Id.Key("property-key", Id.Key("parent.key", Id.Root)).path shouldBe "\"parent.key\".property-key"
-    Id.Key("property-key", Id.Key("-key", Id.Root)).path shouldBe "\"-key\".property-key"
-    Id.Key("-key", Id.Key("parent-key", Id.Root)).path shouldBe "parent-key.\"-key\""
-    Id.Key("property.key", Id.Key("parent-key", Id.Root)).path shouldBe "parent-key.\"property.key\""
-    Id.Index(256, Id.Key("parent.key", Id.Root)).path shouldBe "\"parent.key\"[256]"
+    Id.Key("property.key", Id.Root).path shouldBe "`property.key`"
+    Id.Key("property.key", Id.Index(1024, Id.Root)).path shouldBe "[1024].`property.key`"
+    Id.Key("property.key", Id.Key("parent.key", Id.Root)).path shouldBe "`parent.key`.`property.key`"
+    Id.Key("property.", Id.Key(".key", Id.Root)).path shouldBe "`.key`.`property.`"
+    Id.Key(".key", Id.Key("parent.", Id.Root)).path shouldBe "`parent.`.`.key`"
+    Id.Key("property-key", Id.Key("parent.key", Id.Root)).path shouldBe "`parent.key`.property-key"
+    Id.Key("property-key", Id.Key("-key", Id.Root)).path shouldBe "`-key`.property-key"
+    Id.Key("-key", Id.Key("parent-key", Id.Root)).path shouldBe "parent-key.`-key`"
+    Id.Key("property.key", Id.Key("parent-key", Id.Root)).path shouldBe "parent-key.`property.key`"
+    Id.Index(256, Id.Key("parent.key", Id.Root)).path shouldBe "`parent.key`[256]"
   }
 
   it should "quote keys with unsafe characters" in {
-    val unsafe = "\"\\\b\f\n\r\t Spaces: \u00A0\u3000; Format: \u200C\u2069\uFEFF;" +
+    val unsafe = "`\"\\\b\f\n\r\t Spaces: \u00A0\u3000; Format: \u200C\u2069\uFEFF;" +
       " Controls: \u0000\u001B\u0080\u0084\u009C; Separators: \u2028\u2029;" +
       " High surrogates: \uD800\uD8A9\uDB7F; Low surrogates \uDC00\uDD42\uDFF1."
-    val escaped = "\\\"\\\\\\b\\f\\n\\r\\t Spaces: \\u00A0\\u3000; Format: \\u200C\\u2069\\uFEFF;" +
+    val escaped = "\\`\"\\\\\\b\\f\\n\\r\\t Spaces: \\u00A0\\u3000; Format: \\u200C\\u2069\\uFEFF;" +
       " Controls: \\u0000\\u001B\\u0080\\u0084\\u009C; Separators: \\u2028\\u2029;" +
       " High surrogates: \\uD800\\uD8A9\\uDB7F; Low surrogates \\uDC00\\uDD42\\uDFF1."
-    Id.Key("property-" + unsafe, Id.Root).path shouldBe "\"property-" + escaped + '"'
-    Id.Key("property-" + unsafe, Id.Index(1024, Id.Root)).path shouldBe "[1024].\"property-" + escaped + '"'
+    Id.Key("property-" + unsafe, Id.Root).path shouldBe "`property-" + escaped + '`'
+    Id.Key("property-" + unsafe, Id.Index(1024, Id.Root)).path shouldBe "[1024].`property-" + escaped + '`'
     Id.Key("property-" + unsafe, Id.Key("parent-" + unsafe, Id.Root)).path shouldBe
-      "\"parent-" + escaped + "\".\"property-" + escaped + '"'
-    Id.Key("property-key", Id.Key("parent-" + unsafe, Id.Root)).path shouldBe "\"parent-" + escaped + "\".property-key"
-    Id.Key("property-" + unsafe, Id.Key("parent-key", Id.Root)).path shouldBe "parent-key.\"property-" + escaped + '"'
-    Id.Index(256, Id.Key("parent-" + unsafe, Id.Root)).path shouldBe "\"parent-" + escaped + "\"[256]"
+      "`parent-" + escaped + "`.`property-" + escaped + '`'
+    Id.Key("property-key", Id.Key("parent-" + unsafe, Id.Root)).path shouldBe "`parent-" + escaped + "`.property-key"
+    Id.Key("property-" + unsafe, Id.Key("parent-key", Id.Root)).path shouldBe "parent-key.`property-" + escaped + '`'
+    Id.Index(256, Id.Key("parent-" + unsafe, Id.Root)).path shouldBe "`parent-" + escaped + "`[256]"
   }
 
   it should "quote keys with emojis" in {
     val unsafe = "😀💀🐯🌈💋🍆👠"
     val escaped = "\\uD83D\\uDE00\\uD83D\\uDC80\\uD83D\\uDC2F\\uD83C\\uDF08\\uD83D\\uDC8B\\uD83C\\uDF46\\uD83D\\uDC60"
-    Id.Key("property-" + unsafe, Id.Root).path shouldBe "\"property-" + escaped + '"'
-    Id.Key("property-" + unsafe, Id.Index(1024, Id.Root)).path shouldBe "[1024].\"property-" + escaped + '"'
+    Id.Key("property-" + unsafe, Id.Root).path shouldBe "`property-" + escaped + '`'
+    Id.Key("property-" + unsafe, Id.Index(1024, Id.Root)).path shouldBe "[1024].`property-" + escaped + '`'
     Id.Key("property-" + unsafe, Id.Key("parent-" + unsafe, Id.Root)).path shouldBe
-      "\"parent-" + escaped + "\".\"property-" + escaped + '"'
-    Id.Key("property-key", Id.Key("parent-" + unsafe, Id.Root)).path shouldBe "\"parent-" + escaped + "\".property-key"
-    Id.Key("property-" + unsafe, Id.Key("parent-key", Id.Root)).path shouldBe "parent-key.\"property-" + escaped + '"'
-    Id.Index(256, Id.Key("parent-" + unsafe, Id.Root)).path shouldBe "\"parent-" + escaped + "\"[256]"
+      "`parent-" + escaped + "`.`property-" + escaped + '`'
+    Id.Key("property-key", Id.Key("parent-" + unsafe, Id.Root)).path shouldBe "`parent-" + escaped + "`.property-key"
+    Id.Key("property-" + unsafe, Id.Key("parent-key", Id.Root)).path shouldBe "parent-key.`property-" + escaped + '`'
+    Id.Index(256, Id.Key("parent-" + unsafe, Id.Root)).path shouldBe "`parent-" + escaped + "`[256]"
   }
 
   it should "quote empty keys" in {
-    Id.Key("", Id.Root).path shouldBe "\"\""
-    Id.Key("", Id.Index(1024, Id.Root)).path shouldBe "[1024].\"\""
-    Id.Key("", Id.Key("", Id.Root)).path shouldBe "\"\".\"\""
-    Id.Key("property-key", Id.Key("", Id.Root)).path shouldBe "\"\".property-key"
-    Id.Key("", Id.Key("parent-key", Id.Root)).path shouldBe "parent-key.\"\""
-    Id.Index(256, Id.Key("", Id.Root)).path shouldBe "\"\"[256]"
+    Id.Key("", Id.Root).path shouldBe "``"
+    Id.Key("", Id.Index(1024, Id.Root)).path shouldBe "[1024].``"
+    Id.Key("", Id.Key("", Id.Root)).path shouldBe "``.``"
+    Id.Key("property-key", Id.Key("", Id.Root)).path shouldBe "``.property-key"
+    Id.Key("", Id.Key("parent-key", Id.Root)).path shouldBe "parent-key.``"
+    Id.Index(256, Id.Key("", Id.Root)).path shouldBe "``[256]"
   }
 
   it should "not quote unicode letters" in {

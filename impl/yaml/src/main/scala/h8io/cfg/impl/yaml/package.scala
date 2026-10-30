@@ -41,9 +41,15 @@ package object yaml {
       Optional.empty[Mark],
       Optional.empty[Mark])
 
-  /** The tag written in the source, or `None` when the tag was inferred by the resolver or is the non-specific `!`. */
-  @inline private[yaml] def tagOf(node: YamlNode): Option[String] =
-    if (node.isResolved) None else Some(node.getTag.getValue)
+  /** The tag written in the source without its leading `!`, or none when the tag was inferred by the resolver or is the
+    * non-specific `!`. YAML allows one tag per node, so the set holds at most one name.
+    */
+  @inline private[yaml] def tagOf(node: YamlNode): Set[String] =
+    if (node.isResolved) Set.empty
+    else {
+      val tag = node.getTag.getValue
+      Set(if (tag.startsWith("!")) tag.substring(1) else tag)
+    }
 
   @inline private[yaml] def keyOf(tuple: NodeTuple): String = tuple.getKeyNode.asInstanceOf[ScalarNode].getValue
 

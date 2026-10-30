@@ -24,7 +24,7 @@ import java.net.URL
   * the parsed Java object, so the string stored in `Node.IScalar` may not match the original text in the file exactly
   * (e.g. a number written as `1e5` may come back as `100000.0`).
   *
-  * YAML tags are not propagated; the `tag` field is always `None`.
+  * YAML tags are not propagated; `tags` is always empty.
   *
   * ==Thread safety==
   * The shared `ConfigLoader` is stateless after construction and safe for concurrent use.

@@ -1,5 +1,6 @@
 package h8io.cfg.impl.hocon
 
+import h8io.cfg.impl.hocon.context.*
 import com.typesafe.config.ConfigFactory
 import h8io.cfg.{Id, Node}
 import org.scalatest.Inside
@@ -15,8 +16,8 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
     inside(wrap(rootId, mapValue)) { case map: Node.IMap[?] =>
       map.iterator.map {
         inside(_) {
-          case Node.Scalar(Id.Key(key, `rootId`), None, scalar, _) => key -> Some(scalar)
-          case Node.Null(Id.Key(key, `rootId`), None, _) => key -> None
+          case Node.Scalar(Id.Key(key, `rootId`), NoTags, scalar, _) => key -> Some(scalar)
+          case Node.Null(Id.Key(key, `rootId`), NoTags, _) => key -> None
         }
       }.toList should contain theSameElementsAs
         List("a" -> Some("x"), "b" -> Some("y"), "c" -> Some("z"), "d" -> None)
@@ -30,8 +31,8 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
       seq.iterator.zipWithIndex.map { case (node, i) =>
         val id = seq.id
         inside(node) {
-          case Node.Scalar(Id.Index(`i`, `id`), None, scalar, _) => Some(scalar)
-          case Node.Null(Id.Index(`i`, `id`), None, _) => None
+          case Node.Scalar(Id.Index(`i`, `id`), NoTags, scalar, _) => Some(scalar)
+          case Node.Null(Id.Index(`i`, `id`), NoTags, _) => None
         }
       }.toList should contain theSameElementsInOrderAs
         List(Some("1"), Some("2"), Some("3"), None)
@@ -42,14 +43,14 @@ class WrapTest extends AnyFlatSpec with Matchers with Inside {
   it should "create a Node.Scalar object" in {
     val scalarValue = config.get("scalar")
     inside(wrap(Id.Root, scalarValue)) {
-      case Node.Scalar(Id.Root, None, "42", LocationImpl(origin)) =>
+      case Node.Scalar(Id.Root, NoTags, "42", LocationImpl(origin)) =>
         origin should be theSameInstanceAs scalarValue.origin
     }
   }
 
   it should "create a Node.Null object" in {
     val nullValue = config.get("null")
-    inside(wrap(Id.Root, nullValue)) { case Node.Null(Id.Root, None, LocationImpl(origin)) =>
+    inside(wrap(Id.Root, nullValue)) { case Node.Null(Id.Root, NoTags, LocationImpl(origin)) =>
       origin should be theSameInstanceAs nullValue.origin
     }
   }

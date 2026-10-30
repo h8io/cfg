@@ -14,13 +14,13 @@ class SelectiveDecoderTest extends AnyFlatSpec with Matchers with Inside with Mo
     val decoder = new SelectiveDecoder[Node.Scalar] {
       override protected def parse(scalar: Node.Scalar): CfgValue[Node.Scalar] = scalar.valid
     }
-    val scalar = Node.Scalar(Id.Root, None, "test scalar", mock[Location])
+    val scalar = Node.Scalar(Id.Root, Set.empty, "test scalar", mock[Location])
     inside(decoder(scalar)) { case Validated.Valid(result) => result should be theSameInstanceAs scalar }
   }
 
   it should "not parse scalar if scalar parse method is not overridden" in {
     val decoder = new SelectiveDecoder[Any] {}
-    val scalar = Node.Scalar(Id.Root, None, "test scalar", mock[Location])
+    val scalar = Node.Scalar(Id.Root, Set.empty, "test scalar", mock[Location])
     decoder(scalar) shouldBe UnexpectedNode[Any](scalar).invalid
   }
 

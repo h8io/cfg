@@ -1,5 +1,6 @@
 package h8io.cfg.impl.hocon
 
+import h8io.cfg.impl.hocon.context.*
 import com.typesafe.config.{ConfigObject, ConfigOrigin, ConfigRenderOptions}
 import h8io.cfg.impl.hocon.context.CfgContext
 import h8io.cfg.{Id, Node}
@@ -15,7 +16,7 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     val obj = hocon"""scalar: 42"""
     val scalar = obj.get("scalar")
     inside(MapImpl(Id.Root, obj)("scalar")) {
-      case Node.Scalar(Id.Key("scalar", Id.Root), None, "42", LocationImpl(origin)) =>
+      case Node.Scalar(Id.Key("scalar", Id.Root), NoTags, "42", LocationImpl(origin)) =>
         origin should be theSameInstanceAs scalar.origin
     }
   }
@@ -24,7 +25,7 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     val obj = hocon"""scalar: null"""
     val scalar = obj.get("scalar")
     inside(MapImpl(Id.Root, obj)("scalar")) {
-      case Node.Null(Id.Key("scalar", Id.Root), None, LocationImpl(scalarOrigin)) =>
+      case Node.Null(Id.Key("scalar", Id.Root), NoTags, LocationImpl(scalarOrigin)) =>
         scalarOrigin should be theSameInstanceAs scalar.origin
     }
   }
@@ -43,10 +44,10 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
         val expectedOrigin = list.get(i).origin
         val id = seq.id
         inside(value) {
-          case Node.Scalar(Id.Index(`i`, `id`), None, scalar, LocationImpl(origin)) =>
+          case Node.Scalar(Id.Index(`i`, `id`), NoTags, scalar, LocationImpl(origin)) =>
             origin should be theSameInstanceAs expectedOrigin
             Some(scalar)
-          case Node.Null(Id.Index(`i`, `id`), None, LocationImpl(origin)) =>
+          case Node.Null(Id.Index(`i`, `id`), NoTags, LocationImpl(origin)) =>
             origin should be theSameInstanceAs expectedOrigin
             None
         }
@@ -62,10 +63,10 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     inside(MapImpl(Id.Root, cfg)("map")) { case map: Node.IMap[?] =>
       map.iterator.map { node =>
         inside(node) {
-          case Node.Scalar(Id.Key(key, Id.Key("map", Id.Root)), None, scalar, LocationImpl(origin)) =>
+          case Node.Scalar(Id.Key(key, Id.Key("map", Id.Root)), NoTags, scalar, LocationImpl(origin)) =>
             origin should be theSameInstanceAs obj.get(key).origin
             key -> Some(scalar)
-          case Node.Null(Id.Key(key, Id.Key("map", Id.Root)), None, LocationImpl(origin)) =>
+          case Node.Null(Id.Key(key, Id.Key("map", Id.Root)), NoTags, LocationImpl(origin)) =>
             origin should be theSameInstanceAs obj.get(key).origin
             key -> None
         }
@@ -75,17 +76,17 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
   }
 
   "tag" should "always return None" in {
-    MapImpl(Id.Root, mock[ConfigObject]).tag shouldBe None
+    MapImpl(Id.Root, mock[ConfigObject]).tags shouldBe Set.empty
   }
 
   "iterator" should "return a correct sequence of nodes" in {
     val obj = hocon"""a: null, b: c, null: "null""""
     MapImpl(Id.Root, obj).iterator.map { node =>
       inside(node) {
-        case Node.Scalar(Id.Key(key, Id.Root), None, scalar, LocationImpl(origin)) =>
+        case Node.Scalar(Id.Key(key, Id.Root), NoTags, scalar, LocationImpl(origin)) =>
           origin should be theSameInstanceAs obj.get(key).origin
           key -> Some(scalar)
-        case Node.Null(Id.Key(key, Id.Root), None, LocationImpl(origin)) =>
+        case Node.Null(Id.Key(key, Id.Root), NoTags, LocationImpl(origin)) =>
           origin should be theSameInstanceAs obj.get(key).origin
           key -> None
       }

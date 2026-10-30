@@ -21,50 +21,50 @@ class YAMLTest extends AnyFlatSpec with Matchers with Inside {
 
   it should "read from a single URL" in {
     val cfg = YAML(resource("base.yaml"))
-    cfg("base-config") should matchPattern { case Node.Scalar(Id.Key("base-config", Id.Root), None, "true", _) => }
+    cfg("base-config") should matchPattern { case Node.Scalar(Id.Key("base-config", Id.Root), NoTags, "true", _) => }
     cfg("override-config") should matchPattern { case Node.None(Id.Key("override-config", Id.Root), _) => }
-    cfg("source") should matchPattern { case Node.Scalar(Id.Key("source", Id.Root), None, "base", _) => }
-    cfg("property") should matchPattern { case Node.Scalar(Id.Key("property", Id.Root), None, "12", _) => }
-    cfg("nullable") should matchPattern { case Node.Null(Id.Key("nullable", Id.Root), None, _) => }
+    cfg("source") should matchPattern { case Node.Scalar(Id.Key("source", Id.Root), NoTags, "base", _) => }
+    cfg("property") should matchPattern { case Node.Scalar(Id.Key("property", Id.Root), NoTags, "12", _) => }
+    cfg("nullable") should matchPattern { case Node.Null(Id.Key("nullable", Id.Root), NoTags, _) => }
     inside(cfg("server")) { case server: Node.IMap[?] =>
-      server("port") should matchPattern { case Node.Scalar(_, None, "8080", _) => }
+      server("port") should matchPattern { case Node.Scalar(_, NoTags, "8080", _) => }
       server("secure") should matchPattern { case Node.None(_, _) => }
     }
   }
 
   it should "name the URL in the location of every node it reads" in {
     val url = resource("base.yaml")
-    inside(YAML(url)("property")) { case Node.Scalar(_, None, "12", location) =>
+    inside(YAML(url)("property")) { case Node.Scalar(_, NoTags, "12", location) =>
       location.description shouldBe s"${url.toString}: 3:11"
     }
   }
 
   it should "overlay two URLs, the last one winning" in {
     val cfg = YAML(resource("base.yaml"), resource("override.yaml"))
-    cfg("base-config") should matchPattern { case Node.Scalar(Id.Key("base-config", Id.Root), None, "true", _) => }
+    cfg("base-config") should matchPattern { case Node.Scalar(Id.Key("base-config", Id.Root), NoTags, "true", _) => }
     cfg("override-config") should matchPattern {
-      case Node.Scalar(Id.Key("override-config", Id.Root), None, "true", _) =>
+      case Node.Scalar(Id.Key("override-config", Id.Root), NoTags, "true", _) =>
     }
-    cfg("source") should matchPattern { case Node.Scalar(Id.Key("source", Id.Root), None, "overridden", _) => }
-    cfg("property") should matchPattern { case Node.Scalar(Id.Key("property", Id.Root), None, "12", _) => }
-    cfg("nullable") should matchPattern { case Node.Scalar(Id.Key("nullable", Id.Root), None, "non-null", _) => }
+    cfg("source") should matchPattern { case Node.Scalar(Id.Key("source", Id.Root), NoTags, "overridden", _) => }
+    cfg("property") should matchPattern { case Node.Scalar(Id.Key("property", Id.Root), NoTags, "12", _) => }
+    cfg("nullable") should matchPattern { case Node.Scalar(Id.Key("nullable", Id.Root), NoTags, "non-null", _) => }
     inside(cfg("server")) { case server: Node.IMap[?] =>
-      server("host") should matchPattern { case Node.Scalar(_, None, "localhost", _) => }
-      server("port") should matchPattern { case Node.Scalar(_, None, "9090", _) => }
-      server("secure") should matchPattern { case Node.Scalar(_, None, "true", _) => }
+      server("host") should matchPattern { case Node.Scalar(_, NoTags, "localhost", _) => }
+      server("port") should matchPattern { case Node.Scalar(_, NoTags, "9090", _) => }
+      server("secure") should matchPattern { case Node.Scalar(_, NoTags, "true", _) => }
     }
     inside(cfg("hosts")) { case hosts: Node.ISeq[?] => hosts.size shouldBe 1 }
   }
 
   it should "report the tags written in the source" in {
     val cfg = YAML(resource("tags.yaml"))
-    cfg("plain") should matchPattern { case Node.Scalar(Id.Key("plain", Id.Root), None, "42", _) => }
+    cfg("plain") should matchPattern { case Node.Scalar(Id.Key("plain", Id.Root), NoTags, "42", _) => }
     cfg("tagged") should matchPattern {
-      case Node.Scalar(Id.Key("tagged", Id.Root), Some("tag:yaml.org,2002:int"), "42", _) =>
+      case Node.Scalar(Id.Key("tagged", Id.Root), tags, "42", _) if tags == Set("tag:yaml.org,2002:int") =>
     }
-    cfg("non-specific") should matchPattern { case Node.Scalar(Id.Key("non-specific", Id.Root), None, "42", _) => }
-    cfg("storage").asInstanceOf[Node.ISome[Id.Key]].tag shouldBe Some("!postgres")
-    cfg("ids").asInstanceOf[Node.ISome[Id.Key]].tag shouldBe Some("!identifiers")
+    cfg("non-specific") should matchPattern { case Node.Scalar(Id.Key("non-specific", Id.Root), NoTags, "42", _) => }
+    cfg("storage").asInstanceOf[Node.ISome[Id.Key]].tags shouldBe Set("postgres")
+    cfg("ids").asInstanceOf[Node.ISome[Id.Key]].tags shouldBe Set("identifiers")
   }
 
   it should "reject a document that is not rooted at a mapping" in {

@@ -33,8 +33,8 @@ object Id {
 
   /** A named field inside a map node.
     *
-    * Keys that contain characters outside `[A-Za-z_][A-Za-z0-9_-]*` are quoted and escaped in [[path]] so the output is
-    * always unambiguous.
+    * A key that is not a letter or `_` followed by letters, digits, `_` and `-` is rendered in [[path]] in backticks,
+    * escaped, so the output is always unambiguous — and valid DEF, where a quoted key is written the same way.
     *
     * @param key
     *   the field name
@@ -63,9 +63,9 @@ object Id {
   private val SafeKeyPattern = Pattern.compile("^[\\p{L}_][\\p{L}\\p{N}_-]*$")
   @inline private def quote(key: String): String =
     if (SafeKeyPattern.matcher(key).matches()) key
-    else ((key foldLeft new StringBuilder(key.length + 1, "\"")) { (builder, char) =>
+    else ((key foldLeft new StringBuilder(key.length + 1, "`")) { (builder, char) =>
       (char: @switch) match {
-        case '"' | '\\' => builder += '\\' += char
+        case '`' | '\\' => builder += '\\' += char
         case '\b' => builder += '\\' += 'b'
         case '\f' => builder += '\\' += 'f'
         case '\n' => builder += '\\' += 'n'
@@ -80,5 +80,5 @@ object Id {
             case _ => builder += char
           }
       }
-    } += '"').result()
+    } += '`').result()
 }

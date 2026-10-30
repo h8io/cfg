@@ -6,6 +6,10 @@ import java.io.StringReader
 import java.net.URL
 
 object context {
+
+  /** No tags, as a stable identifier, so that a pattern can match it where `Set.empty` cannot stand. */
+  val NoTags: Set[String] = Set.empty
+
   val Label: String = "test"
 
   def resource(path: String): URL = getClass.getClassLoader.getResource(path)
