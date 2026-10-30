@@ -189,7 +189,6 @@ The indent rule is picked by a marker between the opening delimiter and the end 
 |---|---|
 | `"""` | the common indent is stripped, Java's rule (below) |
 | `"""<` | all of it is stripped |
-| `"""\|` | the first non-blank line's indent is stripped |
 | `"""=` | kept as written |
 | `""">` | as with no marker, then folded (below) |
 
@@ -216,12 +215,11 @@ server {
 // value: "  abc" — 2 + 2 stripped; nested one level deeper, 4 + 2, the same value
 ```
 
-A width with any other marker is an error: `<`, `|` and `=` fix the indent themselves.
+A width with any other marker is an error: `<` and `=` fix the indent themselves.
 
-Indents are compared character by character, so a tab never matches a space. Under `"""|`, a line
-whose indent does not start with the first line's is an error. Under no marker, two indents of
-which neither is a prefix of the other (a tab where the other has a space) are an error too, rather
-than a common indent silently shorter than intended.
+Indents are compared character by character, so a tab never matches a space. Under no marker, two
+indents of which neither is a prefix of the other (a tab where the other has a space) are an error,
+rather than a common indent silently shorter than intended.
 
 With no marker, the common indent is the longest leading whitespace shared by the non-blank lines
 and by the line of the closing delimiter, when that delimiter stands on a line of its own:
@@ -620,7 +618,7 @@ mistake is worse than stopping.
      error.
    - **Trailing whitespace** on a line: kept, the string being raw, or stripped, as Java does.
      Invisible spaces in a value are a common source of bugs.
-   - ~~**Indent markers**~~ Settled (§5): `<`, `|`, `=`, `>` after the opening `"""`, folding as in
+   - ~~**Indent markers**~~ Settled (§5): `<`, `=`, `>` after the opening `"""`, folding as in
      YAML, an explicit width relative to the opening line.
    - ~~**Text right after the opening `"""`**~~ Settled (§5): a block starts on the next line; text
      after the delimiter makes a one-line string, which must close on its line.
@@ -921,3 +919,9 @@ alternative listed here should not be re-proposed without new information.
   changing meaning once indentation arrives, and the indent of the opening line stays its indent
   under either syntax. Written `"""N` or `""">N`, N from 1 to 9 as in YAML.
 - **Markers do not combine**, but for a width after `>` (§5). The user's call, on a proposal.
+- **`"""|` dropped** (§5), on the user's question of how it differs from no marker. It gives the same
+  value except where the first line is deeper than the rest (an error under `|`) or the closing
+  delimiter stands left of the text (ignored under `|`): a weaker copy of the rule for no marker,
+  whose only gain — independence from the closing delimiter — the explicit width gives more
+  robustly. The user's call. `|` stays free, being an unknown marker; the candidate for it later is
+  a margin as in Scala's `stripMargin`, each line starting with `|` after its indent.
