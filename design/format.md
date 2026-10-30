@@ -17,6 +17,8 @@ Extensible Format*:
 is still open, and §14 logs how each decision was reached so a later session does not reopen a
 question that was already argued through. Add to §14 rather than silently editing §2.
 
+The implementation is tracked step by step in [`plan.md`](plan.md).
+
 ## 1. Why a format of our own
 
 The `cfg` protocol says an `IScalar` carries the raw string that was written in the source, that a
@@ -47,32 +49,55 @@ loader path.
 | Includes | Yes, but as a **directive**, not a keyword |
 | Include placement | Anywhere in the tree, not just at file top level |
 | Include sources | Relative paths, classpath resources; optional variant that tolerates a missing file |
-| Multi-line strings | Triple quotes, raw, with the common leading indent stripped |
-| Special words | Avoided — `@`-prefixed directives instead, as an open, extensible set. `null` is the one exception |
+| Comments | `//` and nesting `/* */`; `/** */` reserved for doc comments (§3) |
+| Multi-line strings | Triple quotes, raw but for `${…}` and two escapes; a block or a one-line form; indent markers, Java's rule by default (§5) |
+| Special words | Avoided — `#`-prefixed directives instead, as an open, extensible set. `null` is the one exception |
 | Error model | `Either`, no Cats; as many errors per run as can be reported honestly (§11) |
 | Dotted keys | Sugar for nesting; a quoted key is indivisible, dots included |
 | Substitution location | Reference site, carrying the definition site with it (§10) |
+| Location coordinates | Source as it was named — the URL passed to the loader, or an include argument as written; line and column 1-based, column in code points (§10) |
 | `impl/hocon` | Stays, alongside this module |
 | Overriding | `:` merges maps, `:=` replaces whatever was there (§7); no append operator |
 
 ## 3. Lexical structure
 
-- Encoding is UTF-8. A newline is LF or CRLF; a lone CR is an error.
-- `#` starts a comment that runs to the end of the line. There is deliberately no second comment
-  form.
+- Encoding is UTF-8. A byte order mark at the start of a source is skipped. A newline is LF or
+  CRLF; a lone CR is an error.
+- **Comments** are `//` to the end of the line and `/* … */`, which nest, as in Scala: commenting out
+  a block that already holds a comment is safe. An unterminated `/*` is reported at its opening, a
+  stray `*/` is an error, and `/**/` is an empty ordinary comment. Inside an unquoted scalar `//`
+  and `/*` are ordinary characters; anywhere else they open a comment. So `url: http://host` is one
+  scalar — and so is `a: 1//x`, the price of the rule — while `pattern: /*.log` opens a comment, and
+  a value starting with `//` or `/*` is written in quotes. `#` has no meaning of its own here.
+- **Doc comments** — `/** … */` is reserved for documentation that DSLs built on DEF may one day
+  want in the source. v1 ignores it, but accepts it only before a field, a sequence element or a
+  directive; anywhere else (between a tag and its value, after a value on the same line) it is an
+  error. Doc comments carry no meaning for values, so giving them one later breaks no v1 file. That
+  will take a field such as `doc: Option[String]` on `ISome` — a change to `cfg`, for `schema` to
+  read (generated reference docs, decoder messages) — so the lexer emits a doc comment as a token
+  and the Ast keeps it on the node it precedes from the start.
 - **Bare keys** match `Id.SafeKeyPattern` exactly — `^[\p{L}_][\p{L}\p{N}_-]*$`. Anything else is
-  written as a quoted key.
-- **Quoted keys and quoted scalars** use `"…"` with the escape set `Id.quote` produces: `\"`, `\\`,
-  `\b`, `\f`, `\n`, `\r`, `\t` and `\uXXXX`.
+  written as a quoted key. A key that would pass bare may be quoted too: `` `port` `` and `port` are
+  the same key.
+- **Names in backticks, values in double quotes.** A quoted key — in a field, a dotted key or a path
+  inside `${…}` — is written `` `…` ``; `"…"` is only ever a scalar. The role of a token is
+  therefore visible to the lexer without context, and `"port": 1` is an error with a hint, not a
+  second spelling. Both forms share one escape set: `\"`, ``\` ``, `\\`, `\b`, `\f`, `\n`, `\r`, `\t`
+  and `\uXXXX` — the set `Id.quote` produces today, plus ``\` `` and `\$`. Both quotes are
+  escapable in both forms, so there is one escape grammar rather than one per delimiter; `Id.quote`
+  itself only needs ``\` `` and `\\`. Any other `\` is an error. Neither form may hold a raw
+  newline — that is what `\n` and `"""…"""` are for — so an unterminated quote is reported on its own
+  line rather than at the end of the file.
 - **Dotted keys** — `a.b.c: v` is sugar for `a { b { c: v } }`. The split happens only on dots
-  *between* key tokens: a quoted key is indivisible, so `"a.b": v` is one key named `a.b`, and
-  `x."a.b".c` is three levels. This is also what `Id.path` produces — a key containing a dot fails
-  `SafeKeyPattern` and is rendered quoted — so the round-trip property holds.
+  *between* key tokens: a quoted key is indivisible, so `` `io.h8`: v `` is one key named `io.h8`,
+  and ``x.`a.b`.c`` is three levels. This is also what `Id.path` produces — a key containing a dot
+  fails `SafeKeyPattern` and is rendered quoted — so the round-trip property holds.
 
   The two rules together buy a property worth keeping: the output of `Id.path` is itself valid
-  source. `server."odd key"[0]` renders from a node and parses back to the same address. Any change
-  to `Id.quote` has to be mirrored here, and vice versa.
-- **Unquoted scalars** contain no whitespace. One runs to the first whitespace, `,`, `}`, `]` or `#`;
+  source. ``server.`odd key`[0]`` renders from a node and parses back to the same address. This
+  takes `Id.quote` in `cfg` from `"…"` to backticks, which changes every path the HOCON and YAML
+  loaders print as well. Any later change to `Id.quote` has to be mirrored here, and vice versa.
+- **Unquoted scalars** contain no whitespace. One runs to the first whitespace, `,`, `}` or `]`;
   after it only a separator, a comment or the end of the block may follow, so `a: foo bar` is an
   error that says to quote the value. What was read becomes `IScalar.value` verbatim — `1e5` stays
   `"1e5"`, `true` stays `"true"`, `007` stays `"007"`. There is no type inference anywhere in the
@@ -80,6 +105,12 @@ loader path.
 
   An unquoted scalar may not start with `'`: YAML's `a: 'x'` would otherwise parse silently to a
   value with the quotes kept. `~` gets no rule — it is the string `~`, and `null` is written out.
+
+  `${` opens a substitution (§9) in every kind of scalar: unquoted (`jdbc:${host}/db`), in
+  `"…"` (`"jdbc:${host}/db"`) and in `"""…"""`. A literal `${` is written `\${`, which is what
+  the `\$` escape is for: `"\${not.a.substitution}"`. Inside backticks there are no
+  substitutions — a name is never computed — but `\$` is accepted there too, the escape set being
+  one. Inside `"""…"""` a literal `${` is `\${` as well, one of its two escapes (§5).
 - **`:` after a key** must be followed by whitespace or the end of the line, so `a:b` in a block is an
   error with a hint rather than a field. Inside a value `:` is ordinary: `url: http://host:8080`.
   `:=` is the replacing form of `:` (§7) and follows the same rule: `a:=b` is an error.
@@ -93,8 +124,8 @@ loader path.
   The rule also frees `- ` (dash, space) at the start of an indented line for the sequence element
   marker (§13): `- 5` can never be a scalar, `-5` and `"- 5"` always are.
 - **`null`** — the one reserved word. An unquoted scalar whose trimmed text is exactly `null`
-  becomes `Node.INull`; `"null"` in quotes stays a scalar. A tag is kept: `!secret null` is an
-  `INull` with `tag = Some("secret")`. `true`, `false` and every other word remain plain scalars.
+  becomes `Node.INull`; `"null"` in quotes stays a scalar. Tags are kept: `@secret null` is an
+  `INull` with `tags = Set("secret")`. `true`, `false` and every other word remain plain scalars.
   `null` is reserved only in value position — as a key it is an ordinary bare key.
 
 ## 4. Grammar sketch
@@ -107,8 +138,9 @@ field      = key { "." key } ( ( ":" | ":=" ) value | block )
 value      = [ tag ] ( scalar | block | seq | directive | substitution-expr )
 seq        = "[" [ value { sep value } [ sep ] ] "]"
 sep        = "," | newline
-tag        = "!" identifier
-scalar     = null | bare-scalar | quoted-scalar | multiline-scalar
+tag        = "@" name
+directive  = "#" name "(" [ arg { sep arg } [ sep ] ] ")"
+scalar     = null | bare-scalar | quoted-scalar | triple-quoted
 ```
 
 Fields are separated by a newline or a `,` (§3). `key { … }` needs no `:`, and the `{` must be on the
@@ -121,43 +153,181 @@ so it merges; replacing a block is written `key := { … }`.
 
 **Sequences** — `[a, b, c]`; a newline also separates, and a trailing separator is allowed.
 
-**Multi-line scalars** — `"""…"""`, taken raw: no escape processing at all, so PEM blocks, regexes
-and SQL survive untouched. The newline immediately after the opening delimiter is dropped, and the
-longest common leading whitespace across the non-blank lines is stripped:
+**Triple-quoted scalars** — `"""…"""`, taken raw: no escape processing, so PEM blocks, regexes
+and SQL survive untouched — except `${…}`, which is substituted here as in any scalar (§3, §9), and
+two escapes: `\"""` for a literal `"""` and `\${` for a literal `${`, the latter as in `"…"`. Any
+other `\` is an ordinary character. A `\` right before the closing delimiter therefore escapes it:
+a value ending in `\` is written as a block with the delimiter on its own line, or as `"…\\"`.
+
+What follows the opening delimiter picks one of two forms, which differ in layout only — the
+content rules above are the same in both:
+
+- **Block**: the end of the line right after the delimiter. Whitespace before it is an error, though
+  not a fatal one: it is reported and the block is read on. The rules below apply.
+- **One line**: anything else. The string must close on the same line and is taken as written,
+  with no newline or indent processing: `pattern: """^\d+"$"""`. A newline before the closing
+  delimiter is an error with a hint to start the block on the next line — a first line written
+  after the delimiter has no column in common with the lines below it.
+
+A run of more than three quotes closes the string at its last three, so a value may end in `"`:
+`"""say "hi""""` is `say "hi"`. After the closing delimiter comes what follows any value — a
+separator, a comment, the end of the block; a triple-quoted string takes no part in a concatenation
+(§9), a substitution belonging inside it.
+
+In a block, the newline immediately after the opening delimiter is dropped, and so is the one
+immediately before the closing delimiter, together with the whitespace between it and the
+delimiter. These newline rules hold whatever the indent rule is.
+
+A final newline is therefore written as one, by an empty line before the closing delimiter:
+
+```
+key: """
+  abc
+  def
+
+  """
+// value: "abc\ndef\n"
+```
+
+The indent rule is picked by a marker between the opening delimiter and the end of its line:
+
+| Opening | Leading whitespace of each line |
+|---|---|
+| `"""` | the common indent is stripped, Java's rule (below) |
+| `"""<` | all of it is stripped |
+| `"""=` | kept as written |
+| `""">` | as with no marker, then folded (below) |
+
+A marker must end its line, so `"""<x"""` is a one-line string holding `<x`, and an unknown one is
+an error. Markers do not combine, with one exception: an explicit width, below.
+
+**Folding** under `""">` comes after the indent is stripped, by the rule for no marker or by an
+explicit width. As in YAML, a newline between two lines left with no indent becomes a space, an empty line becomes a newline,
+and a line indented deeper is not folded — neither it nor the newlines around it — so a list or a
+code sample inside prose survives.
+
+**An explicit width** is a digit from 1 to 9 after the delimiter, `"""2`, or after `>`, `""">2`. As
+in YAML it counts from the indent of the line holding the opening delimiter: that indent and then N
+whitespace characters are stripped from every non-blank line, and a line that does not start with
+them is an error. The closing delimiter's column does not count then. Counting from that line
+keeps the value when a formatter shifts the whole block:
+
+```
+server {
+  banner: """2
+      abc
+    """
+}
+// value: "  abc" — 2 + 2 stripped; nested one level deeper, 4 + 2, the same value
+```
+
+A width with any other marker is an error: `<` and `=` fix the indent themselves.
+
+**Every newline in a block is LF** in the value, whether the file has LF or CRLF, so the value does
+not depend on the editor or on git's `core.autocrlf`. A substituted value keeps its own newlines.
+
+**Trailing whitespace** is stripped from every line of a block, under any marker and before folding,
+so a line holding only whitespace becomes empty. It is stripped from the source text, before
+substitution: a substituted value keeps its own. The one-line form keeps it, its closing delimiter
+making it visible. A block value cannot end a line in whitespace; `"…"` with its escapes can.
+
+Indents are compared character by character, so a tab never matches a space. Under no marker, two
+indents of which neither is a prefix of the other (a tab where the other has a space) are an error,
+rather than a common indent silently shorter than intended.
+
+With no marker, the common indent is the longest leading whitespace shared by the non-blank lines
+and by the line of the closing delimiter, when that delimiter stands on a line of its own:
 
 ```
 server {
   banner: """
     Welcome.
       Indented line.
-  """
+    """
 }
-# value: "Welcome.\n  Indented line."
+// value: "Welcome.\n  Indented line."
 ```
 
-**Tags** — `!name` before any value, including containers:
+Moving the closing delimiter left keeps an indent in the value:
 
 ```
-timeout: !duration 5s
-routes: !ordered { a: 1, b: 2 }
+key: """
+    abc
+    def
+  """
+// value: "  abc\n  def"
 ```
 
-Only tags written in the source reach `ISome.tag`; nothing is ever inferred, and there is no
-non-specific tag that resolves to `None`. This matches the rule already settled for `impl/yaml`.
+**Tags** — `@name` before any value, including containers. They are to a value what annotations
+are to a Scala or Java class: metadata the parser carries and something else — a decoder, a later
+schema — reads.
+
+```
+timeout: @duration 5s
+routes: @ordered { a: 1, b: 2 }
+```
+
+A tag is a name, not a call: `@name(` is an error, which keeps arguments to tags available for later
+without breaking a v1 file. A value starting with `@` is written in quotes (`user: "@john"`); inside
+an unquoted scalar `@` is ordinary (`admin@host`).
+
+A tag name follows the key rule: bare if it matches `Id.SafeKeyPattern`, in backticks otherwise.
+`ISome.tags` holds names only — the prefix and the quotes are syntax of the format, not part of
+the tag: `@duration` gives `duration`, ``@`tag:yaml.org,2002:int` `` gives `tag:yaml.org,2002:int`,
+so there is no need for `!!`. A tag may precede any value, a multi-line string included:
+`query: @sql """…"""`.
+
+`impl/yaml` follows the same rule and drops the leading `!` of a tag (`!postgres` gives `postgres`, `!!int` still `tag:yaml.org,2002:int`) — a breaking change to
+`cfg-yaml`, made in step 2 of the plan. It merges YAML's `!foo` and `!<foo>`, two different tags in
+YAML, into one name; the protocol accepts that.
+
+Only tags written in the source reach `ISome.tags`; nothing is ever inferred, and there is no
+non-specific tag that resolves to nothing. This matches the rule already settled for `impl/yaml`.
+
+**A value takes any number of tags, and they form a set** — as an element takes CSS classes, which
+is the role tags are meant to play for a later DEF schema. They are written stacked, like
+annotations: `@pooled @readonly { … }`. Order carries no meaning, `@a @b` is the same as `@b @a`,
+and a tag written twice counts once: `@a @a x` is `@a x`, not an error.
+
+**Tags mean nothing at this level.** DEF and `cfg` are the low-level protocol; what a tag means,
+and how particular tags combine when values merge, is for the level above — the `schema` layer and
+the planned DEF schema — to define. So the rules below are deliberately the neutral ones: a set,
+union on merge and graft, nothing dropped except by `:=`. They lose no tag a higher level might
+need, and they pre-empt none of its choices — that level can still give two tags a conflict, an
+order or a "later wins" of its own.
+
+In the protocol `ISome.tag: Option[String]` becomes `ISome.tags: Set[String]`, empty when nothing
+was written — a change to `cfg` and every loader, made in step 2 of the plan together with the `!`
+above, so the API breaks once. `impl/hocon` always gives the empty set, `impl/yaml` at most one
+element, YAML allowing one tag per node.
+
+**`@-name` is reserved** for removing an inherited tag (§7) and is an error in v1. It costs nothing:
+a bare tag name follows `Id.SafeKeyPattern`, which cannot start with `-`, so `@-` never begins a
+legal tag. A tag whose name starts with `-` is written in backticks, ``@`-name` ``, and is an
+ordinary tag.
 
 ## 6. Directives
 
 The extension point, and the reason `include` is not a keyword. A directive is
 
 ```
-@name(arg = literal, arg = literal)
+#name(arg = literal, arg = literal)
 ```
 
-and may appear in two positions:
+The `#` is the C preprocessor's, and for the same reason: directives are expanded while parsing,
+before merging and substitution (§8). A value starting with `#` is written in quotes
+(`color: "#fff"` — unquoted it is a call of an unknown directive `fff`); inside an unquoted scalar
+`#` is ordinary. A pasted YAML or HOCON comment fails loudly: `# text` is a directive with no name.
+
+A directive may appear in two positions:
 
 - **statement position**, inside any block or at the top of a file — it must produce a map, which is
   merged into the enclosing block at the point where it appears, so fields below it override it;
 - **value position**, on the right of `:` or as a sequence element — it produces a single node.
+
+A directive name follows the key rule, as a tag name does (§5): bare if it matches
+`Id.SafeKeyPattern`, in backticks otherwise — ``#`my.directive`(…)``. One rule covers every name
+in the language: keys, path segments, tags and directives.
 
 Arguments are separated like everything else, by `,` or a newline, so a long directive can be split
 across lines. They keep `name = literal`, not `name: literal`: a directive is a call with named
@@ -173,13 +343,13 @@ Directives are an open set. The loader is built with a set of handlers; the form
 the call syntax. An unknown directive is an error, never a silently ignored field — otherwise a typo
 in a directive name becomes a config silently missing half its content.
 
-`@include` is the only built-in:
+`#include` is the only built-in:
 
 ```
-@include(file = "conf.d/extra")             # relative to the including file's URL
-@include(file = "local", optional = true)   # missing file is not an error
-@include(resource = "reference")            # classpath, JVM only
-@include(url = "https://…")
+#include(file = "conf.d/extra")             // relative to the including file's URL
+#include(file = "local", optional = true)   // missing file is not an error
+#include(resource = "reference")            // classpath, JVM only
+#include(url = "https://…")
 ```
 
 Exactly one of `file` / `resource` / `url` is required. Relative paths resolve against the URL of the
@@ -197,26 +367,28 @@ The same rule applies in all three places it is needed, so there is one behaviou
 
 This follows the call already made for `impl/yaml`.
 
-**Tags in a merge.** When two maps merge, the result takes the later map's tag if one was written there,
-and keeps the earlier one otherwise. Being untagged is not a reason to drop a tag:
+**Tags in a merge.** When two maps merge, the result carries the union of their tags, as classes
+accumulate in CSS. Being untagged is not a reason to drop a tag:
 
 ```
-routes: !ordered { a: 1 }
-routes { b: 2 }            # !ordered { a: 1, b: 2 }
-routes: !sorted { c: 3 }   # !sorted { a: 1, b: 2, c: 3 }
+routes: @ordered { a: 1 }
+routes { b: 2 }            // @ordered { a: 1, b: 2 }
+routes: @sorted { c: 3 }   // @ordered @sorted { a: 1, b: 2, c: 3 }
 ```
 
-A replaced value carries only its own tag; with `:=` that holds for maps too.
+A replaced value carries only its own tags; with `:=` that holds for maps too. `:=` is also the
+only way to drop an inherited tag in v1 — it drops the fields with it. A finer tool is reserved,
+not designed: `@-name` (§5).
 
 **Explicit replacement — `:=`.** A field written with `:=` discards whatever the key held before and
-takes the new value as is, with its own tag:
+takes the new value as is, with its own tags:
 
 ```
-# reference.conf
+// reference.conf
 pool { min: 1, max: 10, idle: 30s }
 
-# app.conf
-pool := { max: 4 }    # pool is { max: 4 }; min and idle are gone
+// app.conf
+pool := { max: 4 }    // pool is { max: 4 }; min and idle are gone
 ```
 
 With `:` the result would have been `{ min: 1, max: 4, idle: 30s }`, and there is no other way to drop
@@ -226,7 +398,7 @@ in practice it matters for maps, and anywhere the author wants the intent to be 
 - With a dotted key the operator applies to the last key only: `a.b.c := { … }` replaces `c` and
   merges `a` and `b` as usual.
 - The operator is kept in the syntax tree until merging, and works in all three places listed above:
-  `:=` in an included file resets what the including block held before the `@include`, and `:=` in
+  `:=` in an included file resets what the including block held before the `#include`, and `:=` in
   the second URL resets what the first defined.
 - With no earlier value `:=` behaves like `:`.
 - `a := ${b}` is always allowed: whatever `${b}` resolves to, nothing before it survives.
@@ -239,13 +411,13 @@ the other is a map or a substitution.
 
 ```
 a: ${server}
-a { port: 1 }      # error: cannot merge into a substitution, use := to replace
+a { port: 1 }      // error: cannot merge into a substitution, use := to replace
 
 b { port: 1 }
-b: ${server}       # error: ${server} may be a map, use := to replace
+b: ${server}       // error: ${server} may be a map, use := to replace
 
 c: ${x}
-c: 5               # fine: a scalar replaces whatever ${x} turns out to be
+c: 5               // fine: a scalar replaces whatever ${x} turns out to be
 ```
 
 A concatenation such as `"jdbc:"${host}` is always a scalar and never triggers the rule; `${?x}` does,
@@ -261,7 +433,7 @@ cannot be expressed any other way.
 ## 8. Phase order
 
 1. Parse each source URL into a syntax tree, directives unexpanded.
-2. Expand directives depth-first. `@include` parses the referenced source recursively and merges it
+2. Expand directives depth-first. `#include` parses the referenced source recursively and merges it
    positionally. Cycle detection lives here.
 3. Merge the input sources, last wins.
 4. Resolve substitutions over the merged tree.
@@ -275,9 +447,22 @@ from a substitution.
 
 - `${path}` in place of a whole value grafts the referenced node, whatever it is — scalar, block or
   sequence.
-- `prefix${path}suffix` concatenates; the referenced node must then be a scalar, and the result is a
+- **A path is written as `Id.path` renders one** (§3): keys joined by dots, quoted in backticks when
+  not bare, and indices into sequences in brackets — `${x.y[7].z}`, `${a[0][1]}`,
+  ``${server.`odd key`[0]}``. An index is a decimal with no sign and no leading zeros, as `Id.path`
+  prints it, so `[07]` and `[-1]` are errors. An index past the end of a sequence resolves to
+  nothing, as a missing key does: an error for `${…}`, an omitted field for `${?…}`.
+- Tags written before a whole-value `${…}` are added to the grafted node's own: with
+  `b: @x { … }`, `a: @y ${b}` gives `a` the tags `x` and `y`. The union is the same as in a merge
+  (§7), so a graft and a merge never disagree about tags.
+- A concatenation builds a new scalar, which carries only the tags written before it: in
+  `@t "jdbc:"${host}` the result is tagged `t` alone, whatever `host` carries.
+- `prefix${path}suffix` concatenates, and so does a `${…}` inside quotes, even alone: `"${a}"` is
+  a concatenation, not a graft. The referenced node must then be a scalar, and the result is a
   scalar. The parts touch: `"a" ${b}` with a space between is an error, not a concatenation with a
   space as in HOCON — whitespace never joins or separates values.
+- A triple-quoted string is never a part: nothing may touch it on either side, so `"""…"""${x}` and
+  `${x}"""…"""` are errors with a hint to move the substitution inside the quotes (§5).
 - `${?path}` is optional: when it does not resolve, the field is omitted entirely, so a later lookup
   yields `Node.INone` rather than an error.
 - Lookup order is the merged tree, then system properties, then environment variables — the HOCON
@@ -292,6 +477,23 @@ from a substitution.
 Every node carries its own `Location`, with `description` rendered as `<source>:<line>:<column>`.
 This is the visible win over `impl/hocon`, where the description is whatever typesafe-config
 composed.
+
+**`<source>` is the source as it was named**, so the reader sees the name they wrote and can find
+the file by it:
+
+- a source passed to `DEF(urls*)` — the full URL, as the caller gave it (`file:/etc/app/app.def`);
+- a source pulled in by `#include` — the argument as written in the directive (`conf.d/extra`,
+  `reference`, `https://…`), not the URL it resolves to. A `file` argument is therefore relative to
+  the including file, not to the working directory or the top-level source.
+
+The same written name can stand for different files when two files in different directories include
+it; the location does not disambiguate them. Accepted: the including file is one step away, and an
+error inside an include can name the include chain if that turns out to be needed.
+
+**Line and column are 1-based**, as in the YAML backend. **The column counts code points**, not
+UTF-16 units: `é`, `ж` and `😀` are one column each, so the number matches what an editor shows
+rather than `String.length`. A tab is one column. A line ends at LF or CRLF (§3); the CR of a CRLF is
+not part of the line.
 
 A node produced by a substitution carries **both** sites: the reference site as its primary
 coordinates, and the location of the node it was taken from. `Location` is an open trait in `cfg`, so
@@ -317,7 +519,7 @@ ReferenceLocation(b-site, "c", SourceLocation(c-site)))`. The environment and sy
 a location of their own instead of a fake file position.
 
 `description` puts the reference site first, because that is where the reader has to go:
-`app.conf:12:9 (${db.url} from base.conf:3:7)`.
+`file:/etc/app/app.def:12:9 (${db.url} from base.def:3:7)`.
 
 **Grafted containers.** With `a: ${server}`, *every* node in the grafted subtree gets a
 `ReferenceLocation` — the reference site of `a`, the path it was taken by (`server.port`), and that
@@ -363,10 +565,11 @@ mistake is worse than stopping.
 - Unlike the hocon and yaml backends, which wrap a foreign structure lazily, this module owns its
   data: phase 5 builds immutable `Map`/`Vector` structures once, and `MapImpl`/`SeqImpl` are thin
   views over them.
-- Cross-built for 2.13 and 2.12. A hand-written lexer is exactly the kind of code that reaches for
-  2.13-only collection methods; `scala-collection-compat` is already wired in for 2.12.
-- `-Xfatal-warnings` is on, so exhaustiveness in the parser's pattern matches is enforced rather
-  than merely intended.
+- Cross-built for 2.13, 2.12 and 3.9, from one source tree in Scala 2 style that Scala 3 accepts. A
+  hand-written lexer is exactly the kind of code that reaches for 2.13-only collection methods;
+  `scala-collection-compat` is already wired in for 2.12.
+- Warnings are fatal on every version (`-Xfatal-warnings` on 2.x, `-Werror` on 3), so exhaustiveness
+  in the parser's pattern matches is enforced rather than merely intended.
 
 ## 13. Open questions
 
@@ -403,7 +606,7 @@ mistake is worse than stopping.
    - `key:` at the end of a line, followed by a deeper-indented line, opens a block — the Scala 3
      rule for `:` at the end of a line, and what `key:` would lead a reader to expect anyway. A bare
      key alone on a line stays an error.
-   - A container tag goes after `:`: `routes: !ordered`, block on the next line.
+   - A container tag goes after `:`: `routes: @ordered`, block on the next line.
    - Blank lines and comment-only lines do not take part in indentation.
 
    Open:
@@ -420,8 +623,25 @@ mistake is worse than stopping.
      mitigation (fixed width above is one).
    - **Opt-in.** Enabled everywhere automatically, or per file (a directive, or a separate extension).
 
-   Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
-   indentation can claim it later.
+   Constraint on v1 meanwhile: leading whitespace must carry no meaning for the structure, so that
+   indentation can claim it later without changing what a v1 file means. Inside a triple-quoted
+   string it is content (§5); the explicit width reads the indent of its opening line, which keeps
+   meaning the same under either syntax.
+3. ~~**Multi-line strings**~~ — closed in session 7: reopened by the user and settled point by
+   point (§5, §14).
+4. **Templates in the direction of StringTemplate 4.** Raised by the user in session 7: substitutions
+   stay as they are in v1, but the way forward is to look at ST4's ideas. Nothing is decided yet.
+   Noted so far:
+   - **Delimiters chosen per template.** ST4 lets a template use `<…>` or `$…$`, whichever does not
+     clash with its content. The case for it: a shell script, a Helm template or a Spring config in
+     a `"""` block is full of `${`, each of which needs `\${` in v1. A marker on the opening quotes
+     could turn substitution off or change its syntax; markers do not combine in v1 (§5), and this
+     one would have to combine with the indent markers.
+   - **A template applied to a collection with a separator**, `<hosts; separator=",">`. This is the
+     job parked as value expressions (item 1, `${b} + ${c}`), so both may end up as one
+     mechanism.
+   - **Options inside `${…}`**, the user's idea: `${array; null="-1", separator=", "}`. Not in v1;
+     the syntax stays free, `;` being outside `Id.SafeKeyPattern`, so `${a; …}` is an error today.
 
 ## 14. Decision log
 
@@ -549,3 +769,178 @@ alternative listed here should not be re-proposed without new information.
   container definitions, Modula-2) barely overlap with a Scala project's resources.
 - **Correction to session 1:** `native` is not a Scala 2 keyword (Scala has the `@native` annotation,
   not a reserved word). The collision with Scala Native alone is enough to keep it rejected.
+
+### Session 4 — 2026-10-15
+
+- **`<source>` in a location is the source as it was named** (§10): the full URL for a source given
+  to the loader, the argument as written for an include. The user's call — "the full URL or a
+  relative path" — refined into this rule. Rejected: the full resolved URL everywhere (long, and an
+  include shows up under a name its author never wrote); the file name alone (ambiguous across
+  directories and meaningless for a URL or a resource); a path relative to the working directory
+  (includes resolve against the including file, never the working directory, §6).
+- **Line and column 1-based, column in code points, tab = 1** (§10). The user's call, on the
+  recommendation. Rejected: UTF-16 units — what `String.length` gives, but an astral character such
+  as an emoji counts twice and the column drifts from what the editor shows. Not discussed: grapheme
+  clusters (`e` + combining accent as one column) — they need `BreakIterator`, and editors disagree
+  about them anyway.
+
+### Session 5 — 2026-10-24
+
+- **Backticks for names, double quotes for values** (§3). The user's proposal, after weighing SQL's
+  separate identifier quotes. A key — in a field, a dotted key, a `${…}` path or a tag — is bare when
+  it matches `Id.SafeKeyPattern` and in `` `…` `` otherwise; `"…"` is only a scalar, and `"port": 1`
+  is an error. Gained: the role of a token is lexical, a name in value position stays free for
+  later syntax, and paths, tags and directive arguments read by one rule. Paid: `Id.quote` in `cfg`
+  moves to backticks, changing the paths every loader prints (accepted by the user); JSON and HOCON
+  habits break (intended — strictness is preferred over compatibility with HOCON and YAML); inline
+  code in the Markdown docs needs double backticks. Rejected: `"…"` for keys, as before — position
+  already tells a key from a value, but it closes value position to names for good. Supersedes
+  session 2's `"a.b"` example; the indivisibility it records stands.
+- **A quoted safe key is allowed**: `` `port` `` is `port`. The user's call — it does not weaken
+  strictness, and a generator of configs need not reproduce `SafeKeyPattern`.
+- **No raw newline inside `` `…` `` or `"…"`.** Agreed on the recommendation.
+- **Tag names follow the key rule; a quoted tag is taken verbatim**, like YAML's `!<…>`. Agreed; the
+  prefix and the string in `ISome.tag` were settled later the same session (below).
+- **Backslash escapes inside backticks**, the same set as in `"…"` (§3). The user's call, on the
+  recommendation: one escape grammar for the whole language, and every string representable, which
+  the round-trip property of `Id.path` needs. Rejected: doubling as in SQL (``` `my ``key`` ``` for
+  ``my `key` ``) — a second mechanism beside the backslashes of `"…"`, and with raw newlines
+  forbidden a key holding a control character could not be written at all; both forms at once —
+  two spellings of one thing. Both quotes being escapable in both forms follows from the one set.
+- **Comments are `//` and nesting `/* */`; `/** */` is reserved for doc comments** (§3). The user's
+  call. Reasons: C-style comments suit the user's taste better than `#`, which reads as a scripting
+  language, and DEF is meant as a base for DSLs, which may want documented configuration — `/** */`
+  is the familiar form, `#` has none (`##` would be weak). Comments open only outside an unquoted
+  scalar, so URLs need no quotes, at the price of `a: 1//x` being one scalar; values starting with
+  `//` or `/*` (globs) need quotes. Block comments nest, as in Scala. Doc comments are positioned
+  and kept as tokens from v1, so that giving them meaning later breaks nothing. Rejected: `#`, the
+  session 1 choice, and with it the "deliberately one comment form" rule.
+- **`ISome.tag` holds the tag's name only**, without the prefix or the quotes (§5). The user's call:
+  both are syntax of the format and meaningless in the value. `impl/yaml` drops the leading `!` to
+  match, a breaking change to `cfg-yaml`. Rejected: keeping YAML's `!` (the string would depend on
+  the syntax that wrote it); letting DEF and YAML differ.
+- **Tags need a prefix.** Rejected: `key: tag value`, unambiguous since an unquoted scalar holds no
+  whitespace, because it takes over the position the "stray word is an error" rule guards:
+  `greeting: Hello world` with forgotten quotes would become tag `Hello`, `[a b]` with a forgotten
+  comma one tagged element, and in `level: debug info` a reader cannot tell which word is the tag.
+  **Reopened** by the user later the same session, then closed again: the prefix stays. Tags may
+  become several per node, as CSS classes are, and `a b value` cannot be read with more than one.
+- **Tags take `@`, directives take `#`** (§5, §6). The user's proposal, swapping the session 1
+  directive prefix. Tags are metadata on a value, as annotations are on a class (`@a @b value` reads
+  as stacked annotations); directives are expanded during parsing, as by the C preprocessor
+  (`#include`). Values starting with `@` or `#` are quoted, which the user accepted. `@name(` is an
+  error for now, so arguments to tags stay available. Rejected: `!` (YAML's, no merit left once the
+  tag string dropped it), `#` for tags with `@` directives, and no prefix (above). Pasted YAML
+  comments fail loudly either way.
+
+### Session 6 — 2026-10-26
+
+- **The reason behind all of the below** (§5): the low-level protocol gives tags no meaning; the
+  meaning of tags and how different tags merge are left to the higher level, so the rules here are
+  the neutral, lossless ones. The user's statement, recorded so it is not forgotten.
+- **Several tags per node, as a set** (§5). The user's call. Order carries no meaning, as with CSS
+  classes; `ISome.tag: Option[String]` becomes `ISome.tags: Set[String]` in step 2 of the plan,
+  together with the `!` change, so the API breaks once. Rejected: the user's own candidate from
+  session 5, a tag that is one collection-valued annotation (`@[a, b]`) merging as a sequence does
+  — it keeps "later wins" and order, and the user preferred classes that accumulate.
+- **A merge takes the union of tags** (§7), replacing session 3's "the later tag if written, the
+  earlier one otherwise", which existed only because a node had one slot.
+- **A graft adds the written tags to the grafted node's** (§9). The user's call: the same union as
+  in a merge.
+- **`:=` is the only way to drop an inherited tag in v1; `@-name` is reserved** for a finer way
+  (§5). The user's call. Free because a bare tag name cannot start with `-`; a backticked one can
+  and stays an ordinary tag.
+- **A tag written twice on one value collapses into one** (§5). The user's call; a set has no
+  duplicates to report.
+- **A concatenation carries only the tags written before it** (§9). The user's call: it is a new
+  value, not a graft, so the tags of the referenced scalars do not reach it.
+
+### Session 7 — 2026-10-30
+
+- **A directive name follows the key rule** (§6): bare when it matches `Id.SafeKeyPattern`, in
+  backticks otherwise. The user's call — the same rule as for every other name.
+- **`${` is a substitution in every kind of scalar, quoted ones included; a literal one is `\${`**
+  (§3). The user's call, after a misunderstanding earlier in the session recorded the opposite.
+  Rejected: HOCON's rule, under which `${` inside quotes is literal and a substitution has to stand
+  outside them (`"jdbc:"${host}`). `\$` joins the shared escape set; backticks hold no
+  substitutions. `"""…"""` substitutes too; its literal `${` is left to the revision of multi-line
+  strings.
+- **Substitutions stay as they are in v1; templating to be looked at in the direction of
+  StringTemplate 4** (§13). The user's call.
+- **A byte order mark at the start of a source is skipped** (§3). The user's call. Rejected: an
+  error — editors on Windows still write one, and it carries no meaning in UTF-8.
+- **A tag may precede a multi-line string** (§5). The user's call; the grammar in §4 allowed it
+  already, the plan asked to confirm it.
+- **Multi-line strings reopened** by the user, to be thought through again before step 2 lexes
+  them (§13).
+- **The final newline of a multi-line string is explicit** (§5): the newline before the closing
+  `"""` is dropped, symmetrically with the one after the opening, and a value that ends in `\n`
+  has an empty line before the delimiter. The user's idea. Rejected: YAML's `|` / `|-` / `|+`
+  markers, and Java's rule that the closing `"""` on its own line keeps the newline — both make an
+  invisible detail decide the value.
+- **Multi-line strings keep `"""`** (§5). Considered at the user's suggestion: a single `"` followed
+  by the end of the line opening a multi-line string, since that newline is dropped anyway.
+  Rejected, with the user's agreement: a `"` in the value would then close it, so the string either
+  needs `\"` and loses being raw (a regex's `\d` becomes an error, §3) or cannot hold a `"` at all;
+  a stray `key: "` would swallow the file up to the next quote instead of failing on its own line
+  (§3, §11); and a space after the `"` would decide the mode invisibly.
+- **Two forms of `"""`, block and one line** (§5). A block needs the end of the line right after the
+  opening delimiter; text there makes a one-line string, which must close on the same line, and a newline in it is an error. The user's call, on a proposal: a first
+  line after the delimiter has no column in common with the rest, which is what forces
+  `stripMargin` on Scala and `dedent` on Python, while forbidding the one-line form outright would
+  leave a regex with no way to be written without escapes. **Both forms substitute `${…}`** — the
+  user's point: a one-line form that did not would mislead. They differ in layout only; the literal
+  `${` stays open for both (§13).
+- **A run of more than three quotes closes at its last three** (§5), Scala's rule, so a value can
+  end in `"`. The user's call, on a proposal.
+- **Whitespace between the opening `"""` of a block and the end of its line is an error** (§5), not
+  fatal. The user's call, replacing the proposal to ignore it: it is invisible, and the slot after
+  the delimiter is wanted for markers (§13).
+- **Indent markers after the opening `"""` of a block** (§5): `<` strips all leading whitespace, `|`
+  the first line's indent, `=` none, `>` folds as in YAML; no marker is Java's rule, the closing
+  delimiter's column counting. The user's idea and choice of symbols. Rejected: `>` for keeping
+  whitespace, which a YAML reader would take for folding.
+- **The newline rules hold under every marker** (§5) — markers change leading whitespace only. The
+  user's call, on a proposal.
+- **Indents compare character by character; a mismatch is an error** (§5), including a line under
+  `|` indented less than the first. The user's call, on a proposal.
+- **An explicit indent width as in YAML** (§13): the user's pick over the closing delimiter's column
+  for keeping a deliberate indent — which is kept as well, as the rule for no marker.
+- **Folding under `>` follows YAML** (§5): the indent stripped as with no marker first, a deeper
+  indented line left unfolded, an empty line a newline. The user's call, on a proposal.
+- **The width counts from the indent of the opening line**, as in YAML (§5). The user's call, after
+  an example: an absolute width — that many characters stripped — changes the value silently when a
+  formatter shifts the block. The proposal's argument for it, that leading whitespace outside a
+  string must carry no meaning (§13 item 2), was overstated: that constraint keeps v1 files from
+  changing meaning once indentation arrives, and the indent of the opening line stays its indent
+  under either syntax. Written `"""N` or `""">N`, N from 1 to 9 as in YAML.
+- **Markers do not combine**, but for a width after `>` (§5). The user's call, on a proposal.
+- **`"""|` dropped** (§5), on the user's question of how it differs from no marker. It gives the same
+  value except where the first line is deeper than the rest (an error under `|`) or the closing
+  delimiter stands left of the text (ignored under `|`): a weaker copy of the rule for no marker,
+  whose only gain — independence from the closing delimiter — the explicit width gives more
+  robustly. The user's call. `|` stays free, being an unknown marker; the candidate for it later is
+  a margin as in Scala's `stripMargin`, each line starting with `|` after its indent.
+- **Trailing whitespace is stripped from every line of a block** (§5), as Java does — under every
+  marker, `=` included, which is about leading whitespace only; before folding; in the source text,
+  so a substituted value keeps its own. The one-line form keeps it. The user's call: a value that
+  needs trailing whitespace is exotic, and invisible spaces are a common source of bugs.
+- **A CRLF in a block becomes LF in the value** (§5), as in Java; a substituted value keeps its own.
+  The user's call. Rejected: keeping the file's newlines, which makes the value depend on the
+  editor and on git's `core.autocrlf`.
+- **A triple-quoted string takes no part in a concatenation** (§5, §9), in either form and on either
+  side; what may follow it is what follows any value. The user's call: a substitution goes inside
+  the quotes, which substitute anyway, and nothing else was seen to need the slot. An error with
+  that hint, rather than silence, so the slot stays free.
+- **`\"""` is the single escape of a triple-quoted string** (§5), as in Java; any other `\` stays
+  literal. The user's call, on a proposal. Its cost: a `\` right before the closing delimiter
+  escapes it, so a value ending in `\` needs the block form or `"…"`.
+- **`\${` is the second escape of a triple-quoted string** (§5), the same as in `"…"`. The user's
+  call, on a proposal. Turning substitution off for a whole block, which a script full of `${`
+  wants, is left to templating (§13 item 4). With this §13 item 3 is closed.
+- **Options inside `${…}` noted for later** (§13 item 4): `${array; null="-1", separator=", "}`. The
+  user's idea, explicitly not in v1.
+- **Indices in substitution paths** (§9): `${x.y[7].z}` is valid. The user's call, closing a gap of
+  step 4. The rest follows from the round-trip promise of §3 — a path inside `${…}` is exactly what
+  `Id.path` renders, so an index has no sign and no leading zeros; an index out of range is treated
+  as a missing key.
