@@ -154,7 +154,10 @@ so it merges; replacing a block is written `key := { … }`.
 **Sequences** — `[a, b, c]`; a newline also separates, and a trailing separator is allowed.
 
 **Triple-quoted scalars** — `"""…"""`, taken raw: no escape processing, so PEM blocks, regexes
-and SQL survive untouched — except `${…}`, which is substituted here as in any scalar (§3, §9).
+and SQL survive untouched — except `${…}`, which is substituted here as in any scalar (§3, §9), and
+the single escape `\"""`, which stands for a literal `"""`. Any other `\` is an ordinary
+character. A `\` right before the closing delimiter therefore escapes it: a value ending in `\` is
+written as a block with the delimiter on its own line, or as `"…\\"`.
 The whole section is under revision (§13). What follows the opening delimiter picks one of two
 forms, which differ in layout only — the content rules above are the same in both:
 
@@ -618,8 +621,7 @@ mistake is worse than stopping.
    it is revised, but step 2 of the plan does not lex `"""` before this is settled. Questions
    collected so far, none discussed yet:
    - **A literal `${`**: `"""` substitutes but has no escapes. Possibly answered by item 4.
-   - **A literal `"""`** inside the string: raw means there is no way to write it today, the same
-     gap Scala has.
+   - ~~**A literal `"""`**~~ Settled (§5): `\"""`, the single escape.
    - ~~**The final newline.**~~ Settled (§5): the newline before the closing `"""` is dropped like
      the one after the opening, so a final newline is an explicit empty line. The closing
      delimiter's position no longer decides it, which takes that half of the Java model off the
@@ -946,3 +948,6 @@ alternative listed here should not be re-proposed without new information.
   side; what may follow it is what follows any value. The user's call: a substitution goes inside
   the quotes, which substitute anyway, and nothing else was seen to need the slot. An error with
   that hint, rather than silence, so the slot stays free.
+- **`\"""` is the single escape of a triple-quoted string** (§5), as in Java; any other `\` stays
+  literal. The user's call, on a proposal. Its cost: a `\` right before the closing delimiter
+  escapes it, so a value ending in `\` needs the block form or `"…"`.
