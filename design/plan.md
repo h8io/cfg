@@ -160,8 +160,8 @@ tag before `"""` (§3, §5, §6).
 
 ### 4. Parser: substitutions and directives
 
-- `${path}`, `${?path}`, and concatenations whose parts touch (`"jdbc:"${host}"/db"`); a space between
-  parts is an error (§9). A `${…}` inside `"…"` or `"""…"""` makes the string a concatenation too.
+- `${path}`, `${?path}`, and concatenations — a scalar with `${…}` inside (`jdbc:${host}/db`,
+  `"jdbc:${host}/db"`); two values side by side, `"jdbc:"${host}`, are an error with a hint (§9).
 - Directives in statement and value position, arguments `name = literal` separated by `,`/newline,
   literals: strings, bare identifiers, `true`/`false`, integers; `${…}` in an argument is an error
   (§6). The Ast only — nothing is expanded yet.
