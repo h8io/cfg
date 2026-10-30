@@ -191,10 +191,32 @@ The indent rule is picked by a marker between the opening delimiter and the end 
 | `"""<` | all of it is stripped |
 | `"""\|` | the first non-blank line's indent is stripped |
 | `"""=` | kept as written |
-| `""">` | folded, as YAML's `>` — details open (§13) |
+| `""">` | as with no marker, then folded (below) |
 
 A marker must end its line, so `"""<x"""` is a one-line string holding `<x`, and an unknown one is
-an error. An explicit indent width is given as in YAML (§13).
+an error. Markers do not combine, with one exception: an explicit width, below.
+
+**Folding** under `""">` comes after the indent is stripped by the rule for no marker. As in YAML,
+a newline between two lines at the common indent becomes a space, an empty line becomes a newline,
+and a line indented deeper is not folded — neither it nor the newlines around it — so a list or a
+code sample inside prose survives.
+
+**An explicit width** is a digit from 1 to 9 after the delimiter, `"""2`, or after `>`, `""">2`. As
+in YAML it counts from the indent of the line holding the opening delimiter: that indent and then N
+whitespace characters are stripped from every non-blank line, and a line that does not start with
+them is an error. The closing delimiter's column does not count then. Counting from that line
+keeps the value when a formatter shifts the whole block:
+
+```
+server {
+  banner: """2
+      abc
+    """
+}
+// value: "  abc" — 2 + 2 stripped; nested one level deeper, 4 + 2, the same value
+```
+
+A width with any other marker is an error: `<`, `|` and `=` fix the indent themselves.
 
 Indents are compared character by character, so a tab never matches a space. Under `"""|`, a line
 whose indent does not start with the first line's is an error. Under no marker, two indents of
@@ -593,20 +615,13 @@ mistake is worse than stopping.
      delimiter's position no longer decides it, which takes that half of the Java model off the
      table.
    - ~~**Deliberate indentation.**~~ Settled (§5): with no marker the closing delimiter's column
-     counts, as in Java; an explicit width as in YAML is to come (below).
+     counts, as in Java; or an explicit width, as in YAML.
    - ~~**Tabs mixed with spaces**~~ Settled (§5): compared character by character, a mismatch is an
      error.
    - **Trailing whitespace** on a line: kept, the string being raw, or stripped, as Java does.
      Invisible spaces in a value are a common source of bugs.
-   - ~~**Indent markers**~~ Settled (§5): `<`, `|`, `=`, `>` after the opening `"""`. Still open:
-     - **Folding under `>`**: which indent rule it folds after; whether more-indented lines stay
-       unfolded, as in YAML; how an empty line folds.
-     - **Explicit width, as YAML's `|2`**: how it is written (a digit alone, `"""2`, or after a
-       marker, `""">2`), and what it counts from. YAML counts from the parent node's indent; DEF
-       cannot without giving leading whitespace outside a string a meaning (§13 item 2), so the
-       count would be absolute — exactly that many leading characters stripped, a shorter
-       non-blank line an error.
-     - **Combining markers** at all, beyond the width.
+   - ~~**Indent markers**~~ Settled (§5): `<`, `|`, `=`, `>` after the opening `"""`, folding as in
+     YAML, an explicit width relative to the opening line.
    - ~~**Text right after the opening `"""`**~~ Settled (§5): a block starts on the next line; text
      after the delimiter makes a one-line string, which must close on its line.
    - **CRLF in the value**: normalised to LF, or kept as in the file, which makes the value depend on
@@ -897,3 +912,12 @@ alternative listed here should not be re-proposed without new information.
   `|` indented less than the first. The user's call, on a proposal.
 - **An explicit indent width as in YAML** (§13): the user's pick over the closing delimiter's column
   for keeping a deliberate indent — which is kept as well, as the rule for no marker.
+- **Folding under `>` follows YAML** (§5): the indent stripped as with no marker first, a deeper
+  indented line left unfolded, an empty line a newline. The user's call, on a proposal.
+- **The width counts from the indent of the opening line**, as in YAML (§5). The user's call, after
+  an example: an absolute width — that many characters stripped — changes the value silently when a
+  formatter shifts the block. The proposal's argument for it, that leading whitespace outside a
+  string must carry no meaning (§13 item 2), was overstated: that constraint keeps v1 files from
+  changing meaning once indentation arrives, and the indent of the opening line stays its indent
+  under either syntax. Written `"""N` or `""">N`, N from 1 to 9 as in YAML.
+- **Markers do not combine**, but for a width after `>` (§5). The user's call, on a proposal.
