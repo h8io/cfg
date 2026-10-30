@@ -10,7 +10,7 @@ private[hocon] final case class MapImpl[+I <: Id](id: I, underlying: ConfigObjec
     if (underlying.containsKey(key.key)) wrap(key, underlying.get(key.key))
     else Node.None(key, this)
 
-  override def tag: Option[String] = None
+  override def tags: Set[String] = Set.empty
 
   override def iterator: Iterator[Node.ISome[Id.Key]] =
     underlying.entrySet.iterator.asScala.map(e => wrap(Id.Key(e.getKey, id), e.getValue))

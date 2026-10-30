@@ -278,7 +278,7 @@ so there is no need for `!!`. A tag may precede any value, a multi-line string i
 `query: @sql """…"""`.
 
 `impl/yaml` follows the same rule and drops the leading `!` of a tag (`!postgres` gives `postgres`, `!!int` still `tag:yaml.org,2002:int`) — a breaking change to
-`cfg-yaml`, made in step 2 of the plan. It merges YAML's `!foo` and `!<foo>`, two different tags in
+`cfg-yaml`, made in step 2a of the plan. It merges YAML's `!foo` and `!<foo>`, two different tags in
 YAML, into one name; the protocol accepts that.
 
 Only tags written in the source reach `ISome.tags`; nothing is ever inferred, and there is no
@@ -297,7 +297,7 @@ need, and they pre-empt none of its choices — that level can still give two ta
 order or a "later wins" of its own.
 
 In the protocol `ISome.tag: Option[String]` becomes `ISome.tags: Set[String]`, empty when nothing
-was written — a change to `cfg` and every loader, made in step 2 of the plan together with the `!`
+was written — a change to `cfg` and every loader, made in step 2a of the plan together with the `!`
 above, so the API breaks once. `impl/hocon` always gives the empty set, `impl/yaml` at most one
 element, YAML allowing one tag per node.
 

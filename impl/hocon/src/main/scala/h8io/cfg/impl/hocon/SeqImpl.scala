@@ -10,7 +10,7 @@ private[hocon] final case class SeqImpl[+I <: Id](id: I, underlying: ConfigList)
     if (index.fits(underlying.size)) wrap(index, underlying.get(index.index))
     else Node.None(index, this)
 
-  override def tag: Option[String] = None
+  override def tags: Set[String] = Set.empty
 
   override def iterator: Iterator[Node.ISome[Id.Index]] =
     underlying.iterator.asScala.zipWithIndex.map { case (value, i) => wrap(Id.Index(i, id), value) }

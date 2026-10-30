@@ -9,13 +9,13 @@ import org.scalatest.matchers.should.Matchers
 class MapImplTest extends AnyFlatSpec with Matchers with Inside {
   "apply" should "return a Node.Scalar object" in
     inside(MapImpl(Id.Root, yaml"scalar: 42")("scalar")) {
-      case Node.Scalar(Id.Key("scalar", Id.Root), None, "42", location) =>
+      case Node.Scalar(Id.Key("scalar", Id.Root), NoTags, "42", location) =>
         location.description shouldBe s"$Label: 1:9"
     }
 
   it should "return a Node.Null object" in {
     MapImpl(Id.Root, yaml"scalar: ~")("scalar") should matchPattern {
-      case Node.Null(Id.Key("scalar", Id.Root), None, _) =>
+      case Node.Null(Id.Key("scalar", Id.Root), NoTags, _) =>
     }
   }
 
@@ -29,8 +29,8 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside {
       val id = seq.id
       seq.iterator.map {
         inside(_) {
-          case Node.Scalar(Id.Index(_, `id`), None, scalar, _) => Some(scalar)
-          case Node.Null(Id.Index(_, `id`), None, _) => None
+          case Node.Scalar(Id.Index(_, `id`), NoTags, scalar, _) => Some(scalar)
+          case Node.Null(Id.Index(_, `id`), NoTags, _) => None
         }
       }.toList should contain theSameElementsInOrderAs List(Some("a"), None, Some("b"))
     }
@@ -39,8 +39,8 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside {
     inside(MapImpl(Id.Root, yaml"map: {a: ~, b: c}")("map")) { case map: Node.IMap[?] =>
       map.iterator.map {
         inside(_) {
-          case Node.Scalar(Id.Key(key, Id.Key("map", Id.Root)), None, scalar, _) => key -> Some(scalar)
-          case Node.Null(Id.Key(key, Id.Key("map", Id.Root)), None, _) => key -> None
+          case Node.Scalar(Id.Key(key, Id.Key("map", Id.Root)), NoTags, scalar, _) => key -> Some(scalar)
+          case Node.Null(Id.Key(key, Id.Key("map", Id.Root)), NoTags, _) => key -> None
         }
       }.toList should contain theSameElementsInOrderAs List("a" -> None, "b" -> Some("c"))
     }
@@ -51,15 +51,15 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside {
 dup: 1
 other: x
 dup: 2
-""")("dup") should matchPattern { case Node.Scalar(Id.Key("dup", Id.Root), None, "2", _) => }
+""")("dup") should matchPattern { case Node.Scalar(Id.Key("dup", Id.Root), NoTags, "2", _) => }
   }
 
   "tag" should "return None when the source carries no tag" in {
-    MapImpl(Id.Root, yaml"a: 1").tag shouldBe None
+    MapImpl(Id.Root, yaml"a: 1").tags shouldBe Set.empty
   }
 
   it should "return the tag written in the source" in {
-    MapImpl(Id.Root, yaml"!postgres {a: 1}").tag shouldBe Some("!postgres")
+    MapImpl(Id.Root, yaml"!postgres {a: 1}").tags shouldBe Set("postgres")
   }
 
   "iterator" should "return a correct sequence of nodes" in {
@@ -70,8 +70,8 @@ b: c
 "null": "null"
 """).iterator.map {
       inside(_) {
-        case Node.Scalar(Id.Key(key, Id.Root), None, scalar, _) => key -> Some(scalar)
-        case Node.Null(Id.Key(key, Id.Root), None, _) => key -> None
+        case Node.Scalar(Id.Key(key, Id.Root), NoTags, scalar, _) => key -> Some(scalar)
+        case Node.Null(Id.Key(key, Id.Root), NoTags, _) => key -> None
       }
     }.toList should contain theSameElementsInOrderAs List("a" -> None, "b" -> Some("c"), "null" -> Some("null"))
   }
@@ -83,7 +83,7 @@ dup: 1
 other: x
 dup: 2
 """).iterator.map {
-      inside(_) { case Node.Scalar(Id.Key(key, Id.Root), None, scalar, _) => key -> scalar }
+      inside(_) { case Node.Scalar(Id.Key(key, Id.Root), NoTags, scalar, _) => key -> scalar }
     }.toList should contain theSameElementsInOrderAs List("other" -> "x", "dup" -> "2")
   }
 
@@ -112,8 +112,8 @@ a: 1
   }
 
   it should "keep the tag of the source mapping" in {
-    (MapImpl(Id.Root, yaml"!postgres {a: 1, b: 2}") - "a").tag shouldBe Some("!postgres")
-    (MapImpl(Id.Root, yaml"{a: 1, b: 2}") - "a").tag shouldBe None
+    (MapImpl(Id.Root, yaml"!postgres {a: 1, b: 2}") - "a").tags shouldBe Set("postgres")
+    (MapImpl(Id.Root, yaml"{a: 1, b: 2}") - "a").tags shouldBe Set.empty
   }
 
   it should "return the existent node if key does not exist" in {

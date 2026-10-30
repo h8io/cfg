@@ -5,6 +5,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class NodeTest extends AnyFlatSpec with Matchers with MockFactory {
+  private val NoTags: Set[String] = Set.empty
+
   "None" should "be created successfully" in {
     val key = Id.Key("unexistent", Id.Root)
     val parent = mock[Node.Map]
@@ -25,17 +27,17 @@ class NodeTest extends AnyFlatSpec with Matchers with MockFactory {
   "Null" should "be created successfully" in {
     val key = Id.Index(42, Id.Root)
     val location = mock[Location]
-    Node.Null(key, None, location) shouldBe Node.INull(key, None, location)
+    Node.Null(key, Set.empty, location) shouldBe Node.INull(key, Set.empty, location)
   }
 
   it should "be correctly extracted" in {
     val key = Id.Index(42, Id.Root)
     val location = mock[Location]
-    Node.INull(key, None, location) should matchPattern { case Node.Null(`key`, _, `location`) => }
+    Node.INull(key, Set.empty, location) should matchPattern { case Node.Null(`key`, _, `location`) => }
   }
 
   it should "be the node of its own error" in {
-    val nul = Node.INull(Id.Index(42, Id.Root), None, mock[Location])
+    val nul = Node.INull(Id.Index(42, Id.Root), Set.empty, mock[Location])
     nul.node should be theSameInstanceAs nul
   }
 
@@ -43,15 +45,15 @@ class NodeTest extends AnyFlatSpec with Matchers with MockFactory {
     val key = Id.Key("great-one", Id.Root)
     val value = "Cthulhu"
     val location = mock[Location]
-    Node.Scalar(key, None, value, location) shouldBe Node.IScalar(key, None, value, location)
+    Node.Scalar(key, Set.empty, value, location) shouldBe Node.IScalar(key, Set.empty, value, location)
   }
 
   it should "be correctly deconstructed" in {
     val key = Id.Key("great-one", Id.Root)
     val value = "Cthulhu"
     val location = mock[Location]
-    Node.IScalar(key, None, value, location) should
-      matchPattern { case Node.Scalar(`key`, None, `value`, `location`) => }
+    Node.IScalar(key, Set.empty, value, location) should
+      matchPattern { case Node.Scalar(`key`, NoTags, `value`, `location`) => }
   }
 
   "Map.isEmpty" should "return true if size is 0" in {

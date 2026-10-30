@@ -25,9 +25,9 @@ tagged-nothing: !!null ~
     val id = Id.Index(42, Id.Root)
     inside(wrap(id, value)) { case map: Node.IMap[?] =>
       map should be(MapImpl(id, value.asInstanceOf[MappingNode]))
-      map.tag shouldBe None
+      map.tags shouldBe Set.empty
       map.iterator.map {
-        inside(_) { case Node.Scalar(Id.Key(key, `id`), None, scalar, _) => key -> scalar }
+        inside(_) { case Node.Scalar(Id.Key(key, `id`), NoTags, scalar, _) => key -> scalar }
       }.toList should contain theSameElementsInOrderAs List("a" -> "x", "b" -> "y")
       map.location.description shouldBe s"$Label: 2:6"
     }
@@ -37,31 +37,31 @@ tagged-nothing: !!null ~
     val value = valueOf(config, "seq")
     inside(wrap(Id.Root, value)) { case seq: Node.ISeq[?] =>
       seq.iterator.zipWithIndex.map { case (node, i) =>
-        inside(node) { case Node.Scalar(Id.Index(`i`, Id.Root), None, scalar, _) => scalar }
+        inside(node) { case Node.Scalar(Id.Index(`i`, Id.Root), NoTags, scalar, _) => scalar }
       }.toList should contain theSameElementsInOrderAs List("1", "2", "3")
-      seq.tag shouldBe None
+      seq.tags shouldBe Set.empty
       seq.location.description shouldBe s"$Label: 3:6"
     }
   }
 
   it should "create a Node.Scalar object" in
-    inside(wrap(Id.Root, valueOf(config, "scalar"))) { case Node.Scalar(Id.Root, None, "42", location) =>
+    inside(wrap(Id.Root, valueOf(config, "scalar"))) { case Node.Scalar(Id.Root, NoTags, "42", location) =>
       location.description shouldBe s"$Label: 4:9"
     }
 
   it should "create a Node.Null object" in
-    inside(wrap(Id.Root, valueOf(config, "nothing"))) { case Node.Null(Id.Root, None, location) =>
+    inside(wrap(Id.Root, valueOf(config, "nothing"))) { case Node.Null(Id.Root, NoTags, location) =>
       location.description shouldBe s"$Label: 5:10"
     }
 
   it should "report the tag written in the source" in {
-    wrap(Id.Root, valueOf(config, "tagged-map")).tag shouldBe Some("!postgres")
-    wrap(Id.Root, valueOf(config, "tagged-seq")).tag shouldBe Some("!identifiers")
+    wrap(Id.Root, valueOf(config, "tagged-map")).tags shouldBe Set("postgres")
+    wrap(Id.Root, valueOf(config, "tagged-seq")).tags shouldBe Set("identifiers")
     wrap(Id.Root, valueOf(config, "tagged-scalar")) should matchPattern {
-      case Node.Scalar(Id.Root, Some("tag:yaml.org,2002:int"), "42", _) =>
+      case Node.Scalar(Id.Root, tags, "42", _) if tags == Set("tag:yaml.org,2002:int") =>
     }
     wrap(Id.Root, valueOf(config, "tagged-nothing")) should matchPattern {
-      case Node.Null(Id.Root, Some("tag:yaml.org,2002:null"), _) =>
+      case Node.Null(Id.Root, tags, _) if tags == Set("tag:yaml.org,2002:null") =>
     }
   }
 
@@ -71,8 +71,8 @@ tagged-nothing: !!null ~
       s"Unexpected ${anchor.getNodeType.toString} node at $Label: 4:9"
   }
 
-  "tagOf" should "return None for a tag the resolver inferred" in {
-    tagOf(valueOf(config, "scalar")) shouldBe None
+  "tagOf" should "return no tags for a tag the resolver inferred" in {
+    tagOf(valueOf(config, "scalar")) shouldBe Set.empty
   }
 
   "keyOf" should "return the string value of the key node" in {

@@ -71,7 +71,10 @@ Two-layer design: `cfg` is the low-level protocol (a format-agnostic ADT for con
 - `Node.ISome` — present nodes (Null, Scalar, Map, Seq)
 - `Node.INone` — a missing key; also a `NodeError`
 - `Node.INull` — an explicit null value; also a `NodeError`
-- `Node.IScalar` — a string value with an optional YAML tag and a `Location`
+- `Node.IScalar` — a string value with its tags and a `Location`
+
+Every `ISome` carries `tags: Set[String]` — the tags written in the source, by name only (`@x` in DEF, `!x` in YAML both
+give `x`), empty when none was written. `Id.path` renders a key that is not bare in backticks, as DEF writes it.
 - `Node.IMap` / `Node.ISeq` — container nodes; function-like (`key => INode`)
 
 `CfgError` / `NodeError` are traits for all error types; nodes that represent errors implement them directly.
@@ -99,13 +102,13 @@ Built-in decoders (all `implicit`, mixed in via `decoders` package object):
 
 ### HOCON loader (`h8io.cfg.impl.hocon`)
 
-`hocon.apply(urls: URL*)` parses and merges the given URLs (HOCON or YAML), loads the result through `ConfigFactory.load` (for substitution resolution), and wraps it as `Node.IMap[Id.Root]`. YAML support comes from `io.h8:typesafe-config-yaml` with `stringsOnly = true` (all scalars become strings). Tags are not set by the HOCON loader (`None` always).
+`hocon.apply(urls: URL*)` parses and merges the given URLs (HOCON or YAML), loads the result through `ConfigFactory.load` (for substitution resolution), and wraps it as `Node.IMap[Id.Root]`. YAML support comes from `io.h8:typesafe-config-yaml` with `stringsOnly = true` (all scalars become strings). Tags are not set by the HOCON loader (`tags` always empty).
 
 ### YAML loader (`h8io.cfg.impl.yaml`)
 
 `YAML.apply(urls: URL*)` composes each URL with `snakeyaml-engine` (YAML 1.2 core schema, so `~`/`Null`/`NULL` are nulls and `<<` merge keys work), overlays them in order, and wraps the result as `Node.IMap[Id.Root]`. Mappings merge recursively; scalars and sequences are replaced outright. No substitution step. A root that is not a mapping is an error; duplicate keys in a mapping collapse onto the last one.
 
-Unlike the HOCON loader this one sets `tag` — but only when the tag was *written* in the source, expanded through the tag handles in effect (`!!int` → `tag:yaml.org,2002:int`, `!postgres` stays `!postgres`). A tag the resolver inferred, and the non-specific `!`, both give `None`. `tagOf` reads this off `Node.isResolved` (public since snakeyaml-engine 3.2); `copyOf` must carry the flag over when it rebuilds a merged mapping.
+Unlike the HOCON loader this one sets `tags` — but only when the tag was *written* in the source, expanded through the tag handles in effect and without its leading `!` (`!!int` → `tag:yaml.org,2002:int`, `!postgres` and `!<postgres>` → `postgres`); at most one, YAML allowing one per node. A tag the resolver inferred, and the non-specific `!`, both give the empty set. `tagOf` reads this off `Node.isResolved` (public since snakeyaml-engine 3.2); `copyOf` must carry the flag over when it rebuilds a merged mapping.
 
 ## sbt 2
 
@@ -147,5 +150,6 @@ sbt 2 differs from sbt 1 in ways that matter here:
   `import a.b.*` for wildcards and `import a.b.{C as D}` for renames — never `._` or `{C => D}`. Max line length 120.
 - Scalac options include `-Xfatal-warnings`; all warnings are errors.
 - Use `def` not `val` for implicit/constant definitions.
-- Explicit `None` for HOCON tags (never omit or infer).
+- Explicit `Set.empty` for HOCON tags (never omit or infer). Tests match no tags with a stable `NoTags`, since
+  `Set.empty` cannot stand in a pattern.
 - Tests use ScalaTest + ScalaMock + ScalaCheck; Cats law tests use `discipline-scalatest`.

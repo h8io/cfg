@@ -1,5 +1,6 @@
 package h8io.cfg.impl.hocon
 
+import h8io.cfg.impl.hocon.context.*
 import com.typesafe.config.{ConfigList, ConfigObject, ConfigOrigin, ConfigRenderOptions}
 import h8io.cfg.impl.hocon.context.CfgContext
 import h8io.cfg.{Id, Node}
@@ -32,7 +33,7 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
 
   it should "return Node.Null" in {
     val list = hocon"""list: [three, two, one, null, one, two, three]""".toConfig.getList("list")
-    inside(SeqImpl(Id.Root, list)(3)) { case Node.Null(Id.Index(3, Id.Root), None, LocationImpl(origin)) =>
+    inside(SeqImpl(Id.Root, list)(3)) { case Node.Null(Id.Index(3, Id.Root), NoTags, LocationImpl(origin)) =>
       origin should be theSameInstanceAs list.get(3).origin
     }
   }
@@ -40,7 +41,7 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
   it should "return Node.Scalar" in {
     val list = hocon"""list: [three, two, one]""".toConfig.getList("list")
     inside(SeqImpl(Id.Root, list)(0)) {
-      case Node.Scalar(Id.Index(0, Id.Root), None, "three", LocationImpl(origin)) =>
+      case Node.Scalar(Id.Index(0, Id.Root), NoTags, "three", LocationImpl(origin)) =>
         origin should be theSameInstanceAs list.get(0).origin
     }
   }
@@ -53,10 +54,10 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
         val expectedOrigin = nested.get(i).origin
         val id = seq.id
         inside(value) {
-          case Node.Scalar(Id.Index(`i`, `id`), None, scalar, LocationImpl(origin)) =>
+          case Node.Scalar(Id.Index(`i`, `id`), NoTags, scalar, LocationImpl(origin)) =>
             origin should be theSameInstanceAs expectedOrigin
             Some(scalar)
-          case Node.Null(Id.Index(`i`, `id`), None, LocationImpl(origin)) =>
+          case Node.Null(Id.Index(`i`, `id`), NoTags, LocationImpl(origin)) =>
             origin should be theSameInstanceAs expectedOrigin
             None
         }
@@ -72,10 +73,10 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     inside(SeqImpl(Id.Root, list)(index)) { case map: Node.IMap[?] =>
       map.iterator.map { node =>
         inside(node) {
-          case Node.Scalar(Id.Key(key, Id.Index(`index`, Id.Root)), None, scalar, LocationImpl(origin)) =>
+          case Node.Scalar(Id.Key(key, Id.Index(`index`, Id.Root)), NoTags, scalar, LocationImpl(origin)) =>
             origin should be theSameInstanceAs obj.get(key).origin
             key -> Some(scalar)
-          case Node.Null(Id.Key(key, Id.Index(`index`, Id.Root)), None, LocationImpl(origin)) =>
+          case Node.Null(Id.Key(key, Id.Index(`index`, Id.Root)), NoTags, LocationImpl(origin)) =>
             origin should be theSameInstanceAs obj.get(key).origin
             key -> None
         }
@@ -85,7 +86,7 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
   }
 
   "tag" should "always return None" in {
-    SeqImpl(Id.Root, mock[ConfigList]).tag shouldBe None
+    SeqImpl(Id.Root, mock[ConfigList]).tags shouldBe Set.empty
   }
 
   "iterator" should "return a correct sequence of nodes" in {
@@ -93,10 +94,10 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     SeqImpl(Id.Root, list).iterator.zipWithIndex.map { case (node, i) =>
       val expectedOrigin = list.get(i).origin
       inside(node) {
-        case Node.Scalar(Id.Index(`i`, Id.Root), None, scalar, LocationImpl(origin)) =>
+        case Node.Scalar(Id.Index(`i`, Id.Root), NoTags, scalar, LocationImpl(origin)) =>
           origin should be theSameInstanceAs expectedOrigin
           Some(scalar)
-        case Node.Null(Id.Index(`i`, Id.Root), None, LocationImpl(origin)) =>
+        case Node.Null(Id.Index(`i`, Id.Root), NoTags, LocationImpl(origin)) =>
           origin should be theSameInstanceAs expectedOrigin
           None
       }

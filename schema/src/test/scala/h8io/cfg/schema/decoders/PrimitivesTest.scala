@@ -30,49 +30,49 @@ class PrimitivesTest extends AnyFlatSpec with Matchers with MockFactory with Sca
 
   "booleanDecoder" should "return a true value from scalar" in
     (caseIterator("true") ++ caseIterator("on") ++ caseIterator("yes")).foreach { value =>
-      booleanDecoder(Node.Scalar(Id.Root, None, value, mock[Location])) shouldBe true.valid
+      booleanDecoder(Node.Scalar(Id.Root, Set.empty, value, mock[Location])) shouldBe true.valid
     }
 
   it should "return a false value from scalar" in
     (caseIterator("false") ++ caseIterator("off") ++ caseIterator("no")).foreach { value =>
-      booleanDecoder(Node.Scalar(Id.Root, None, value, mock[Location])) shouldBe false.valid
+      booleanDecoder(Node.Scalar(Id.Root, Set.empty, value, mock[Location])) shouldBe false.valid
     }
 
   it should "return an error from non-boolean scalar" in {
-    val nonEmptyNode = Node.Scalar(Id.Root, None, "non-boolean", mock[Location])
+    val nonEmptyNode = Node.Scalar(Id.Root, Set.empty, "non-boolean", mock[Location])
     booleanDecoder(nonEmptyNode) shouldBe UnexpectedNode[Boolean](nonEmptyNode).invalid
-    val emptyNode = Node.Scalar(Id.Root, None, "", mock[Location])
+    val emptyNode = Node.Scalar(Id.Root, Set.empty, "", mock[Location])
     booleanDecoder(emptyNode) shouldBe errors.UnexpectedNode[Boolean](emptyNode).invalid
   }
 
   "byteDecoder" should "return a byte value from scalar" in
     forAll { (value: Byte) =>
-      byteDecoder(Node.Scalar(Id.Root, None, value.toString, mock[Location])) shouldBe value.valid
+      byteDecoder(Node.Scalar(Id.Root, Set.empty, value.toString, mock[Location])) shouldBe value.valid
     }
 
   it should "return an error for out of bounds values" in {
     val positiveNode =
-      Node.Scalar(Id.Root, None, (Byte.MaxValue.toLong + 1).toString, mock[Location])
+      Node.Scalar(Id.Root, Set.empty, (Byte.MaxValue.toLong + 1).toString, mock[Location])
     Decoder[Byte](positiveNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`positiveNode`, _: NumberFormatException)) =>
     }
     val negativeNode =
-      Node.Scalar(Id.Root, None, (Byte.MinValue.toLong - 1).toString, mock[Location])
+      Node.Scalar(Id.Root, Set.empty, (Byte.MinValue.toLong - 1).toString, mock[Location])
     Decoder[Byte](negativeNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`negativeNode`, _: NumberFormatException)) =>
     }
   }
 
   it should "return an error for invalid scalar value" in {
-    val alphaNode = Node.Scalar(Id.Root, None, "abc", mock[Location])
+    val alphaNode = Node.Scalar(Id.Root, Set.empty, "abc", mock[Location])
     Decoder[Byte](alphaNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`alphaNode`, _: NumberFormatException)) =>
     }
-    val emptyNode = Node.Scalar(Id.Root, None, "", mock[Location])
+    val emptyNode = Node.Scalar(Id.Root, Set.empty, "", mock[Location])
     Decoder[Byte](emptyNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`emptyNode`, _: NumberFormatException)) =>
     }
-    val floatNode = Node.Scalar(Id.Root, None, "1.1", mock[Location])
+    val floatNode = Node.Scalar(Id.Root, Set.empty, "1.1", mock[Location])
     Decoder[Byte](floatNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`floatNode`, _: NumberFormatException)) =>
     }
@@ -80,32 +80,32 @@ class PrimitivesTest extends AnyFlatSpec with Matchers with MockFactory with Sca
 
   "shortDecoder" should "return a short value from scalar" in
     forAll { (value: Short) =>
-      shortDecoder(Node.Scalar(Id.Root, None, value.toString, mock[Location])) shouldBe value.valid
+      shortDecoder(Node.Scalar(Id.Root, Set.empty, value.toString, mock[Location])) shouldBe value.valid
     }
 
   it should "return an error for out of bounds values" in {
     val positiveNode =
-      Node.Scalar(Id.Root, None, (Short.MaxValue.toLong + 1).toString, mock[Location])
+      Node.Scalar(Id.Root, Set.empty, (Short.MaxValue.toLong + 1).toString, mock[Location])
     Decoder[Short](positiveNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`positiveNode`, _: NumberFormatException)) =>
     }
     val negativeNode =
-      Node.Scalar(Id.Root, None, (Short.MinValue.toLong - 1).toString, mock[Location])
+      Node.Scalar(Id.Root, Set.empty, (Short.MinValue.toLong - 1).toString, mock[Location])
     Decoder[Short](negativeNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`negativeNode`, _: NumberFormatException)) =>
     }
   }
 
   it should "return an error for invalid scalar value" in {
-    val alphaNode = Node.Scalar(Id.Root, None, "abc", mock[Location])
+    val alphaNode = Node.Scalar(Id.Root, Set.empty, "abc", mock[Location])
     Decoder[Short](alphaNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`alphaNode`, _: NumberFormatException)) =>
     }
-    val emptyNode = Node.Scalar(Id.Root, None, "", mock[Location])
+    val emptyNode = Node.Scalar(Id.Root, Set.empty, "", mock[Location])
     Decoder[Short](emptyNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`emptyNode`, _: NumberFormatException)) =>
     }
-    val floatNode = Node.Scalar(Id.Root, None, "1.1", mock[Location])
+    val floatNode = Node.Scalar(Id.Root, Set.empty, "1.1", mock[Location])
     Decoder[Short](floatNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`floatNode`, _: NumberFormatException)) =>
     }
@@ -113,32 +113,32 @@ class PrimitivesTest extends AnyFlatSpec with Matchers with MockFactory with Sca
 
   "intDecoder" should "return an integer value from scalar" in
     forAll { (value: Int) =>
-      intDecoder(Node.Scalar(Id.Root, None, value.toString, mock[Location])) shouldBe value.valid
+      intDecoder(Node.Scalar(Id.Root, Set.empty, value.toString, mock[Location])) shouldBe value.valid
     }
 
   it should "return an error for out of bounds values" in {
     val positiveNode =
-      Node.Scalar(Id.Root, None, (Int.MaxValue.toLong + 1).toString, mock[Location])
+      Node.Scalar(Id.Root, Set.empty, (Int.MaxValue.toLong + 1).toString, mock[Location])
     Decoder[Int](positiveNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`positiveNode`, _: NumberFormatException)) =>
     }
     val negativeNode =
-      Node.Scalar(Id.Root, None, (Int.MinValue.toLong - 1).toString, mock[Location])
+      Node.Scalar(Id.Root, Set.empty, (Int.MinValue.toLong - 1).toString, mock[Location])
     Decoder[Int](negativeNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`negativeNode`, _: NumberFormatException)) =>
     }
   }
 
   it should "return an error for invalid scalar value" in {
-    val alphaNode = Node.Scalar(Id.Root, None, "abc", mock[Location])
+    val alphaNode = Node.Scalar(Id.Root, Set.empty, "abc", mock[Location])
     Decoder[Int](alphaNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`alphaNode`, _: NumberFormatException)) =>
     }
-    val emptyNode = Node.Scalar(Id.Root, None, "", mock[Location])
+    val emptyNode = Node.Scalar(Id.Root, Set.empty, "", mock[Location])
     Decoder[Int](emptyNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`emptyNode`, _: NumberFormatException)) =>
     }
-    val floatNode = Node.Scalar(Id.Root, None, "1.1", mock[Location])
+    val floatNode = Node.Scalar(Id.Root, Set.empty, "1.1", mock[Location])
     Decoder[Int](floatNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`floatNode`, _: NumberFormatException)) =>
     }
@@ -146,34 +146,34 @@ class PrimitivesTest extends AnyFlatSpec with Matchers with MockFactory with Sca
 
   "longDecoder" should "return a long value from scalar" in
     forAll { (value: Long) =>
-      longDecoder(Node.Scalar(Id.Root, None, value.toString, mock[Location])) shouldBe value.valid
+      longDecoder(Node.Scalar(Id.Root, Set.empty, value.toString, mock[Location])) shouldBe value.valid
     }
 
   private val BigIntOne = BigInt(1)
 
   it should "return an error for out of bounds values" in {
     val positiveNode =
-      Node.Scalar(Id.Root, None, (BigInt(Long.MaxValue) + BigIntOne).toString, mock[Location])
+      Node.Scalar(Id.Root, Set.empty, (BigInt(Long.MaxValue) + BigIntOne).toString, mock[Location])
     Decoder[Long](positiveNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`positiveNode`, _: NumberFormatException)) =>
     }
     val negativeNode =
-      Node.Scalar(Id.Root, None, (BigInt(Long.MinValue) - BigIntOne).toString, mock[Location])
+      Node.Scalar(Id.Root, Set.empty, (BigInt(Long.MinValue) - BigIntOne).toString, mock[Location])
     Decoder[Long](negativeNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`negativeNode`, _: NumberFormatException)) =>
     }
   }
 
   it should "return an error for invalid scalar value" in {
-    val alphaNode = Node.Scalar(Id.Root, None, "abc", mock[Location])
+    val alphaNode = Node.Scalar(Id.Root, Set.empty, "abc", mock[Location])
     Decoder[Long](alphaNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`alphaNode`, _: NumberFormatException)) =>
     }
-    val emptyNode = Node.Scalar(Id.Root, None, "", mock[Location])
+    val emptyNode = Node.Scalar(Id.Root, Set.empty, "", mock[Location])
     Decoder[Long](emptyNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`emptyNode`, _: NumberFormatException)) =>
     }
-    val floatNode = Node.Scalar(Id.Root, None, "1.1", mock[Location])
+    val floatNode = Node.Scalar(Id.Root, Set.empty, "1.1", mock[Location])
     Decoder[Long](floatNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`floatNode`, _: NumberFormatException)) =>
     }
@@ -181,20 +181,20 @@ class PrimitivesTest extends AnyFlatSpec with Matchers with MockFactory with Sca
 
   "floatDecoder" should "return a floating point value from scalar" in {
     forAll { (value: Float) =>
-      floatDecoder(Node.Scalar(Id.Root, None, value.toString, mock[Location])) shouldBe value.valid
+      floatDecoder(Node.Scalar(Id.Root, Set.empty, value.toString, mock[Location])) shouldBe value.valid
     }
-    floatDecoder(Node.Scalar(Id.Root, None, Double.MaxValue.toString, mock[Location])) shouldBe
+    floatDecoder(Node.Scalar(Id.Root, Set.empty, Double.MaxValue.toString, mock[Location])) shouldBe
       Float.PositiveInfinity.valid
-    floatDecoder(Node.Scalar(Id.Root, None, Double.MinValue.toString, mock[Location])) shouldBe
+    floatDecoder(Node.Scalar(Id.Root, Set.empty, Double.MinValue.toString, mock[Location])) shouldBe
       Float.NegativeInfinity.valid
   }
 
   it should "return an error for invalid scalar value" in {
-    val alphaNode = Node.Scalar(Id.Root, None, "abc", mock[Location])
+    val alphaNode = Node.Scalar(Id.Root, Set.empty, "abc", mock[Location])
     Decoder[Float](alphaNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`alphaNode`, _: NumberFormatException)) =>
     }
-    val emptyNode = Node.Scalar(Id.Root, None, "", mock[Location])
+    val emptyNode = Node.Scalar(Id.Root, Set.empty, "", mock[Location])
     Decoder[Float](emptyNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`emptyNode`, _: NumberFormatException)) =>
     }
@@ -204,22 +204,22 @@ class PrimitivesTest extends AnyFlatSpec with Matchers with MockFactory with Sca
 
   "doubleDecoder" should "return a double precision floating point value from scalar" in {
     forAll { (value: Double) =>
-      doubleDecoder(Node.Scalar(Id.Root, None, value.toString, mock[Location])) shouldBe value.valid
+      doubleDecoder(Node.Scalar(Id.Root, Set.empty, value.toString, mock[Location])) shouldBe value.valid
     }
     doubleDecoder(
-      Node.Scalar(Id.Root, None, (BigDecimal(Double.MaxValue) * BigDecimalTwo).toString, mock[Location])) shouldBe
+      Node.Scalar(Id.Root, Set.empty, (BigDecimal(Double.MaxValue) * BigDecimalTwo).toString, mock[Location])) shouldBe
       Double.PositiveInfinity.valid
     doubleDecoder(
-      Node.Scalar(Id.Root, None, (BigDecimal(Double.MinValue) * BigDecimalTwo).toString, mock[Location])) shouldBe
+      Node.Scalar(Id.Root, Set.empty, (BigDecimal(Double.MinValue) * BigDecimalTwo).toString, mock[Location])) shouldBe
       Double.NegativeInfinity.valid
   }
 
   it should "return an error for invalid scalar value" in {
-    val alphaNode = Node.Scalar(Id.Root, None, "abc", mock[Location])
+    val alphaNode = Node.Scalar(Id.Root, Set.empty, "abc", mock[Location])
     Decoder[Double](alphaNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`alphaNode`, _: NumberFormatException)) =>
     }
-    val emptyNode = Node.Scalar(Id.Root, None, "", mock[Location])
+    val emptyNode = Node.Scalar(Id.Root, Set.empty, "", mock[Location])
     Decoder[Double](emptyNode) should matchPattern {
       case Validated.Invalid(Decoder.Thrown(`emptyNode`, _: NumberFormatException)) =>
     }
