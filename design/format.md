@@ -158,7 +158,8 @@ and SQL survive untouched — except `${…}`, which is substituted here as in a
 The whole section is under revision (§13). What follows the opening delimiter picks one of two
 forms, which differ in layout only — the content rules above are the same in both:
 
-- **Block**: only whitespace up to the end of the line, which is ignored. The rules below apply.
+- **Block**: the end of the line right after the delimiter. Whitespace before it is an error, though
+  not a fatal one: it is reported and the block is read on. The rules below apply.
 - **One line**: anything else. The string must close on the same line and is taken as written,
   with no newline or indent processing: `pattern: """^\d+"$"""`. A newline before the closing
   delimiter is an error with a hint to start the block on the next line — a first line written
@@ -568,6 +569,11 @@ mistake is worse than stopping.
      character-by-character comparison.
    - **Trailing whitespace** on a line: kept, the string being raw, or stripped, as Java does.
      Invisible spaces in a value are a common source of bugs.
+   - **Indent markers on the opening delimiter**, proposed by the user in session 7: `"""<` strips
+     all leading whitespace, `"""|` strips the first line's indent, `""">` keeps it all; no marker
+     strips the common indent. A marker must end its line, so `"""<x"""` stays a one-line string.
+     Under discussion: `>` and `|` mean something else in YAML; a line indented less than the
+     first under `|`; whether the newline rules hold under `>`.
    - ~~**Text right after the opening `"""`**~~ Settled (§5): a block starts on the next line; text
      after the delimiter makes a one-line string, which must close on its line.
    - **CRLF in the value**: normalised to LF, or kept as in the file, which makes the value depend on
@@ -834,7 +840,7 @@ alternative listed here should not be re-proposed without new information.
   a stray `key: "` would swallow the file up to the next quote instead of failing on its own line
   (§3, §11); and a space after the `"` would decide the mode invisibly.
 - **Two forms of `"""`, block and one line** (§5). A block needs the end of the line right after the
-  opening delimiter (trailing whitespace ignored); text there makes a one-line string, which must
+  opening delimiter; text there makes a one-line string, which must
   close on the same line, and a newline in it is an error. The user's call, on a proposal: a first
   line after the delimiter has no column in common with the rest, which is what forces
   `stripMargin` on Scala and `dedent` on Python, while forbidding the one-line form outright would
@@ -843,3 +849,6 @@ alternative listed here should not be re-proposed without new information.
   `${` stays open for both (§13).
 - **A run of more than three quotes closes at its last three** (§5), Scala's rule, so a value can
   end in `"`. The user's call, on a proposal.
+- **Whitespace between the opening `"""` of a block and the end of its line is an error** (§5), not
+  fatal. The user's call, replacing the proposal to ignore it: it is invisible, and the slot after
+  the delimiter is wanted for markers (§13).
