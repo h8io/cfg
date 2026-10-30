@@ -110,7 +110,7 @@ loader path.
   `"…"` (`"jdbc:${host}/db"`) and in `"""…"""`. A literal `${` is written `\${`, which is what
   the `\$` escape is for: `"\${not.a.substitution}"`. Inside backticks there are no
   substitutions — a name is never computed — but `\$` is accepted there too, the escape set being
-  one. How a literal `${` is written inside `"""…"""`, which has no escapes, is open (§13).
+  one. Inside `"""…"""` a literal `${` is `\${` as well, one of its two escapes (§5).
 - **`:` after a key** must be followed by whitespace or the end of the line, so `a:b` in a block is an
   error with a hint rather than a field. Inside a value `:` is ordinary: `url: http://host:8080`.
   `:=` is the replacing form of `:` (§7) and follows the same rule: `a:=b` is an error.
@@ -155,10 +155,10 @@ so it merges; replacing a block is written `key := { … }`.
 
 **Triple-quoted scalars** — `"""…"""`, taken raw: no escape processing, so PEM blocks, regexes
 and SQL survive untouched — except `${…}`, which is substituted here as in any scalar (§3, §9), and
-the single escape `\"""`, which stands for a literal `"""`. Any other `\` is an ordinary
-character. A `\` right before the closing delimiter therefore escapes it: a value ending in `\` is
+two escapes: `\"""` for a literal `"""` and `\${` for a literal `${`, the latter as in `"…"`. Any
+other `\` is an ordinary character. A `\` right before the closing delimiter therefore escapes it: a value ending in `\` is
 written as a block with the delimiter on its own line, or as `"…\\"`.
-The whole section is under revision (§13). What follows the opening delimiter picks one of two
+What follows the opening delimiter picks one of two
 forms, which differ in layout only — the content rules above are the same in both:
 
 - **Block**: the end of the line right after the delimiter. Whitespace before it is an error, though
@@ -617,46 +617,22 @@ mistake is worse than stopping.
 
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
    indentation can claim it later.
-3. **Multi-line strings** (§5) — reopened by the user in session 7. The design in §5 stands until
-   it is revised, but step 2 of the plan does not lex `"""` before this is settled. Questions
-   collected so far, none discussed yet:
-   - **A literal `${`**: `"""` substitutes but has no escapes. Possibly answered by item 4.
-   - ~~**A literal `"""`**~~ Settled (§5): `\"""`, the single escape.
-   - ~~**The final newline.**~~ Settled (§5): the newline before the closing `"""` is dropped like
-     the one after the opening, so a final newline is an explicit empty line. The closing
-     delimiter's position no longer decides it, which takes that half of the Java model off the
-     table.
-   - ~~**Deliberate indentation.**~~ Settled (§5): with no marker the closing delimiter's column
-     counts, as in Java; or an explicit width, as in YAML.
-   - ~~**Tabs mixed with spaces**~~ Settled (§5): compared character by character, a mismatch is an
-     error.
-   - ~~**Trailing whitespace**~~ Settled (§5): stripped from every line of a block.
-   - ~~**Indent markers**~~ Settled (§5): `<`, `=`, `>` after the opening `"""`, folding as in
-     YAML, an explicit width relative to the opening line.
-   - ~~**Text right after the opening `"""`**~~ Settled (§5): a block starts on the next line; text
-     after the delimiter makes a one-line string, which must close on its line.
-   - ~~**CRLF in the value**~~ Settled (§5): normalised to LF.
-   - ~~**What may follow the closing `"""`**~~ Settled (§5, §9): what follows any value; no
-     concatenation.
-
-   A starting point offered in session 7, not discussed: the Java text block model — the opening
-   `"""` ends its line, the closing `"""`'s column sets the indent, the final `\n` is there when the
-   closing `"""` stands on its own line, newlines are normalised to LF — with `\"""` as the single
-   escape. Its rule for the final `\n` is superseded by the explicit empty line; its indent rule is
-   adopted for `"""` with no marker. Its stripping of trailing whitespace is not, so far — that is
-   the trailing whitespace question above.
+3. ~~**Multi-line strings**~~ — closed in session 7: reopened by the user and settled point by
+   point (§5, §14).
 4. **Templates in the direction of StringTemplate 4.** Raised by the user in session 7: substitutions
    stay as they are in v1, but the way forward is to look at ST4's ideas. Nothing is decided yet.
    Two of them bear on open questions here:
    - **Delimiters chosen per template.** ST4 lets a template use `<…>` or `$…$`, whichever does not
-     clash with its content. For a raw `"""` this could settle the literal `${` without escapes —
-     a marker on the opening quotes that turns substitution off or changes its syntax.
+     clash with its content. The case for it: a shell script, a Helm template or a Spring config in
+     a `"""` block is full of `${`, each of which needs `\${` in v1. A marker on the opening quotes
+     could turn substitution off or change its syntax; markers do not combine in v1 (§5), and this
+     one would have to combine with the indent markers.
    - **A template applied to a collection with a separator**, `<hosts; separator=",">`. This is the
      job parked as value expressions (item 1, `${b} + ${c}`), so both may end up as one
      mechanism.
 
-   Whether substitutions inside `"""` are settled before or after looking at ST4 as a whole is
-   itself open, since ST4 may change how they are written there.
+   - **Options inside `${…}`**, the user's idea: `${array; null="-1", separator=", "}`. Not in v1;
+     the syntax stays free, `;` being outside `Id.SafeKeyPattern`, so `${a; …}` is an error today.
 
 ## 14. Decision log
 
@@ -951,3 +927,8 @@ alternative listed here should not be re-proposed without new information.
 - **`\"""` is the single escape of a triple-quoted string** (§5), as in Java; any other `\` stays
   literal. The user's call, on a proposal. Its cost: a `\` right before the closing delimiter
   escapes it, so a value ending in `\` needs the block form or `"…"`.
+- **`\${` is the second escape of a triple-quoted string** (§5), the same as in `"…"`. The user's
+  call, on a proposal. Turning substitution off for a whole block, which a script full of `${`
+  wants, is left to templating (§13 item 4). With this §13 item 3 is closed.
+- **Options inside `${…}` noted for later** (§13 item 4): `${array; null="-1", separator=", "}`. The
+  user's idea, explicitly not in v1.

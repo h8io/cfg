@@ -100,7 +100,7 @@ at the phase gate.
   doc comment (`/** */`, kept), bare key
   (`Id.SafeKeyPattern`), backticked name, unquoted scalar, quoted string with the escape set of
   §3 (`Id.quote`'s plus ``\` `` and `\$`) and `${…}` inside it, triple-quoted
-  string (raw but for `${…}` and the escape `\"""`; a block — first and last newline dropped, common indent stripped — or
+  string (raw but for `${…}` and the escapes `\"""`, `\${`; a block — first and last newline dropped, common indent stripped — or
   one line, closing at the last three of a run of quotes, §5), `${`/`${?` … `}`.
 - Value mode: an unquoted scalar runs to whitespace, `,`, `}` or `]`; may not start with `'`
   (§3), and `@` or `#` at its start opens a tag or a directive (§5, §6); `@name(` is an error, so is
@@ -118,9 +118,9 @@ at the phase gate.
   tests. Made in the same release as the `!`, so the API breaks once; in the release notes.
 - Property test: for any string `k`, `Id.Key(k, Id.Root).path` lexes in key mode to exactly one key
   token with value `k` — the round-trip promise of §3.
-- **Spec gaps:** multi-line strings are reopened (`format.md` §13) — settle them before lexing
-  `"""`. Directive names, `${` in and out of quotes, the byte order mark and a tag before `"""`
-  were settled in session 7 (`format.md` §3, §5, §6, §14).
+- **Spec gaps:** none left. Multi-line strings were reopened and settled in session 7 (`format.md` §5,
+  §14), as were directive names, `${` in and out of quotes, the byte order mark and a tag before
+  `"""` (§3, §5, §6).
 
 ### 3. Ast and parser: core syntax
 
