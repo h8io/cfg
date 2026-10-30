@@ -99,8 +99,8 @@ at the phase gate.
 - Tokens: `{ } [ ] ( ) , . : := = @tag #name`, newline, comment (`//`, nesting `/* */`, skipped),
   doc comment (`/** */`, kept), bare key
   (`Id.SafeKeyPattern`), backticked name, unquoted scalar, quoted string with the escape set of
-  `Id.quote`, triple-quoted
-  string (raw, first newline dropped, common indent stripped, §5), `${`/`${?` … `}`.
+  §3 (`Id.quote`'s plus ``\` `` and `\$`) and `${…}` inside it, triple-quoted
+  string (raw but for `${…}`, first newline dropped, common indent stripped, §5), `${`/`${?` … `}`.
 - Value mode: an unquoted scalar runs to whitespace, `,`, `}` or `]`; may not start with `'`
   (§3), and `@` or `#` at its start opens a tag or a directive (§5, §6); `@name(` is an error, so is
   `@-`, reserved (§5). Inside
@@ -134,7 +134,7 @@ at the phase gate.
 ### 4. Parser: substitutions and directives
 
 - `${path}`, `${?path}`, and concatenations whose parts touch (`"jdbc:"${host}"/db"`); a space between
-  parts is an error (§9).
+  parts is an error (§9). A `${…}` inside `"…"` or `"""…"""` makes the string a concatenation too.
 - Directives in statement and value position, arguments `name = literal` separated by `,`/newline,
   literals: strings, bare identifiers, `true`/`false`, integers; `${…}` in an argument is an error
   (§6). The Ast only — nothing is expanded yet.

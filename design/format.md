@@ -50,7 +50,7 @@ loader path.
 | Include placement | Anywhere in the tree, not just at file top level |
 | Include sources | Relative paths, classpath resources; optional variant that tolerates a missing file |
 | Comments | `//` and nesting `/* */`; `/** */` reserved for doc comments (§3) |
-| Multi-line strings | Triple quotes, raw, with the common leading indent stripped |
+| Multi-line strings | Triple quotes, raw but for `${…}`, with the common leading indent stripped; under revision (§13) |
 | Special words | Avoided — `#`-prefixed directives instead, as an open, extensible set. `null` is the one exception |
 | Error model | `Either`, no Cats; as many errors per run as can be reported honestly (§11) |
 | Dotted keys | Sugar for nesting; a quoted key is indivisible, dots included |
@@ -83,9 +83,9 @@ loader path.
   inside `${…}` — is written `` `…` ``; `"…"` is only ever a scalar. The role of a token is
   therefore visible to the lexer without context, and `"port": 1` is an error with a hint, not a
   second spelling. Both forms share one escape set: `\"`, ``\` ``, `\\`, `\b`, `\f`, `\n`, `\r`, `\t`
-  and `\uXXXX` — the set `Id.quote` produces today, plus ``\` ``. Both quotes are escapable in both
-  forms, so there is one escape grammar rather than one per delimiter; `Id.quote` itself only needs
-  ``\` `` and `\\`. Any other `\` is an error. Neither form may hold a raw newline — that is what `\n`
+  and `\uXXXX` — the set `Id.quote` produces today, plus ``\` `` and `\$`. Both quotes are
+  escapable in both forms, so there is one escape grammar rather than one per delimiter; `Id.quote`
+  itself only needs ``\` `` and `\\`. Any other `\` is an error. Neither form may hold a raw newline — that is what `\n`
   and `"""…"""` are for — so an unterminated quote is reported on its own line rather than at the end
   of the file.
 - **Dotted keys** — `a.b.c: v` is sugar for `a { b { c: v } }`. The split happens only on dots
@@ -106,9 +106,11 @@ loader path.
   An unquoted scalar may not start with `'`: YAML's `a: 'x'` would otherwise parse silently to a
   value with the quotes kept. `~` gets no rule — it is the string `~`, and `null` is written out.
 
-  `${` inside an unquoted scalar always opens a substitution (§9): `jdbc:${host}/db` is a
-  concatenation. Inside `"…"` and `"""…"""` it is two ordinary characters, as in HOCON, so a
-  literal `${` is written in quotes: `"${not.a.substitution}"`.
+  `${` opens a substitution (§9) in every kind of scalar: unquoted (`jdbc:${host}/db`), in
+  `"…"` (`"jdbc:${host}/db"`) and in `"""…"""`. A literal `${` is written `\${`, which is what
+  the `\$` escape is for: `"\${not.a.substitution}"`. Inside backticks there are no
+  substitutions — a name is never computed — but `\$` is accepted there too, the escape set being
+  one. How a literal `${` is written inside `"""…"""`, which has no escapes, is open (§13).
 - **`:` after a key** must be followed by whitespace or the end of the line, so `a:b` in a block is an
   error with a hint rather than a field. Inside a value `:` is ordinary: `url: http://host:8080`.
   `:=` is the replacing form of `:` (§7) and follows the same rule: `a:=b` is an error.
@@ -151,9 +153,10 @@ so it merges; replacing a block is written `key := { … }`.
 
 **Sequences** — `[a, b, c]`; a newline also separates, and a trailing separator is allowed.
 
-**Multi-line scalars** — `"""…"""`, taken raw: no escape processing at all, so PEM blocks, regexes
-and SQL survive untouched. The newline immediately after the opening delimiter is dropped, and the
-longest common leading whitespace across the non-blank lines is stripped:
+**Multi-line scalars** — `"""…"""`, taken raw: no escape processing, so PEM blocks, regexes
+and SQL survive untouched — except `${…}`, which is substituted here as in any scalar (§3, §9).
+The whole section is under revision (§13). The newline immediately after the opening delimiter is
+dropped, and the longest common leading whitespace across the non-blank lines is stripped:
 
 ```
 server {
@@ -357,7 +360,8 @@ from a substitution.
   (§7), so a graft and a merge never disagree about tags.
 - A concatenation builds a new scalar, which carries only the tags written before it: in
   `@t "jdbc:"${host}` the result is tagged `t` alone, whatever `host` carries.
-- `prefix${path}suffix` concatenates; the referenced node must then be a scalar, and the result is a
+- `prefix${path}suffix` concatenates, and so does a `${…}` inside quotes, even alone: `"${a}"` is
+  a concatenation, not a graft. The referenced node must then be a scalar, and the result is a
   scalar. The parts touch: `"a" ${b}` with a space between is an error, not a concatenation with a
   space as in HOCON — whitespace never joins or separates values.
 - `${?path}` is optional: when it does not resolve, the field is omitted entirely, so a later lookup
@@ -523,7 +527,10 @@ mistake is worse than stopping.
    Constraint on v1 meanwhile: leading whitespace must carry no meaning anywhere else, so that
    indentation can claim it later.
 3. **Multi-line strings** (§5) — reopened by the user in session 7. The design in §5 stands until
-   it is revised, but step 2 of the plan does not lex `"""` before this is settled.
+   it is revised, but step 2 of the plan does not lex `"""` before this is settled. Open within it:
+   how a literal `${` is written, since `"""` substitutes but has no escapes.
+4. **Templates in the direction of StringTemplate 4.** Raised by the user in session 7: substitutions
+   stay as they are in v1, but the way forward is to look at ST4's ideas. Nothing is decided yet.
 
 ## 14. Decision log
 
@@ -741,8 +748,14 @@ alternative listed here should not be re-proposed without new information.
 
 - **A directive name follows the key rule** (§6): bare when it matches `Id.SafeKeyPattern`, in
   backticks otherwise. The user's call — the same rule as for every other name.
-- **`${` in an unquoted scalar is always a substitution; inside quotes it is literal** (§3), as in
-  HOCON. The user's call. A literal `${` therefore needs quotes, and needs no escape of its own.
+- **`${` is a substitution in every kind of scalar, quoted ones included; a literal one is `\${`**
+  (§3). The user's call, after a misunderstanding earlier in the session recorded the opposite.
+  Rejected: HOCON's rule, under which `${` inside quotes is literal and a substitution has to stand
+  outside them (`"jdbc:"${host}`). `\$` joins the shared escape set; backticks hold no
+  substitutions. `"""…"""` substitutes too; its literal `${` is left to the revision of multi-line
+  strings.
+- **Substitutions stay as they are in v1; templating to be looked at in the direction of
+  StringTemplate 4** (§13). The user's call.
 - **A byte order mark at the start of a source is skipped** (§3). The user's call. Rejected: an
   error — editors on Windows still write one, and it carries no meaning in UTF-8.
 - **A tag may precede a multi-line string** (§5). The user's call; the grammar in §4 allowed it
