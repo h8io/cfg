@@ -153,9 +153,21 @@ so it merges; replacing a block is written `key := { … }`.
 
 **Sequences** — `[a, b, c]`; a newline also separates, and a trailing separator is allowed.
 
-**Multi-line scalars** — `"""…"""`, taken raw: no escape processing, so PEM blocks, regexes
+**Triple-quoted scalars** — `"""…"""`, taken raw: no escape processing, so PEM blocks, regexes
 and SQL survive untouched — except `${…}`, which is substituted here as in any scalar (§3, §9).
-The whole section is under revision (§13). The newline immediately after the opening delimiter is
+The whole section is under revision (§13). What follows the opening delimiter picks one of two
+forms, which differ in layout only — the content rules above are the same in both:
+
+- **Block**: only whitespace up to the end of the line, which is ignored. The rules below apply.
+- **One line**: anything else. The string must close on the same line and is taken as written,
+  with no newline or indent processing: `pattern: """^\d+"$"""`. A newline before the closing
+  delimiter is an error with a hint to start the block on the next line — a first line written
+  after the delimiter has no column in common with the lines below it.
+
+A run of more than three quotes closes the string at its last three, so a value may end in `"`:
+`"""say "hi"""""` is `say "hi"`.
+
+In a block, the newline immediately after the opening delimiter is
 dropped, and so is the one immediately before the closing delimiter, together with the whitespace
 between it and the delimiter. The longest common leading whitespace across the non-blank lines is
 stripped:
@@ -556,8 +568,8 @@ mistake is worse than stopping.
      character-by-character comparison.
    - **Trailing whitespace** on a line: kept, the string being raw, or stripped, as Java does.
      Invisible spaces in a value are a common source of bugs.
-   - **Text right after the opening `"""`**, and a one-line `"""abc"""`: allowed or not, and how such
-     a first line takes part in the indent computation.
+   - ~~**Text right after the opening `"""`**~~ Settled (§5): a block starts on the next line; text
+     after the delimiter makes a one-line string, which must close on its line.
    - **CRLF in the value**: normalised to LF, or kept as in the file, which makes the value depend on
      the editor.
    - **What may follow the closing `"""`**: whether it can be a part of a concatenation
@@ -821,3 +833,13 @@ alternative listed here should not be re-proposed without new information.
   needs `\"` and loses being raw (a regex's `\d` becomes an error, §3) or cannot hold a `"` at all;
   a stray `key: "` would swallow the file up to the next quote instead of failing on its own line
   (§3, §11); and a space after the `"` would decide the mode invisibly.
+- **Two forms of `"""`, block and one line** (§5). A block needs the end of the line right after the
+  opening delimiter (trailing whitespace ignored); text there makes a one-line string, which must
+  close on the same line, and a newline in it is an error. The user's call, on a proposal: a first
+  line after the delimiter has no column in common with the rest, which is what forces
+  `stripMargin` on Scala and `dedent` on Python, while forbidding the one-line form outright would
+  leave a regex with no way to be written without escapes. **Both forms substitute `${…}`** — the
+  user's point: a one-line form that did not would mislead. They differ in layout only; the literal
+  `${` stays open for both (§13).
+- **A run of more than three quotes closes at its last three** (§5), Scala's rule, so a value can
+  end in `"`. The user's call, on a proposal.

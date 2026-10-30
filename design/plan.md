@@ -100,7 +100,8 @@ at the phase gate.
   doc comment (`/** */`, kept), bare key
   (`Id.SafeKeyPattern`), backticked name, unquoted scalar, quoted string with the escape set of
   §3 (`Id.quote`'s plus ``\` `` and `\$`) and `${…}` inside it, triple-quoted
-  string (raw but for `${…}`, first newline dropped, common indent stripped, §5), `${`/`${?` … `}`.
+  string (raw but for `${…}`; a block — first and last newline dropped, common indent stripped — or
+  one line, closing at the last three of a run of quotes, §5), `${`/`${?` … `}`.
 - Value mode: an unquoted scalar runs to whitespace, `,`, `}` or `]`; may not start with `'`
   (§3), and `@` or `#` at its start opens a tag or a directive (§5, §6); `@name(` is an error, so is
   `@-`, reserved (§5). Inside
