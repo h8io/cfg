@@ -977,3 +977,15 @@ alternative listed here should not be re-proposed without new information.
   user's call. Rejected: such a comment counting as a newline.
 - **No whitespace inside `${…}`** (§9): `${ a }` is an error with a hint. The user's call, on the
   recommendation — the path is written as `Id.path` renders it.
+- **A lone CR is an error** (§3), anywhere in a source, quotes included; a value that needs a CR
+  writes `\r` in `"…"`. The user's call, on a proposal giving the reasons. Tools disagree on what a
+  lone CR is — VS Code and IntelliJ show a line break, `cat`, `less`, `grep`, `wc` and `git diff`
+  one line — and a newline separates and ends a `//` comment, so any reading but an error makes
+  `// old\rkey: v` a field to one reader and a comment to another. A terminal returns the carriage
+  on a CR, so under `cat` the text after it overwrites the text before: `x: evil\r// harmless`
+  displays as a comment. Line numbers (§10) would disagree with the editor or with `grep -n`,
+  whichever reading were taken. Real sources hold a lone CR only from Mac OS 9 or from damage — a
+  botched conversion, a split CRLF — which the error catches. And an error can be relaxed later
+  without breaking a v1 file; the reverse cannot. Rejected: a newline, as in YAML 1.2, for the
+  disagreement above; whitespace, as in JSON, which hides a field in the comment before it while the
+  editor shows two lines; an ordinary character, which leaves an invisible CR in a value.
