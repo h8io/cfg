@@ -64,7 +64,7 @@ at the phase gate.
 | 1 | Module skeleton, locations, errors | done |
 | 2a | Protocol: tags as a set, backticked keys, YAML tags without `!` | done |
 | 2b | Source and lexer | done |
-| 2c | Lexer: triple-quoted strings | todo |
+| 2c | Lexer: triple-quoted and raw strings | todo |
 | 3 | Ast and parser: core syntax | todo |
 | 4 | Parser: substitutions and directives | todo |
 | 5 | Parser: error recovery | todo |
@@ -123,9 +123,9 @@ rules (`format.md` §5), are a part of their own.
   quoted string with the escape set of §3 (`Id.quote`'s plus ``\` `` and `\$`) and `${…}` inside it,
   `${`/`${?` … `}`. Every token records its column and whether it starts a line.
 - Value mode: an unquoted scalar runs to whitespace, `,`, `}` or `]`; may not start with `'`
-  (§3), and `@` or `#` at its start opens a tag or a directive (§5, §6); `@name(` is an error, so is
-  `@-`, reserved (§5). Inside it `//` and `/*` are ordinary characters; anywhere else they open a
-  comment. Key mode: `:` must be followed by whitespace or end of line, so must `:=`.
+  (§3) until 2c reads raw strings, and `@` or `#` at its start opens a tag or a directive (§5, §6);
+  `@name(` is an error, so is `@-`, reserved (§5). Inside it `//` and `/*` are ordinary characters;
+  anywhere else they open a comment. Key mode: `:` must be followed by whitespace or end of line, so must `:=`.
 - Whitespace is space and tab; any other whitespace outside quotes and comments, and a tab in
   indentation, are errors, not fatal (§3).
 - Fatal lexical errors (unterminated `"…"`/`` `…` ``/`/*`) end the source (§11); others are reported
@@ -134,7 +134,7 @@ rules (`format.md` §5), are a part of their own.
 - Property test: for any string `k`, `Id.Key(k, Id.Root).path` lexes in key mode to exactly one key
   token with value `k` — the round-trip promise of §3.
 
-### 2c. Lexer: triple-quoted strings
+### 2c. Lexer: triple-quoted and raw strings
 
 - Triple-quoted string (§5): the escape set of `"…"` and `${…}`, escapes interpreted after the
   layout rules; a run of more than three quotes closes at its last three.
@@ -145,6 +145,9 @@ rules (`format.md` §5), are a part of their own.
   closing delimiter's column counting), `<`, `=`, `>` (folding), and a width `N` or `>N` relative to
   the opening line; mismatched indents are errors; an unknown marker is an error.
 - An unterminated `"""` ends the source (§11).
+- Raw strings (§5): `'…'` on one line and `'''…'''` with the forms and layout of `"""`; no
+  substitutions, `\'` and `\\` the only escapes. `ApostropheAtStart` goes; an unterminated raw
+  string ends the source, as its double-quoted counterpart does.
 
 **Spec gaps for 2a–2c:** none left. Multi-line strings were reopened and settled in session 7
 (`format.md` §5, §14), as were directive names, `${` in and out of quotes, the byte order mark and a
@@ -255,7 +258,7 @@ tag before `"""` (§3, §5, §6).
 ### 12. Error messages and hints
 
 - Every error message names what was found, where, and what to do: `a:b` → put a space after `:`,
-  `a: foo bar` → quote the value, `a: 'x'` → use double quotes, a merge over `${…}` → use `:=`.
+  `a: foo bar` → quote the value, a merge over `${…}` → use `:=`.
 - `DefErrors` renders as one readable multi-line report.
 - A test file per category asserting the exact texts.
 

@@ -51,6 +51,7 @@ loader path.
 | Include sources | Relative paths, classpath resources; optional variant that tolerates a missing file |
 | Comments | `//` and nesting `/* */`; `/** */` reserved for doc comments (§3) |
 | Multi-line strings | Triple quotes, with the escapes of `"…"` and `${…}`; a block or a one-line form; indent markers, Java's rule by default (§5) |
+| Raw strings | `'…'` and `'''…'''`, as Perl's single quotes: no substitutions, `\'` and `\\` the only escapes (§5) |
 | Special words | Avoided — `#`-prefixed directives instead, as an open, extensible set. `null` is the one exception |
 | Error model | `Either`, no Cats; as many errors per run as can be reported honestly (§11) |
 | Dotted keys | Sugar for nesting; a quoted key is indivisible, dots included |
@@ -94,8 +95,8 @@ loader path.
   written as a quoted key. A key that would pass bare may be quoted too: `` `port` `` and `port` are
   the same key.
 - **Names in backticks, values in double quotes.** A quoted key — in a field, a dotted key or a path
-  inside `${…}` — is written `` `…` ``; `"…"` is only ever a scalar. The role of a token is
-  therefore visible to the lexer without context, and `"port": 1` is an error with a hint, not a
+  inside `${…}` — is written `` `…` ``; `"…"` and `'…'` are only ever scalars. The role of a token
+  is therefore visible to the lexer without context, and `"port": 1` is an error with a hint, not a
   second spelling. Both forms share one escape set, and so does `"""…"""` (§5): `\"`, ``\` ``,
   `\\`, `\b`, `\f`, `\n`, `\r`, `\t` and `\uXXXX` — the set `Id.quote` produces today, plus ``\` ``
   and `\$`. Both quotes are
@@ -119,8 +120,9 @@ loader path.
   `"1e5"`, `true` stays `"true"`, `007` stays `"007"`. There is no type inference anywhere in the
   parser. A value with spaces is written quoted: `greeting: "Hello, world"`.
 
-  An unquoted scalar may not start with `'`: YAML's `a: 'x'` would otherwise parse silently to a
-  value with the quotes kept. `~` gets no rule — it is the string `~`, and `null` is written out.
+  A value starting with `'` is a raw string (§5), so YAML's `a: 'x'` means what it means in YAML,
+  the quotes gone. Inside an unquoted scalar `'` is an ordinary character: `it's`. `~` gets no
+  rule — it is the string `~`, and `null` is written out.
 
   `${` opens a substitution (§9) in every kind of scalar: unquoted (`jdbc:${host}/db`), in
   `"…"` (`"jdbc:${host}/db"`) and in `"""…"""`. A literal `${` is written `\${`, which is what
@@ -180,6 +182,18 @@ and U+2029 (§3) are written `\r`, `\u0085`, `\u2028`, `\u2029`.
 Escapes are interpreted **after the layout rules** below — the indent, trailing whitespace, folding
 — again as in Java: what an escape produces is kept as written. So `\t` or `\u0020` at the end of a
 line survives the stripping of trailing whitespace, and `\n` survives folding.
+
+**Raw strings** — `'…'` and `'''…'''`, as Perl's single quotes: no substitutions, `${` being text,
+and two escapes, `\'` for a quote and `\\` for a backslash. Any other `\` is an ordinary character,
+so `'^\d+"$'` is a regex as written, and `'''…'''` holds a shell script or a Helm template, `${`
+and all, untouched. `'it\'s'` is `it's`, and a value ending in `\` ends in `\\`: `'C:\dir\\'`.
+As in Perl, a doubled backslash collapses — `'\\host\share'` is `\host\share` — so a UNC path is
+written `'\\\\host\share'`.
+
+`'…'` is one line, like `"…"`. `'''…'''` takes the two forms and the layout rules below exactly as
+`"""…"""` does, a literal `'''` being `\'''`; everything said below of `"""` holds of `'''` alike.
+A lone CR, NEL, U+2028 and U+2029 cannot be written in a raw string, being errors anywhere (§3); a
+value holding one is written in `"…"` or `"""…"""`.
 
 What follows the opening delimiter picks one of two forms, which differ in layout only — the
 content rules above are the same in both:
@@ -669,7 +683,8 @@ mistake is worse than stopping.
    Noted so far:
    - **Delimiters chosen per template.** ST4 lets a template use `<…>` or `$…$`, whichever does not
      clash with its content. The case for it: a shell script, a Helm template or a Spring config in
-     a `"""` block is full of `${`, each of which needs `\${` in v1. A marker on the opening quotes
+     a `"""` block is full of `${`, each of which needs `\${` in v1 — the common case is settled by
+     `'''…'''`, which substitutes nothing (§5). A marker on the opening quotes
      could turn substitution off or change its syntax; markers do not combine in v1 (§5), and this
      one would have to combine with the indent markers.
    - **A template applied to a collection with a separator**, `<hosts; separator=",">`. This is the
@@ -1037,3 +1052,15 @@ alternative listed here should not be re-proposed without new information.
   folding survive. Its cost: a backslash is doubled, in regexes and Windows paths above all —
   `"""^\\d+"$"""` — but a forgotten one is an error, not a silent change. The cost of session 7,
   a value unable to end in `\` right before the delimiter, goes away: it is `\\"""`.
+- **Raw strings `'…'` and `'''…'''`, as Perl's single quotes** (§5): no substitutions, and `\'` and
+  `\\` the only escapes, any other `\` ordinary. The user's call, on a proposal following the entry
+  above: escapes in `"""` cost regexes and Windows paths their backslashes, and a raw string beside
+  the escaped one, as in Python and Rust, gives them back. `'` at the start of a value was reserved
+  already (session 2), so no v1 file changes meaning, and YAML's `'x'` now means what it means
+  there. Substituting nothing settles the common case of §13 item 4, a script full of `${`; it does
+  not mislead as a one-line `"""` without substitutions would have (session 7), the delimiter
+  itself saying so. Departing from Perl, `'…'` holds no raw newline, as `"…"` holds none, so an
+  unterminated one is reported on its own line; `'''…'''` is the multi-line form, with the layout of
+  `"""`. Rejected: YAML's and SQL's `''` for a quote, which leaves a backslash before the closing
+  delimiter unwritable; Perl's escapes also give `'''` a literal `\'''`. The cost of Perl's rule:
+  `\\` collapses, so a UNC path doubles its leading backslashes.
