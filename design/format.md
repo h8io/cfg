@@ -50,7 +50,7 @@ loader path.
 | Include placement | Anywhere in the tree, not just at file top level |
 | Include sources | Relative paths, classpath resources; optional variant that tolerates a missing file |
 | Comments | `//` and nesting `/* */`; `/** */` reserved for doc comments (§3) |
-| Multi-line strings | Triple quotes, raw but for `${…}` and two escapes; a block or a one-line form; indent markers, Java's rule by default (§5) |
+| Multi-line strings | Triple quotes, with the escapes of `"…"` and `${…}`; a block or a one-line form; indent markers, Java's rule by default (§5) |
 | Special words | Avoided — `#`-prefixed directives instead, as an open, extensible set. `null` is the one exception |
 | Error model | `Either`, no Cats; as many errors per run as can be reported honestly (§11) |
 | Dotted keys | Sugar for nesting; a quoted key is indivisible, dots included |
@@ -96,8 +96,9 @@ loader path.
 - **Names in backticks, values in double quotes.** A quoted key — in a field, a dotted key or a path
   inside `${…}` — is written `` `…` ``; `"…"` is only ever a scalar. The role of a token is
   therefore visible to the lexer without context, and `"port": 1` is an error with a hint, not a
-  second spelling. Both forms share one escape set: `\"`, ``\` ``, `\\`, `\b`, `\f`, `\n`, `\r`, `\t`
-  and `\uXXXX` — the set `Id.quote` produces today, plus ``\` `` and `\$`. Both quotes are
+  second spelling. Both forms share one escape set, and so does `"""…"""` (§5): `\"`, ``\` ``,
+  `\\`, `\b`, `\f`, `\n`, `\r`, `\t` and `\uXXXX` — the set `Id.quote` produces today, plus ``\` ``
+  and `\$`. Both quotes are
   escapable in both forms, so there is one escape grammar rather than one per delimiter; `Id.quote`
   itself only needs ``\` `` and `\\`. Any other `\` is an error. Neither form may hold a raw
   newline — that is what `\n` and `"""…"""` are for — so an unterminated quote is reported on its own
@@ -125,7 +126,7 @@ loader path.
   `"…"` (`"jdbc:${host}/db"`) and in `"""…"""`. A literal `${` is written `\${`, which is what
   the `\$` escape is for: `"\${not.a.substitution}"`. Inside backticks there are no
   substitutions — a name is never computed — but `\$` is accepted there too, the escape set being
-  one. Inside `"""…"""` a literal `${` is `\${` as well, one of its two escapes (§5).
+  one. Inside `"""…"""` a literal `${` is `\${` as well, the escape set being the same (§5).
 - **`:` after a key** must be followed by whitespace or the end of the line, so `a:b` in a block is an
   error with a hint rather than a field. Inside a value `:` is ordinary: `url: http://host:8080`.
   `:=` is the replacing form of `:` (§7) and follows the same rule: `a:=b` is an error.
@@ -168,16 +169,17 @@ so it merges; replacing a block is written `key := { … }`.
 
 **Sequences** — `[a, b, c]`; a newline also separates, and a trailing separator is allowed.
 
-**Triple-quoted scalars** — `"""…"""`, taken raw: no escape processing, so PEM blocks, regexes
-and SQL survive untouched — except `${…}`, which is substituted here as in any scalar (§3, §9), and
-two escapes: `\"""` for a literal `"""` and `\${` for a literal `${`, the latter as in `"…"`. Any
-other `\` is an ordinary character. A `\` right before the closing delimiter therefore escapes it:
-a value ending in `\` is written as a block with the delimiter on its own line, or as `"…\\"`.
+**Triple-quoted scalars** — `"""…"""`, with the escape set of `"…"` (§3) and `${…}`, which is
+substituted here as in any scalar (§3, §9). As in Java's text blocks, a triple-quoted string is not
+raw: what it saves over `"…"` is escaping quotes and writing newlines, not escaping backslashes. A
+backslash is `\\`, so a regex is written `"""^\\d+"$"""`; any other `\` outside the set is an error,
+as in `"…"`, so a forgotten one is reported rather than kept. `\"""` still writes a literal `"""`
+— `\"` and then two quotes, which do not close — and `\${` a literal `${`. A lone CR, NEL, U+2028
+and U+2029 (§3) are written `\r`, `\u0085`, `\u2028`, `\u2029`.
 
-**To be settled in step 2c: a `\u` escape.** Without one, a lone CR, NEL, U+2028 and U+2029 (§3)
-cannot be written in a triple-quoted string at all. Its form is open: `\\` is not an escape here,
-so a plain `\uXXXX` would leave no way to write a literal `\u0041`, common in JSON, Java and
-regexes.
+Escapes are interpreted **after the layout rules** below — the indent, trailing whitespace, folding
+— again as in Java: what an escape produces is kept as written. So `\t` or `\u0020` at the end of a
+line survives the stripping of trailing whitespace, and `\n` survives folding.
 
 What follows the opening delimiter picks one of two forms, which differ in layout only — the
 content rules above are the same in both:
@@ -185,7 +187,7 @@ content rules above are the same in both:
 - **Block**: the end of the line right after the delimiter. Whitespace before it is an error, though
   not a fatal one: it is reported and the block is read on. The rules below apply.
 - **One line**: anything else. The string must close on the same line and is taken as written,
-  with no newline or indent processing: `pattern: """^\d+"$"""`. A newline before the closing
+  with no newline or indent processing: `pattern: """^\\d+"$"""`. A newline before the closing
   delimiter is an error with a hint to start the block on the next line — a first line written
   after the delimiter has no column in common with the lines below it.
 
@@ -248,7 +250,7 @@ not depend on the editor or on git's `core.autocrlf`. A substituted value keeps 
 **Trailing whitespace** is stripped from every line of a block, under any marker and before folding,
 so a line holding only whitespace becomes empty. It is stripped from the source text, before
 substitution: a substituted value keeps its own. The one-line form keeps it, its closing delimiter
-making it visible. A block value cannot end a line in whitespace; `"…"` with its escapes can.
+making it visible. A block line that has to end in whitespace ends in an escape: `\t`, `\u0020`.
 
 Indents are compared character by character, so a tab never matches a space. Under no marker, two
 indents of which neither is a prefix of the other (a tab where the other has a space) are an error,
@@ -1023,6 +1025,15 @@ alternative listed here should not be re-proposed without new information.
 - **NEL, U+2028 and U+2029 are errors anywhere** (§3), quotes and comments included, for the reasons
   that make a lone CR one (session 7): VS Code shows them as a line break, `cat` and `grep` do not,
   so `// old<U+2028>key: v` is a field to one reader and a comment to another. The user's call. In
-  `"…"` and backticks they are written with `\u`; for `"""…"""` a `\u` escape is to be added in
-  step 2c, its form open (§5). Other whitespace stays content inside quotes: NBSP has uses in text
-  and breaks no line.
+  `"…"` and backticks they are written with `\u`, and in `"""…"""` too, by the entry below. Other
+  whitespace stays content inside quotes: NBSP has uses in text and breaks no line.
+- **`"""…"""` takes the escape set of `"…"`** (§3, §5), `\\`, `\n`, `\r`, `\t` and `\u` included;
+  a `\` outside the set is an error, as in `"…"`. The user's call, superseding session 7's two
+  escapes (`\"""`, `\${`) and raw content. The trigger was the entry above: a raw string has no
+  way to hold a lone CR, NEL, U+2028 or U+2029, and a `\u` on its own would have left no way to
+  write a literal `\u0041`. One escape grammar for every kind of string, as session 5 chose for
+  backticks. Java's text blocks work the same way, escapes included, and so does the order:
+  escapes are interpreted after the layout rules, so `\t` at the end of a line and `\n` under
+  folding survive. Its cost: a backslash is doubled, in regexes and Windows paths above all —
+  `"""^\\d+"$"""` — but a forgotten one is an error, not a silent change. The cost of session 7,
+  a value unable to end in `\` right before the delimiter, goes away: it is `\\"""`.
