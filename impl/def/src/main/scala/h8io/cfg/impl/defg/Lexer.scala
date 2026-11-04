@@ -22,7 +22,10 @@ private[defg] final class Lexer(source: Source) {
   def errors: List[DefError] = reported.toList
 
   def next(mode: Mode): Token = {
+    val tab = if (atLineStart) indentationTab() else -1
+    val before = reported.length
     skipBlanks()
+    if (tab >= 0 && holdsToken(tab)) reported.insert(before, TabInIndentation(source.location(tab)))
     val start = offset
     val startsLine = atLineStart
     val kind = if (ended || offset >= text.length) End else read(mode)
@@ -50,26 +53,64 @@ private[defg] final class Lexer(source: Source) {
   @inline private def at(i: Int, c: Char): Boolean = has(i) && text.charAt(i) == c
   @inline private def startsWith(s: String, i: Int = offset): Boolean = text.startsWith(s, i)
 
+  /** Whitespace inside a line: space and tab, nothing else (`format.md` §3). */
+  private def isSpace(c: Char): Boolean = c == ' ' || c == '\t'
+
+  /** LF or CRLF. */
   private def isNewline(i: Int): Boolean = at(i, '\n') || at(i, '\r') && at(i + 1, '\n')
-  private def isBlank(c: Char): Boolean = c == ' ' || c == '\t' || c == '\r' || c == '\n'
+
+  /** A CR that is not part of a CRLF: an error, read as whitespace once reported. */
+  private def isLoneCarriageReturn(i: Int): Boolean = at(i, '\r') && !at(i + 1, '\n')
+
+  /** Whitespace other than space, tab and the newlines — NBSP, the other Unicode spaces, FF, VT, NEL, U+2028/U+2029,
+    * and a byte order mark past the start (`format.md` §3). An error outside quotes and comments, read as whitespace
+    * once reported; content inside them. All of them are single UTF-16 units.
+    */
+  private def isForeignSpace(c: Char): Boolean =
+    c != ' ' && c != '\t' && c != '\n' && c != '\r' &&
+      (Character.isWhitespace(c) || Character.isSpaceChar(c) || c == '\u0085' || c == '\uFEFF')
+
+  /** Ends a token: whitespace, a newline, or a character that is read as whitespace once reported. */
+  private def isBreak(i: Int): Boolean = {
+    val c = text.charAt(i)
+    isSpace(c) || isNewline(i) || isLoneCarriageReturn(i) || isForeignSpace(c)
+  }
 
   /** A lone CR is reported where it stands and then treated as whitespace. */
   private def skipLoneCarriageReturn(): Boolean =
-    if (at(offset, '\r') && !at(offset + 1, '\n')) {
+    if (isLoneCarriageReturn(offset)) {
       report(LoneCarriageReturn.apply, offset)
       offset += 1
       true
     } else false
 
-  /** Skips spaces, tabs, comments and stray comment ends — everything that is whitespace to the grammar. Newlines are
-    * tokens.
+  /** The first tab in the indentation of the line starting here, or -1: indentation is the whitespace before the first
+    * token of a line (`format.md` §3).
+    */
+  private def indentationTab(): Int = {
+    var i = offset
+    while (at(i, ' ')) i += 1
+    if (at(i, '\t')) i else -1
+  }
+
+  /** Whether the line of `tab` holds a token, now that whitespace and comments are skipped: a blank or comment-only
+    * line has no indentation, and neither has a line that a block comment carries on past.
+    */
+  private def holdsToken(tab: Int): Boolean =
+    !ended && has(offset) && !isNewline(offset) && text.lastIndexOf('\n', offset - 1) < tab
+
+  /** Skips spaces, tabs, comments and stray comment ends — everything that is whitespace to the grammar — and the
+    * characters read as whitespace once reported. Newlines are tokens.
     */
   private def skipBlanks(): Unit = {
     var blank = true
     while (blank && !ended && has(offset))
-      if (at(offset, ' ') || at(offset, '\t')) offset += 1
+      if (isSpace(text.charAt(offset))) offset += 1
       else if (skipLoneCarriageReturn()) ()
-      else if (startsWith("//")) skipLineComment()
+      else if (isForeignSpace(text.charAt(offset))) {
+        report(ForeignWhitespace(_, text.charAt(offset)), offset)
+        offset += 1
+      } else if (startsWith("//")) skipLineComment()
       else if (startsWith("/*") && !isDocComment) skipBlockComment().fold(())(_ => ())
       else if (startsWith("*/")) {
         report(StrayCommentEnd.apply, offset)
@@ -107,7 +148,7 @@ private[defg] final class Lexer(source: Source) {
     val start = offset
     text.charAt(offset) match {
       case '\n' => advance(1, Newline)
-      case '\r' => advance(2, Newline) // a lone CR was skipped as a blank
+      case '\r' => advance(2, Newline) // a CRLF: a lone CR was skipped as whitespace
       case '{' => advance(1, LeftBrace)
       case '}' => advance(1, RightBrace)
       case '[' => advance(1, LeftBracket)
@@ -141,7 +182,7 @@ private[defg] final class Lexer(source: Source) {
       case '=' => advance(1, Equals)
       case ':' =>
         val kind = if (at(offset + 1, '=')) advance(2, Replace) else advance(1, Colon)
-        if (has(offset) && !isBlank(text.charAt(offset))) report(ColonWithoutSpace.apply, start)
+        if (has(offset) && !isBreak(offset)) report(ColonWithoutSpace.apply, start)
         kind
       case _ =>
         while (has(offset) && !endsKey(offset)) offset += 1
@@ -151,10 +192,11 @@ private[defg] final class Lexer(source: Source) {
     }
 
   private def endsKey(i: Int): Boolean =
-    text.charAt(i) match {
-      case ' ' | '\t' | '\r' | '\n' | '.' | ':' | '=' | '{' | '}' | '[' | ']' | '(' | ')' | ',' | '"' | '`' => true
-      case _ => startsWith("//", i) || startsWith("/*", i)
-    }
+    isBreak(i) ||
+      (text.charAt(i) match {
+        case '.' | ':' | '=' | '{' | '}' | '[' | ']' | '(' | ')' | ',' | '"' | '`' => true
+        case _ => startsWith("//", i) || startsWith("/*", i)
+      })
 
   private def valueMode(c: Char, start: Int): Kind =
     if (c == '@') {
@@ -256,7 +298,7 @@ private[defg] final class Lexer(source: Source) {
   /** An unquoted scalar: everything up to whitespace, `,`, `}` or `]`, comment openers and backslashes included. */
   private def unquoted(): Kind = {
     val parts = new Parts
-    while (!ended && has(offset) && !endsUnquoted(text.charAt(offset)))
+    while (!ended && has(offset) && !endsUnquoted(offset))
       if (startsWith("${")) reference(parts, quoted = false)
       else {
         val c = text.charAt(offset)
@@ -267,10 +309,10 @@ private[defg] final class Lexer(source: Source) {
     if (ended) End else Scalar(parts.result(), quoted = false)
   }
 
-  private def endsUnquoted(c: Char): Boolean = isBlank(c) || c == ',' || c == '}' || c == ']'
+  private def endsUnquoted(i: Int): Boolean = isBreak(i) || at(i, ',') || at(i, '}') || at(i, ']')
 
   /** `${path}` or `${?path}` from its `$`, its path written as `Id.path` renders one (`format.md` §9). A path that
-    * cannot be read is reported — at the whitespace, if that is what broke it, at the `${` otherwise — and skipped up
+    * cannot be read is reported — at the space or tab, if that is what broke it, at the `${` otherwise — and skipped up
     * to the next `}` on its line, or with none up to where the scalar around it ends.
     */
   private def reference(parts: Parts, quoted: Boolean): Unit = {
@@ -283,26 +325,30 @@ private[defg] final class Lexer(source: Source) {
         offset += 1
         parts.reference(Reference(path, optional, source.location(start)))
       case None if !ended =>
-        if (has(offset) && isBlank(text.charAt(offset)) && !isNewline(offset))
+        if (has(offset) && isSpace(text.charAt(offset)))
           report(WhitespaceInSubstitution.apply, offset)
         else report(InvalidSubstitution.apply, start)
         val close = closingBrace(quoted)
         if (close >= 0) offset = close + 1
-        else while (has(offset) && !endsAfterReference(text.charAt(offset), quoted)) offset += 1
+        else while (has(offset) && !endsAfterReference(offset, quoted)) offset += 1
       case None => ()
     }
   }
 
-  /** The `}` that closes a broken substitution: the next one on its line, and inside quotes before the closing one. */
+  /** The `}` that closes a broken substitution: the next one on its line, and inside quotes before the closing one. A
+    * lone CR stops the search too, so that it is reported rather than skipped.
+    */
   private def closingBrace(quoted: Boolean): Int = {
     var i = offset
     while (has(i) && !at(i, '}') && !at(i, '\n') && !at(i, '\r') && !(quoted && at(i, '"'))) i += 1
     if (at(i, '}')) i else -1
   }
 
-  /** With no `}` to close it, a broken substitution runs to where the scalar around it would end. */
-  private def endsAfterReference(c: Char, quoted: Boolean): Boolean =
-    if (quoted) c == '"' || c == '\n' || c == '\r' else endsUnquoted(c)
+  /** With no `}` to close it, a broken substitution runs to where the scalar around it would end — or, inside quotes,
+    * to any CR, so that a lone one is reported rather than skipped.
+    */
+  private def endsAfterReference(i: Int, quoted: Boolean): Boolean =
+    if (quoted) at(i, '"') || at(i, '\n') || at(i, '\r') else endsUnquoted(i)
 
   /** The segments of a path below `parent`: a key first, then `.key` or `[index]` any number of times. */
   private def path(parent: Id): Option[Id.Branch] = key(parent).flatMap(segments)

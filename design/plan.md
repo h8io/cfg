@@ -126,6 +126,8 @@ rules (`format.md` §5), are a part of their own.
   (§3), and `@` or `#` at its start opens a tag or a directive (§5, §6); `@name(` is an error, so is
   `@-`, reserved (§5). Inside it `//` and `/*` are ordinary characters; anywhere else they open a
   comment. Key mode: `:` must be followed by whitespace or end of line, so must `:=`.
+- Whitespace is space and tab; any other whitespace outside quotes and comments, and a tab in
+  indentation, are errors, not fatal (§3).
 - Fatal lexical errors (unterminated `"…"`/`` `…` ``/`/*`) end the source (§11); others are reported
   and lexing continues.
 - `"""` is reported as not supported yet, until 2c.

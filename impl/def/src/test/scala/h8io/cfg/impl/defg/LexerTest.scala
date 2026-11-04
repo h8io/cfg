@@ -91,6 +91,42 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
     lex("a\rb") shouldBe Lexed(List(plain("a"), plain("b")), List(LoneCarriageReturn(loc(1, 2))))
   }
 
+  it should "read a tab between tokens as whitespace" in {
+    key("a:\tb\t,\tc") shouldBe Lexed(List(bare("a"), Colon, bare("b"), Comma, bare("c")), Nil)
+  }
+
+  "A tab in indentation" should "be reported at the first one, once per line" in {
+    key("\ta\n  \t\t b\nc\t d") shouldBe
+      Lexed(List(bare("a"), Newline, bare("b"), Newline, bare("c"), bare("d")),
+        List(TabInIndentation(loc(1, 1)), TabInIndentation(loc(2, 3))))
+  }
+
+  it should "be reported before the errors found after it on its line" in {
+    lex("\t\u00A0a") shouldBe
+      Lexed(List(plain("a")), List(TabInIndentation(loc(1, 1)), ForeignWhitespace(loc(1, 2), '\u00A0')))
+  }
+
+  it should "not be reported on a blank or comment-only line" in {
+    lex("\t\n\t// x\n\t/* x */\r\n\t/* x\n */ a\n\t") shouldBe
+      Lexed(List(Newline, Newline, Newline, plain("a"), Newline), Nil)
+  }
+
+  "Whitespace other than space and tab" should "be reported and read as whitespace" in {
+    val foreign = List('\u00A0', '\u2007', '\u202F', '\u3000', '\f', '\u000B', '\u0085', '\u2028', '\u2029', '\uFEFF')
+    foreign.foreach { c =>
+      withClue(c.toInt.toHexString) {
+        lex(s"a${c}b") shouldBe Lexed(List(plain("a"), plain("b")), List(ForeignWhitespace(loc(1, 2), c)))
+        key(s"a:${c}b") shouldBe Lexed(List(bare("a"), Colon, bare("b")), List(ForeignWhitespace(loc(1, 3), c)))
+      }
+    }
+  }
+
+  it should "be content inside quotes and comments" in {
+    lex("\"a\u00A0b\" // \u00A0\n/* \u2028 */ x") shouldBe
+      Lexed(List(quoted(Text("a\u00A0b")), Newline, plain("x")), Nil)
+    key("`a\u00A0b`") shouldBe Lexed(List(Name("a\u00A0b", quoted = true)), Nil)
+  }
+
   "Comments" should "run to the end of the line, leaving the newline" in {
     lex("a // x\rb\nc") shouldBe Lexed(List(plain("a"), Newline, plain("c")), List(LoneCarriageReturn(loc(1, 7))))
   }
@@ -271,6 +307,14 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   it should "report whitespace inside it where it stands" in {
     lex("${ a} x") shouldBe Lexed(List(scalar(), plain("x")), List(WhitespaceInSubstitution(loc(1, 3))))
     lex("\"${a b}c\"") shouldBe Lexed(List(quoted(Text("c"))), List(WhitespaceInSubstitution(loc(1, 5))))
+  }
+
+  it should "leave a lone CR inside it to be reported as one" in {
+    lex("${a\rb} x") shouldBe
+      Lexed(List(scalar(), plain("b"), RightBrace, plain("x")),
+        List(InvalidSubstitution(loc(1, 1)), LoneCarriageReturn(loc(1, 4))))
+    lex("\"${a\rb}\"") shouldBe
+      Lexed(List(quoted(Text("b}"))), List(InvalidSubstitution(loc(1, 2)), LoneCarriageReturn(loc(1, 5))))
   }
 
   it should "be skipped no further than the scalar around it or the end of the line" in {
