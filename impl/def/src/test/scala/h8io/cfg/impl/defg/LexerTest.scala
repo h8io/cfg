@@ -112,7 +112,7 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   }
 
   "Whitespace other than space and tab" should "be reported and read as whitespace" in {
-    val foreign = List('\u00A0', '\u2007', '\u202F', '\u3000', '\f', '\u000B', '\u0085', '\u2028', '\u2029', '\uFEFF')
+    val foreign = List('\u00A0', '\u2007', '\u202F', '\u3000', '\f', '\u000B', '\u001F', '\uFEFF')
     foreign.foreach { c =>
       withClue(c.toInt.toHexString) {
         lex(s"a${c}b") shouldBe Lexed(List(plain("a"), plain("b")), List(ForeignWhitespace(loc(1, 2), c)))
@@ -122,9 +122,28 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   }
 
   it should "be content inside quotes and comments" in {
-    lex("\"a\u00A0b\" // \u00A0\n/* \u2028 */ x") shouldBe
+    lex("\"a\u00A0b\" // \u00A0\n/* \u3000 */ x") shouldBe
       Lexed(List(quoted(Text("a\u00A0b")), Newline, plain("x")), Nil)
     key("`a\u00A0b`") shouldBe Lexed(List(Name("a\u00A0b", quoted = true)), Nil)
+  }
+
+  "NEL, U+2028 and U+2029" should "be reported anywhere, read as whitespace outside quotes and dropped inside" in
+    List('\u0085', '\u2028', '\u2029').foreach { c =>
+      withClue(c.toInt.toHexString) {
+        lex(s"a${c}b") shouldBe Lexed(List(plain("a"), plain("b")), List(ForeignLineBreak(loc(1, 2), c)))
+        lex("\"a" + c.toString + "b\" `c" + c.toString + "d`") shouldBe
+          Lexed(List(quoted(Text("ab")), Name("cd", quoted = true)),
+            List(ForeignLineBreak(loc(1, 3), c), ForeignLineBreak(loc(1, 9), c)))
+        lex(s"// x${c}y\n/* x${c}y */ z") shouldBe
+          Lexed(List(Newline, plain("z")), List(ForeignLineBreak(loc(1, 5), c), ForeignLineBreak(loc(2, 5), c)))
+        lex(s"$${a${c}b} x") shouldBe
+          Lexed(List(scalar(), plain("b"), RightBrace, plain("x")),
+            List(InvalidSubstitution(loc(1, 1)), ForeignLineBreak(loc(1, 4), c)))
+      }
+    }
+
+  they should "be written as an escape inside quotes" in {
+    lex("\"\\u2028\"") shouldBe Lexed(List(quoted(Text("\u2028"))), Nil)
   }
 
   "Comments" should "run to the end of the line, leaving the newline" in {

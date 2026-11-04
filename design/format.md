@@ -65,10 +65,13 @@ loader path.
   not UTF-8 ends the source as unreadable, pointing at the first bad byte; nothing is replaced. A
   newline is LF or CRLF; a lone CR is an error.
 - **Whitespace** is space and tab, nothing else — YAML's set, which Scala 3 and Python widen only
-  with ASCII control characters such as form feed. Every other whitespace character outside quotes and comments is an error: NBSP and the
-  other Unicode spaces, FF, VT, NEL, U+2028/U+2029, and a byte order mark past the start. Each is
-  reported where it stands and then read as whitespace, as a lone CR is. Inside quotes and comments
-  such characters are content.
+  with ASCII control characters such as form feed. Every other whitespace character outside quotes
+  and comments is an error: NBSP and the other Unicode spaces, FF, VT, and a byte order mark past
+  the start. Each is reported where it stands and then read as whitespace, as a lone CR is. Inside
+  quotes and comments such characters are content.
+- **NEL, U+2028 and U+2029 are errors anywhere**, quotes and comments included, as a lone CR is:
+  some tools show them as a line break and others do not. In `"…"` and backticks they are written
+  `\u0085`, `\u2028`, `\u2029`; in `"""…"""` not yet (§5).
 - **A tab in indentation is an error**, already in v1, as in YAML. Indentation is the whitespace
   before the first token of a line; a blank or comment-only line has none. Between tokens a tab is
   whitespace like a space. Inside `"""…"""` leading whitespace is content (§5), tabs included.
@@ -170,6 +173,11 @@ and SQL survive untouched — except `${…}`, which is substituted here as in a
 two escapes: `\"""` for a literal `"""` and `\${` for a literal `${`, the latter as in `"…"`. Any
 other `\` is an ordinary character. A `\` right before the closing delimiter therefore escapes it:
 a value ending in `\` is written as a block with the delimiter on its own line, or as `"…\\"`.
+
+**To be settled in step 2c: a `\u` escape.** Without one, a lone CR, NEL, U+2028 and U+2029 (§3)
+cannot be written in a triple-quoted string at all. Its form is open: `\\` is not an escape here,
+so a plain `\uXXXX` would leave no way to write a literal `\u0041`, common in JSON, Java and
+regexes.
 
 What follows the opening delimiter picks one of two forms, which differ in layout only — the
 content rules above are the same in both:
@@ -1012,3 +1020,9 @@ alternative listed here should not be re-proposed without new information.
   compared. Made an error now because v1 must give leading whitespace no meaning that indentation
   could later contradict (§13), and a rule can be relaxed after v1 without breaking a file, not
   tightened. Blank and comment-only lines are exempt, as they take no part in indentation.
+- **NEL, U+2028 and U+2029 are errors anywhere** (§3), quotes and comments included, for the reasons
+  that make a lone CR one (session 7): VS Code shows them as a line break, `cat` and `grep` do not,
+  so `// old<U+2028>key: v` is a field to one reader and a comment to another. The user's call. In
+  `"…"` and backticks they are written with `\u`; for `"""…"""` a `\u` escape is to be added in
+  step 2c, its form open (§5). Other whitespace stays content inside quotes: NBSP has uses in text
+  and breaks no line.

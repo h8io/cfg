@@ -20,6 +20,9 @@ final case class InvalidEncoding(location: SourceLocation) extends DefError
 /** A carriage return that is not part of a CRLF. */
 final case class LoneCarriageReturn(location: SourceLocation) extends DefError
 
+/** NEL, U+2028 or U+2029 anywhere, quotes included; `char` is the one written. In quotes it is written `\\uXXXX`. */
+final case class ForeignLineBreak(location: SourceLocation, char: Char) extends DefError
+
 /** A whitespace character other than space and tab outside quotes and comments, such as NBSP; `char` is the one
   * written.
   */
