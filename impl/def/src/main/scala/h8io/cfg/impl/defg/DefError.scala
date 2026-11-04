@@ -20,6 +20,14 @@ final case class InvalidEncoding(location: SourceLocation) extends DefError
 /** A carriage return that is not part of a CRLF. */
 final case class LoneCarriageReturn(location: SourceLocation) extends DefError
 
+/** A whitespace character other than space and tab outside quotes and comments, such as NBSP; `char` is the one
+  * written.
+  */
+final case class ForeignWhitespace(location: SourceLocation, char: Char) extends DefError
+
+/** A tab in the indentation of a line; the error points at the first one. */
+final case class TabInIndentation(location: SourceLocation) extends DefError
+
 /** A block or doc comment that is never closed; the error points at its opening. Fatal for the source. */
 final case class UnterminatedComment(location: SourceLocation) extends DefError
 

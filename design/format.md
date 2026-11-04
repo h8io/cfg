@@ -64,6 +64,14 @@ loader path.
 - Encoding is UTF-8. A byte order mark at the start of a source is skipped. A byte sequence that is
   not UTF-8 ends the source as unreadable, pointing at the first bad byte; nothing is replaced. A
   newline is LF or CRLF; a lone CR is an error.
+- **Whitespace** is space and tab, nothing else — YAML's set, which Scala 3 and Python widen only
+  with ASCII control characters such as form feed. Every other whitespace character outside quotes and comments is an error: NBSP and the
+  other Unicode spaces, FF, VT, NEL, U+2028/U+2029, and a byte order mark past the start. Each is
+  reported where it stands and then read as whitespace, as a lone CR is. Inside quotes and comments
+  such characters are content.
+- **A tab in indentation is an error**, already in v1, as in YAML. Indentation is the whitespace
+  before the first token of a line; a blank or comment-only line has none. Between tokens a tab is
+  whitespace like a space. Inside `"""…"""` leading whitespace is content (§5), tabs included.
 - **Comments** are `//` to the end of the line and `/* … */`, which nest, as in Scala: commenting out
   a block that already holds a comment is safe. An unterminated `/*` is reported at its opening, a
   stray `*/` is an error, and `/**/` is an empty ordinary comment. Inside an unquoted scalar `//`
@@ -600,7 +608,7 @@ mistake is worse than stopping.
    Settled:
    - The lexer turns indentation into virtual `{` / `}` from a stack of widths; the grammar in §4 and
      the parser stay unchanged, which is why it can be added later.
-   - A tab in indentation is an error.
+   - A tab in indentation is an error — already in v1 (§3), so no v1 file holds one.
    - A dedent must land exactly on a width in the stack. Recovery (§11): every line is reported as an
      error until one lands on a width from the stack again.
    - **Sequences use a `- ` element marker.** Unquoted scalars contain no whitespace (§3), so a line
@@ -989,3 +997,18 @@ alternative listed here should not be re-proposed without new information.
   without breaking a v1 file; the reverse cannot. Rejected: a newline, as in YAML 1.2, for the
   disagreement above; whitespace, as in JSON, which hides a field in the comment before it while the
   editor shows two lines; an ordinary character, which leaves an invisible CR in a value.
+
+### Session 8 — 2026-11-04
+
+- **Whitespace is space and tab; every other whitespace character outside quotes and comments is an
+  error** (§3), read as whitespace once reported. The user's direction: whitespace as close to Scala
+  3, YAML and Python as possible, with indentation as an alternative to braces coming later (§13).
+  All three take a tab between tokens. Scala 3 and Python reject NBSP and the like, which YAML keeps
+  in a value invisibly — the class of mistake that `a: foo bar` being an error guards against (§3),
+  since `foo<NBSP>bar` would otherwise pass as one scalar. Form feed, whitespace to Python, is left
+  out with YAML: a config has no use for it.
+- **A tab in indentation is an error already in v1** (§3), rather than only once indentation is
+  significant (§13). YAML's rule; Scala 3 and Python accept tabs and reject only a mix that cannot be
+  compared. Made an error now because v1 must give leading whitespace no meaning that indentation
+  could later contradict (§13), and a rule can be relaxed after v1 without breaking a file, not
+  tightened. Blank and comment-only lines are exempt, as they take no part in indentation.
