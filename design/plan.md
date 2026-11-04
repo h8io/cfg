@@ -136,8 +136,8 @@ rules (`format.md` §5), are a part of their own.
 
 ### 2c. Lexer: triple-quoted strings
 
-- Triple-quoted string (§5): raw but for `${…}` and the escapes `\"""`, `\${`; a run of more than
-  three quotes closes at its last three.
+- Triple-quoted string (§5): the escape set of `"…"` and `${…}`, escapes interpreted after the
+  layout rules; a run of more than three quotes closes at its last three.
 - One-line form: taken as written, a newline before the closing delimiter is fatal like an
   unterminated `"…"`.
 - Block form: whitespace after the opening delimiter is an error, not fatal; first and last newline
@@ -145,12 +145,8 @@ rules (`format.md` §5), are a part of their own.
   closing delimiter's column counting), `<`, `=`, `>` (folding), and a width `N` or `>N` relative to
   the opening line; mismatched indents are errors; an unknown marker is an error.
 - An unterminated `"""` ends the source (§11).
-- **`\u` escape — to implement** (`format.md` §5): the only way to put a lone CR, NEL, U+2028 or
-  U+2029 into a triple-quoted string. Its form is open — with `\\` not an escape in `"""`, a plain
-  `\uXXXX` leaves no way to write a literal `\u0041` — and is settled with the user before the step
-  starts.
 
-**Spec gaps for 2a–2c:** the form of `\u` in `"""` (2c, above); otherwise none. Multi-line strings were reopened and settled in session 7
+**Spec gaps for 2a–2c:** none left. Multi-line strings were reopened and settled in session 7
 (`format.md` §5, §14), as were directive names, `${` in and out of quotes, the byte order mark and a
 tag before `"""` (§3, §5, §6).
 
