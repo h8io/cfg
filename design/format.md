@@ -1064,3 +1064,16 @@ alternative listed here should not be re-proposed without new information.
   `"""`. Rejected: YAML's and SQL's `''` for a quote, which leaves a backslash before the closing
   delimiter unwritable; Perl's escapes also give `'''` a literal `\'''`. The cost of Perl's rule:
   `\\` collapses, so a UNC path doubles its leading backslashes.
+
+**Open after session 8** — proposed and written into the spec, not yet confirmed by the user; to
+be settled before step 2c starts:
+
+- **`'…'` on one line only**, departing from Perl, whose single quotes span lines (§5). The reason
+  is the one for `"…"`: an unterminated quote reported on its own line. The alternative is Perl's
+  rule as it stands, with `'''…'''` then only for the layout rules.
+- **Escapes in `"""…"""` interpreted after the layout rules** (§5), Java's order, so `\t` at the
+  end of a line and `\n` under folding survive. Proposed with the escape set, never discussed on
+  its own.
+- **Whitespace other than space and tab inside `${…}`**: `${a<NBSP>b}` is one
+  `InvalidSubstitution`, and the NBSP is skipped with the rest of the broken substitution, with no
+  error of its own (§3, §9). One error per mistake, as §11 wants; the alternative reports both.
