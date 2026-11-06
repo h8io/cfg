@@ -380,11 +380,11 @@ private[defg] final class Lexer(source: Source) {
     marker.toList match {
       case Nil => Some(Layout(CommonIndent, folded = false))
       case '<' :: Nil => Some(Layout(StripIndent, folded = false))
-      case '=' :: Nil => Some(Layout(KeepIndent, folded = false))
-      case '>' :: Nil => Some(Layout(CommonIndent, folded = true))
+      case '>' :: Nil => Some(Layout(KeepIndent, folded = false))
+      case '+' :: Nil => Some(Layout(CommonIndent, folded = true))
       case width :: Nil if isWidth(width) => Some(Layout(WidthIndent(width - '0'), folded = false))
-      case '>' :: width :: Nil if isWidth(width) => Some(Layout(WidthIndent(width - '0'), folded = true))
-      case ('<' | '=') :: width :: Nil if isWidth(width) =>
+      case '+' :: width :: Nil if isWidth(width) => Some(Layout(WidthIndent(width - '0'), folded = true))
+      case ('<' | '>') :: width :: Nil if isWidth(width) =>
         report(WidthWithMarker.apply, at + 1)
         layout(marker.substring(0, 1), at)
       case _ => None
