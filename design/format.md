@@ -1065,15 +1065,19 @@ alternative listed here should not be re-proposed without new information.
   delimiter unwritable; Perl's escapes also give `'''` a literal `\'''`. The cost of Perl's rule:
   `\\` collapses, so a UNC path doubles its leading backslashes.
 
-**Open after session 8** — proposed and written into the spec, not yet confirmed by the user; to
-be settled before step 2c starts:
+**Confirmed after session 8** — proposed during the review of step 2b and written into the spec
+then; confirmed by the user on 2026-11-06, before step 2c:
 
 - **`'…'` on one line only**, departing from Perl, whose single quotes span lines (§5). The reason
-  is the one for `"…"`: an unterminated quote reported on its own line. The alternative is Perl's
-  rule as it stands, with `'''…'''` then only for the layout rules.
-- **Escapes in `"""…"""` interpreted after the layout rules** (§5), Java's order, so `\t` at the
-  end of a line and `\n` under folding survive. Proposed with the escape set, never discussed on
-  its own.
+  is the one for `"…"`: an unterminated quote reported on its own line. Rejected: Perl's rule as it
+  stands, with `'''…'''` then only for the layout rules.
+- **Escapes in `"""…"""` interpreted after the layout rules** (§5), Java's order (JEP 378): the
+  layout reads an escape as the characters written, so what it produces is kept. `\t` at the end of
+  a line survives the stripping of trailing whitespace, `\u0020` at the start of one is not indent,
+  and `\n` survives folding. Rejected: escapes first — `\t` would then be stripped, leaving no way
+  to end a block line in whitespace; `\u0020` would count as indent; and `\n` would be folded into
+  a space or, under no marker, start a line with no indent and drop the common indent of the whole
+  block to zero.
 - **Whitespace other than space and tab inside `${…}`**: `${a<NBSP>b}` is one
   `InvalidSubstitution`, and the NBSP is skipped with the rest of the broken substitution, with no
-  error of its own (§3, §9). One error per mistake, as §11 wants; the alternative reports both.
+  error of its own (§3, §9). One error per mistake, as §11 wants. Rejected: reporting both.
