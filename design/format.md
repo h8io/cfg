@@ -1106,3 +1106,20 @@ then; confirmed by the user on 2026-11-06, before step 2c:
   free again; keeping it as a synonym of `>` was rejected — one spelling per rule. Noted when the
   symbol was picked: YAML's `|+` means keeping trailing newlines, so `+` does not read as folding
   to a YAML reader either.
+
+**Open after session 9** — the user is thinking about markers and about the characters a string may
+hold; to be settled before #134 (step 2c) merges:
+
+- **Markers.** The set now: none (Java's rule), `<` strips all of the indent, `>` keeps it, `+`
+  folds, a width `N` or `+N`; markers do not combine but for `+N`, `<N` and `>N` being errors; any
+  other text after the delimiter an `UnknownMarker`, not fatal. Free and noted for later: `|`, the
+  candidate for a margin as in Scala's `stripMargin`, and `=`, freed in this session. Open whether
+  the set changes again, and how a marker that is not about indent — turning substitution off, or
+  changing its syntax (§13 item 4) — would combine with the indent markers, which do not combine
+  today.
+- **Characters in strings.** As it stands: lone CR, NEL, U+2028 and U+2029 are errors anywhere,
+  dropped once reported, and in `"…"`/`"""…"""` written as escapes; a raw string cannot hold them
+  at all. Other whitespace (NBSP, FF, VT, …) and tabs are content inside quotes. **Other control
+  characters — U+0001 and the like — are not restricted anywhere**, in quotes or out: the lexer
+  only catches those Java counts as whitespace (FF, VT, U+001C–U+001F). Open whether they become
+  errors, inside quotes, outside, or both, and how they are written then.
