@@ -1,6 +1,7 @@
 package h8io.cfg.impl.defg
 
 import h8io.cfg.Id
+import h8io.cfg.impl.defg.Lexer.*
 import h8io.cfg.impl.defg.Token.*
 
 import scala.annotation.tailrec
@@ -8,8 +9,8 @@ import scala.collection.mutable
 
 /** Reads the tokens of one source, in the mode the parser asks for (`format.md` §3).
   *
-  * Errors are collected rather than thrown. A fatal one — an unterminated quote or comment, a triple-quoted string —
-  * leaves nothing to resynchronise on, so the lexer reports it and answers [[Token.End]] from then on (§11).
+  * Errors are collected rather than thrown. A fatal one — an unterminated quote or comment — leaves nothing to
+  * resynchronise on, so the lexer reports it and answers [[Token.End]] from then on (§11).
   */
 private[defg] final class Lexer(source: Source) {
   private val text = source.text
@@ -52,9 +53,6 @@ private[defg] final class Lexer(source: Source) {
   @inline private def has(i: Int): Boolean = i < text.length
   @inline private def at(i: Int, c: Char): Boolean = has(i) && text.charAt(i) == c
   @inline private def startsWith(s: String, i: Int = offset): Boolean = text.startsWith(s, i)
-
-  /** Whitespace inside a line: space and tab, nothing else (`format.md` §3). */
-  private def isSpace(c: Char): Boolean = c == ' ' || c == '\t'
 
   /** LF or CRLF. */
   private def isNewline(i: Int): Boolean = at(i, '\n') || at(i, '\r') && at(i + 1, '\n')
@@ -169,8 +167,10 @@ private[defg] final class Lexer(source: Source) {
       case ']' => advance(1, RightBracket)
       case ',' => advance(1, Comma)
       case '/' if isDocComment => skipBlockComment().fold[Kind](End)(comment => DocComment(comment.substring(1)))
-      case '"' if startsWith("\"\"\"") => fail(TripleQuoteNotSupported.apply, start)
+      case '"' if startsWith("\"\"\"") => triple(start, '"')
       case '"' => quoted()
+      case '\'' if startsWith("'''") => triple(start, '\'')
+      case '\'' => raw()
       case '`' => backticked(start).fold[Kind](End)(Name(_, quoted = true))
       case '#' =>
         offset += 1
@@ -222,10 +222,7 @@ private[defg] final class Lexer(source: Source) {
       val tag = name(MissingTagName.apply, start)
       if (at(offset, '(')) report(TagArguments.apply, start)
       tag.fold[Kind](End)(Tag.apply)
-    } else {
-      if (c == '\'') report(ApostropheAtStart.apply, start)
-      unquoted()
-    }
+    } else unquoted()
 
   /** A tag or directive name after its prefix: bare, or in backticks. */
   private def name(missing: SourceLocation => DefError, prefix: Int): Option[String] =
@@ -296,7 +293,7 @@ private[defg] final class Lexer(source: Source) {
     offset += 1
     val parts = new Parts
     while (!ended && has(offset) && !at(offset, '"') && !isNewline(offset))
-      if (startsWith("${")) reference(parts, quoted = true)
+      if (startsWith("${")) reference(quoted = true).foreach(parts.reference)
       else if (at(offset, '\\')) escape(parts.buffer)
       else if (!skipBadBreak()) {
         parts.buffer += text.charAt(offset)
@@ -313,7 +310,7 @@ private[defg] final class Lexer(source: Source) {
   private def unquoted(): Kind = {
     val parts = new Parts
     while (!ended && has(offset) && !endsUnquoted(offset))
-      if (startsWith("${")) reference(parts, quoted = false)
+      if (startsWith("${")) reference(quoted = false).foreach(parts.reference)
       else {
         val c = text.charAt(offset)
         if (c == '"' || c == '`') report(QuoteInUnquotedScalar.apply, offset)
@@ -325,11 +322,229 @@ private[defg] final class Lexer(source: Source) {
 
   private def endsUnquoted(i: Int): Boolean = isBreak(i) || at(i, ',') || at(i, '}') || at(i, ']')
 
+  /** A raw string in `'…'`, Perl's single quotes: `\'` and `\\` are its only escapes, and `${` is text. */
+  private def raw(): Kind = {
+    val start = offset
+    offset += 1
+    val value = new StringBuilder
+    while (has(offset) && !at(offset, '\'') && !isNewline(offset)) {
+      val escaped = rawEscape()
+      escaped.foreach(value += _)
+      if (escaped.isEmpty && !skipBadBreak()) {
+        value += text.charAt(offset)
+        offset += 1
+      }
+    }
+    if (at(offset, '\'')) {
+      offset += 1
+      Scalar(if (value.isEmpty) Vector.empty else Vector(Text(value.result())), quoted = true)
+    } else fail(UnterminatedString.apply, start)
+  }
+
+  /** `\'` or `\\` here, read; any other backslash is an ordinary character in a raw string. */
+  private def rawEscape(): Option[Char] =
+    if (at(offset, '\\') && (at(offset + 1, '\'') || at(offset + 1, '\\'))) {
+      offset += 2
+      Some(text.charAt(offset - 1))
+    } else None
+
+  /** A triple-quoted string from its opening delimiter, `"""` or `'''` (`format.md` §5): always a block, and what
+    * stands between the delimiter and the end of its line is its marker — an unknown one reported, and the block read
+    * as with none.
+    */
+  private def triple(start: Int, quote: Char): Kind = {
+    offset = start + 3
+    val markerStart = offset
+    val written = new StringBuilder
+    while (has(offset) && !isNewline(offset))
+      if (!skipBadBreak()) {
+        written += text.charAt(offset)
+        offset += 1
+      }
+    var length = written.length
+    while (length > 0 && isSpace(written.charAt(length - 1))) length -= 1
+    val known = layout(written.substring(0, length), markerStart)
+    // whitespace after an unknown marker is part of that one mistake
+    if (known.isEmpty) report(UnknownMarker(_, written.result()), markerStart)
+    else if (length < written.length) report(WhitespaceAfterDelimiter.apply, offset - (written.length - length))
+    if (has(offset)) {
+      offset += (if (at(offset, '\r')) 2 else 1)
+      content(start, quote).fold[Kind](End)(lines =>
+        scalar(arrange(lines, known.getOrElse(Layout(CommonIndent, folded = false)), start)))
+    } else fail(UnterminatedString.apply, start)
+  }
+
+  /** The layout a marker picks, `None` for an unknown one. */
+  private def layout(marker: String, at: Int): Option[Layout] = {
+    def isWidth(c: Char): Boolean = c >= '1' && c <= '9'
+    marker.toList match {
+      case Nil => Some(Layout(CommonIndent, folded = false))
+      case '<' :: Nil => Some(Layout(StripIndent, folded = false))
+      case '=' :: Nil => Some(Layout(KeepIndent, folded = false))
+      case '>' :: Nil => Some(Layout(CommonIndent, folded = true))
+      case width :: Nil if isWidth(width) => Some(Layout(WidthIndent(width - '0'), folded = false))
+      case '>' :: width :: Nil if isWidth(width) => Some(Layout(WidthIndent(width - '0'), folded = true))
+      case ('<' | '=') :: width :: Nil if isWidth(width) =>
+        report(WidthWithMarker.apply, at + 1)
+        layout(marker.substring(0, 1), at)
+      case _ => None
+    }
+  }
+
+  /** The content of a triple-quoted string up to its closing delimiter, split into lines, escapes and substitutions
+    * read but no layout applied; `None` once the source has ended.
+    */
+  private def content(start: Int, quote: Char): Option[Vector[Line]] = {
+    val lines = Vector.newBuilder[Line]
+    var line = Vector.newBuilder[Piece]
+    var lineStart = offset
+    var closed = false
+    while (!closed && !ended && has(offset)) {
+      var run = 0
+      while (at(offset + run, quote)) run += 1
+      if (run >= 3) {
+        // a run of more than three quotes closes at its last three
+        for (_ <- 3 until run) line += Written(quote)
+        offset += run
+        closed = true
+      } else if (run > 0) {
+        for (_ <- 0 until run) line += Written(quote)
+        offset += run
+      } else if (isNewline(offset)) {
+        lines += Line(lineStart, line.result())
+        line = Vector.newBuilder[Piece]
+        offset += (if (at(offset, '\r')) 2 else 1)
+        lineStart = offset
+      } else if (quote == '\'') {
+        val escaped = rawEscape()
+        escaped.foreach(c => line += Escaped(c.toString))
+        if (escaped.isEmpty) written(line)
+      } else if (at(offset, '\\')) {
+        val value = new StringBuilder
+        escape(value)
+        if (value.nonEmpty) line += Escaped(value.result())
+      } else if (startsWith("${")) reference(quoted = true).foreach(line += Substituted(_))
+      else written(line)
+    }
+    if (closed) Some(lines.result() :+ Line(lineStart, line.result()))
+    else {
+      if (!ended) stop(UnterminatedString.apply, start)
+      None
+    }
+  }
+
+  /** A character as written, here; a lone CR, NEL, U+2028 or U+2029 is reported and dropped instead. */
+  private def written(line: mutable.Builder[Piece, Vector[Piece]]): Unit =
+    if (!skipBadBreak()) {
+      line += Written(text.charAt(offset))
+      offset += 1
+    }
+
+  /** Applies the layout of a block (`format.md` §5) to its lines, the last being the one of the closing delimiter,
+    * which is dropped with the newline before it when it holds nothing but whitespace.
+    */
+  private def arrange(lines: Vector[Line], layout: Layout, start: Int): Vector[Piece] = {
+    val last = lines.last
+    val closingAlone = last.pieces.forall(isBlank)
+    val body = (if (closingAlone) lines.init else lines).map(_.trimmed)
+    val stripped = layout.indent match {
+      case CommonIndent =>
+        val indent = commonIndent(body.filter(_.pieces.nonEmpty) ++ (if (closingAlone) Vector(last) else Vector.empty))
+        body.map(_.drop(indent))
+      case StripIndent => body.map(line => line.drop(line.indent.length))
+      case KeepIndent => body
+      case WidthIndent(width) =>
+        val opening = indentOf(start)
+        body.map(line =>
+          if (line.pieces.isEmpty) line else line.drop(widthIndent(line, opening, opening.length + width)))
+    }
+    join(stripped.map(_.pieces), layout.folded)
+  }
+
+  /** The indent of the line holding `offset`. */
+  private def indentOf(offset: Int): String = {
+    var i = text.lastIndexOf('\n', offset - 1) + 1
+    val from = i
+    while (isSpace(text.charAt(i))) i += 1
+    text.substring(from, i)
+  }
+
+  /** The longest indent `lines` share; any two of which neither is a prefix of the other are reported, at the first
+    * character that differs. `lines` is never empty: it holds the closing delimiter's line, or a last line that is not
+    * blank.
+    */
+  private def commonIndent(lines: Vector[Line]): Int = {
+    var longest = ""
+    lines.foreach { line =>
+      val indent = line.indent
+      if (!longest.startsWith(indent))
+        if (indent.startsWith(longest)) longest = indent
+        else report(InconsistentIndent.apply, line.start + sharedPrefix(longest, indent))
+    }
+    lines.map(_.indent).reduce((a, b) => a.substring(0, sharedPrefix(a, b))).length
+  }
+
+  private def sharedPrefix(a: String, b: String): Int = {
+    var i = 0
+    while (i < a.length && i < b.length && a.charAt(i) == b.charAt(i)) i += 1
+    i
+  }
+
+  /** How much of `line`'s indent to strip under an explicit width: `required` characters, the first of them `opening`;
+    * a line that falls short is reported where it does, and loses what indent it has up to that.
+    */
+  private def widthIndent(line: Line, opening: String, required: Int): Int = {
+    val indent = line.indent
+    if (indent.startsWith(opening) && indent.length >= required) required
+    else {
+      val short = if (indent.startsWith(opening)) indent.length else sharedPrefix(opening, indent)
+      report(InsufficientIndent.apply, line.start + short)
+      math.min(indent.length, required)
+    }
+  }
+
+  /** Joins lines with newlines, or folds them as in YAML: a newline between two lines left with no indent becomes a
+    * space, and of a run of empty lines between them the first newline is dropped; a line indented deeper is not
+    * folded, nor are the newlines around it.
+    */
+  private def join(lines: Vector[Vector[Piece]], folded: Boolean): Vector[Piece] = {
+    def isText(line: Vector[Piece]): Boolean = !isBlank(line.head) // called on non-empty lines only
+    def newlines(n: Int): Vector[Piece] = Vector.fill(n)(Escaped("\n"))
+    val filled = lines.indices.filter(lines(_).nonEmpty)
+    if (filled.isEmpty) newlines(math.max(lines.length - 1, 0))
+    else {
+      val between = filled.zip(filled.tail).flatMap { case (a, b) =>
+        val empty = b - a - 1
+        val separator =
+          if (folded && isText(lines(a)) && isText(lines(b)))
+            if (empty == 0) Vector(Escaped(" ")) else newlines(empty)
+          else newlines(empty + 1)
+        separator ++ lines(b)
+      }
+      newlines(filled.head) ++ lines(filled.head) ++ between ++ newlines(lines.length - 1 - filled.last)
+    }
+  }
+
+  /** A quoted scalar of `pieces`. */
+  private def scalar(pieces: Vector[Piece]): Kind = {
+    val parts = new Parts
+    pieces.foreach {
+      case Written(c) =>
+        parts.buffer += c
+        ()
+      case Escaped(value) =>
+        parts.buffer ++= value
+        ()
+      case Substituted(reference) => parts.reference(reference)
+    }
+    Scalar(parts.result(), quoted = true)
+  }
+
   /** `${path}` or `${?path}` from its `$`, its path written as `Id.path` renders one (`format.md` §9). A path that
     * cannot be read is reported — at the space or tab, if that is what broke it, at the `${` otherwise — and skipped up
     * to the next `}` on its line, or with none up to where the scalar around it ends.
     */
-  private def reference(parts: Parts, quoted: Boolean): Unit = {
+  private def reference(quoted: Boolean): Option[Reference] = {
     val start = offset
     offset += 2
     val optional = at(offset, '?')
@@ -337,7 +552,7 @@ private[defg] final class Lexer(source: Source) {
     path(Id.Root).flatMap(path => if (at(offset, '}')) Some(path) else None) match {
       case Some(path) =>
         offset += 1
-        parts.reference(Reference(path, optional, source.location(start)))
+        Some(Reference(path, optional, source.location(start)))
       case None if !ended =>
         if (has(offset) && isSpace(text.charAt(offset)))
           report(WhitespaceInSubstitution.apply, offset)
@@ -345,7 +560,8 @@ private[defg] final class Lexer(source: Source) {
         val close = closingBrace(quoted)
         if (close >= 0) offset = close + 1
         else while (has(offset) && !endsAfterReference(offset, quoted)) offset += 1
-      case None => ()
+        None
+      case None => None
     }
   }
 
@@ -425,4 +641,42 @@ private[defg] final class Lexer(source: Source) {
         buffer.clear()
       }
   }
+}
+
+private object Lexer {
+
+  /** Whitespace inside a line: space and tab, nothing else (`format.md` §3). */
+  def isSpace(c: Char): Boolean = c == ' ' || c == '\t'
+
+  /** What a line of a triple-quoted string holds before its layout is applied (`format.md` §5): a character as written,
+    * what an escape produced — never whitespace to the layout, which comes first — or a substitution.
+    */
+  sealed trait Piece
+  final case class Written(c: Char) extends Piece
+  final case class Escaped(value: String) extends Piece
+  final case class Substituted(reference: Reference) extends Piece
+
+  def isBlank(piece: Piece): Boolean =
+    piece match {
+      case Written(c) => isSpace(c)
+      case _ => false
+    }
+
+  /** A line of a triple-quoted string from `start`, its newline left out. */
+  final case class Line(start: Int, pieces: Vector[Piece]) {
+    def indent: String = pieces.iterator.takeWhile(isBlank).collect { case Written(c) => c }.mkString
+
+    def drop(n: Int): Line = copy(pieces = pieces.drop(n))
+
+    /** Without trailing whitespace; a line of nothing else becomes empty. */
+    def trimmed: Line = copy(pieces = pieces.reverseIterator.dropWhile(isBlank).toVector.reverse)
+  }
+
+  sealed trait Indent
+  case object CommonIndent extends Indent
+  case object StripIndent extends Indent
+  case object KeepIndent extends Indent
+  final case class WidthIndent(width: Int) extends Indent
+
+  final case class Layout(indent: Indent, folded: Boolean)
 }

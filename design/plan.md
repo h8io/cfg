@@ -64,7 +64,7 @@ at the phase gate.
 | 1 | Module skeleton, locations, errors | done |
 | 2a | Protocol: tags as a set, backticked keys, YAML tags without `!` | done |
 | 2b | Source and lexer | done |
-| 2c | Lexer: triple-quoted and raw strings | todo |
+| 2c | Lexer: triple-quoted and raw strings | done |
 | 3 | Ast and parser: core syntax | todo |
 | 4 | Parser: substitutions and directives | todo |
 | 5 | Parser: error recovery | todo |
@@ -138,20 +138,21 @@ rules (`format.md` §5), are a part of their own.
 
 - Triple-quoted string (§5): the escape set of `"…"` and `${…}`, escapes interpreted after the
   layout rules; a run of more than three quotes closes at its last three.
-- One-line form: taken as written, a newline before the closing delimiter is fatal like an
-  unterminated `"…"`.
-- Block form: whitespace after the opening delimiter is an error, not fatal; first and last newline
-  dropped; trailing whitespace stripped; CRLF to LF; indent by marker — none (Java's rule, the
-  closing delimiter's column counting), `<`, `=`, `>` (folding), and a width `N` or `>N` relative to
-  the opening line; mismatched indents are errors; an unknown marker is an error.
+- Always a block (no one-line form since session 9): whatever follows the opening delimiter on its
+  line is the marker, an unknown one an error, not fatal; whitespace after the delimiter or a known
+  marker is an error, not fatal; first and last newline dropped; trailing whitespace stripped; CRLF
+  to LF; indent by marker — none (Java's rule, the closing delimiter's column counting), `<`, `=`,
+  `>` (folding), and a width `N` or `>N` relative to the opening line; mismatched indents are
+  errors.
 - An unterminated `"""` ends the source (§11).
-- Raw strings (§5): `'…'` on one line and `'''…'''` with the forms and layout of `"""`; no
+- Raw strings (§5): `'…'` on one line and `'''…'''` with the layout of `"""`; no
   substitutions, `\'` and `\\` the only escapes. `ApostropheAtStart` goes; an unterminated raw
   string ends the source, as its double-quoted counterpart does.
 
 **Spec gaps for 2a–2c:** none left. Multi-line strings were reopened and settled in session 7
 (`format.md` §5, §14), as were directive names, `${` in and out of quotes, the byte order mark and a
-tag before `"""` (§3, §5, §6).
+tag before `"""` (§3, §5, §6). Session 9 dropped the one-line form of `"""` when 2c started, and
+settled that any text after the opening delimiter is a marker, an unknown one not fatal (§5, §14).
 
 ### 3. Ast and parser: core syntax
 

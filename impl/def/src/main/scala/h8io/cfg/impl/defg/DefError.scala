@@ -37,8 +37,35 @@ final case class UnterminatedComment(location: SourceLocation) extends DefError
 /** The end of a block comment outside any comment. */
 final case class StrayCommentEnd(location: SourceLocation) extends DefError
 
-/** A `"` with no closing quote on its line; the error points at the opening. Fatal for the source. */
+/** A string that is never closed: `"…"` or `'…'` not closed on its line, a triple-quoted block not closed at all; the
+  * error points at the opening. Fatal for the source.
+  */
 final case class UnterminatedString(location: SourceLocation) extends DefError
+
+/** Whitespace between the opening delimiter of a triple-quoted block, or its marker, and the end of the line; the error
+  * points at the first whitespace character.
+  */
+final case class WhitespaceAfterDelimiter(location: SourceLocation) extends DefError
+
+/** What stands between the opening delimiter of a triple-quoted block and the end of its line, when it is not one of
+  * `<`, `=`, `>`, a width `1`–`9`, or `>` and a width; `marker` is what was written, trailing whitespace included. The
+  * block is read as with no marker. A string meant to be one line and not closed on it gives this error too: a block
+  * starts on the line after the delimiter.
+  */
+final case class UnknownMarker(location: SourceLocation, marker: String) extends DefError
+
+/** A width after `<` or `=`, which fix the indent themselves; the block is read with the marker alone. */
+final case class WidthWithMarker(location: SourceLocation) extends DefError
+
+/** With no marker, two lines of a triple-quoted block whose indents are not one a prefix of the other, such as a tab
+  * where the other has a space; the error points at the first character that differs.
+  */
+final case class InconsistentIndent(location: SourceLocation) extends DefError
+
+/** With an explicit width, a line of a triple-quoted block that does not start with the indent of the opening line and
+  * the width; the error points at the first character that falls short.
+  */
+final case class InsufficientIndent(location: SourceLocation) extends DefError
 
 /** A backtick with no closing one on its line; the error points at the opening. Fatal for the source. */
 final case class UnterminatedName(location: SourceLocation) extends DefError
@@ -54,9 +81,6 @@ final case class ColonWithoutSpace(location: SourceLocation) extends DefError
 
 /** A `"` or backtick inside an unquoted scalar; the value has to be quoted as a whole. */
 final case class QuoteInUnquotedScalar(location: SourceLocation) extends DefError
-
-/** An unquoted scalar starting with `'`, which YAML would read as a quote. */
-final case class ApostropheAtStart(location: SourceLocation) extends DefError
 
 /** An `@` with no tag name after it. */
 final case class MissingTagName(location: SourceLocation) extends DefError
@@ -75,9 +99,6 @@ final case class WhitespaceInSubstitution(location: SourceLocation) extends DefE
 
 /** A `\${…}` whose path cannot be read; the error points at the `\${`. */
 final case class InvalidSubstitution(location: SourceLocation) extends DefError
-
-/** A triple-quoted string, which the lexer does not read yet. Fatal for the source. */
-final case class TripleQuoteNotSupported(location: SourceLocation) extends DefError
 
 /** Every error a load reported, in the order found. The loader reports as many as it can without inventing any. */
 final case class DefErrors(errors: ::[DefError]) extends CfgError

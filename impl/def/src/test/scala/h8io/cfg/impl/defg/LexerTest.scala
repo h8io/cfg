@@ -263,8 +263,157 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
     lex("\"b\r\n\"") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1))))
   }
 
-  "A triple-quoted string" should "end the source until it is supported" in {
-    lex("a \"\"\"b\"\"\"") shouldBe Lexed(List(plain("a")), List(TripleQuoteNotSupported(loc(1, 3))))
+  "A raw string" should "take \\' and \\\\ as its only escapes, and ${ as text" in {
+    lex("""'a\'b\\c\d${x}"' ''""") shouldBe Lexed(List(quoted(Text("a'b\\c\\d${x}\"")), quoted()), Nil)
+  }
+
+  it should "be read in key mode too, for the parser to reject" in {
+    key("'a': b") shouldBe Lexed(List(quoted(Text("a")), Colon, bare("b")), Nil)
+  }
+
+  it should "not open inside an unquoted scalar" in {
+    lex("it's") shouldBe Lexed(List(plain("it's")), Nil)
+  }
+
+  it should "report a lone CR inside it" in {
+    lex("'a\rb'") shouldBe Lexed(List(quoted(Text("ab"))), List(LoneCarriageReturn(loc(1, 3))))
+  }
+
+  it should "end the source when it is not closed on its line" in {
+    lex("a 'b\nc'") shouldBe Lexed(List(plain("a")), List(UnterminatedString(loc(1, 3))))
+    lex("'b\\'") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1))))
+  }
+
+  /** `text` with each "```" standing for a triple quote, which a Scala string cannot hold unescaped. */
+  private def tq(text: String): String = text.replace("```", "\"\"\"")
+
+  private def block(text: String): Lexed[Kind] = lex(tq(text))
+
+  private def value(text: String, value: String, errors: DefError*): Unit =
+    block(text) shouldBe Lexed(List(quoted(Text(value))), errors.toList)
+
+  "A triple-quoted string" should "always be a block, what follows its delimiter on the line a marker" in {
+    value("```abc```\n  d\n  ```", "d", UnknownMarker(loc(1, 4), "abc\"\"\""))
+    block("x ```a b\nc```") shouldBe Lexed(List(plain("x"), quoted(Text("c"))), List(UnknownMarker(loc(1, 6), "a b")))
+    block("```a b") shouldBe Lexed(Nil, List(UnknownMarker(loc(1, 4), "a b"), UnterminatedString(loc(1, 1))))
+    value("```a\\\n  b\n  ```", "b", UnknownMarker(loc(1, 4), "a\\"))
+  }
+
+  it should "close at the last three quotes of a longer run" in {
+    value("```\n  say \"hi\"\"\"\"", "say \"hi\"")
+    value("```\n  a\"\"\"\"\"\"\"\"", "a\"\"\"\"\"")
+  }
+
+  "A triple-quoted block" should "drop the first and the last newline and the common indent" in {
+    value("```\n  abc\n  def\n\n  ```", "abc\ndef\n")
+    value("```\n    Welcome.\n      Indented line.\n    ```", "Welcome.\n  Indented line.")
+  }
+
+  it should "keep an indent left of which the closing delimiter stands" in {
+    value("```\n    abc\n    def\n  ```", "  abc\n  def")
+    value("```\n    abc\n```", "    abc")
+  }
+
+  it should "count the closing delimiter's line only when it stands alone" in {
+    value("```\n    abc\n  def```", "  abc\ndef")
+    value("```\n    abc```", "abc")
+  }
+
+  it should "leave blank lines out of the common indent" in
+    value("```\n    a\n\n  \n    b\n    ```", "a\n\n\nb")
+
+  it should "be empty with no lines" in {
+    block("```\n```") shouldBe Lexed(List(quoted()), Nil)
+    block("```\n  ```") shouldBe Lexed(List(quoted()), Nil)
+  }
+
+  it should "turn CRLF into LF" in
+    value("```\r\n  a\r\n  b\r\n  ```", "a\nb")
+
+  it should "strip trailing whitespace before its escapes are interpreted" in
+    value("```\n  a  \n  b\\t \n  \\u0020c\n  \\td\n  ```", "a\nb\t\n c\n\td")
+
+  it should "strip all of the indent under <" in
+    value("```<\n    a\n  b\n    \\u0020\\u0020c\n  ```", "a\nb\n  c")
+
+  it should "keep the indent under =" in
+    value("```=\n  a\n    b\n  ```", "  a\n    b")
+
+  it should "fold under > as YAML does" in {
+    value("```>\n  a\n  b\n\n  c\n    d\n  e\n  f\n  ```", "a b\nc\n  d\ne f")
+    value("```>\n  a\n\n\n  b\\nc\n  d\n  ```", "a\n\nb\nc d")
+    value("```>\n\n  a\n\n  ```", "\na\n")
+    value("```>\n\n\n```", "\n")
+  }
+
+  it should "strip the opening line's indent and an explicit width" in {
+    value("  ```2\n      abc\n\n    ```", "  abc\n")
+    value("```1\n  a\n   b\n```", " a\n  b")
+    value("  ```>2\n    a\n    b\n      c\n  ```", "a b\n  c")
+  }
+
+  it should "report a line short of an explicit width" in
+    value("  ```2\n    a\n   b\n\tc\n  ```", "a\nb\nc", InsufficientIndent(loc(3, 4)), InsufficientIndent(loc(4, 1)))
+
+  it should "report a width after < or =, and read the marker alone" in {
+    value("```<2\n    a\n  ```", "a", WidthWithMarker(loc(1, 5)))
+    value("```=2\n    a\n  ```", "    a", WidthWithMarker(loc(1, 5)))
+  }
+
+  it should "report an unknown marker, and read the block as with none" in
+    List("|", ">>", "0", "12", "<=", "abc", "a\"b", "//", "a b", "| ").foreach { marker =>
+      withClue(marker) {
+        value(s"```$marker\n    a\n  ```", "  a", UnknownMarker(loc(1, 4), marker))
+      }
+    }
+
+  it should "report whitespace after the delimiter or the marker" in {
+    value("```  \n  a\n  ```", "a", WhitespaceAfterDelimiter(loc(1, 4)))
+    value("```<\t\n  a\n  ```", "a", WhitespaceAfterDelimiter(loc(1, 5)))
+  }
+
+  it should "report a line break of another kind after the delimiter, and leave it out of the marker" in
+    value("```<\u2028\n  a\n  ```", "a", ForeignLineBreak(loc(1, 5), '\u2028'))
+
+  it should "report indents of which neither is a prefix of the other" in {
+    value("```\n  a\n\tb\n  ```", "  a\n\tb", InconsistentIndent(loc(3, 1)))
+    value("```\n  a\n    b\n  \tc\n  ```", "a\n  b\n\tc", InconsistentIndent(loc(4, 3)))
+    value("```\n    a\n  b\n  ```", "  a\nb")
+  }
+
+  it should "keep quotes short of a run of three" in
+    value("```\n  say \"hi\" \"\"\n  a\"\"\"\"", "say \"hi\" \"\"\na\"")
+
+  it should "hold substitutions and escapes" in {
+    block("```\n  ${a}\n  x${b} \\\"\"\" \\${c}\n  ```") shouldBe
+      Lexed(List(quoted(ref(at("a"), 2, 3), Text("\nx"), ref(at("b"), 3, 4), Text(" \"\"\" ${c}"))), Nil)
+  }
+
+  it should "report an escape outside the set, and a lone CR" in
+    value("```\n  a\\qb\rc\\\n  ```", "abc", InvalidEscape(loc(2, 4), "\\q"), LoneCarriageReturn(loc(2, 7)),
+      InvalidEscape(loc(2, 9), "\\"))
+
+  it should "be followed by the next token" in {
+    block("```\n  a\n  ``` b") shouldBe Lexed(List(quoted(Text("a")), plain("b")), Nil)
+  }
+
+  it should "end the source when it is not closed" in {
+    block("x ```\n  a\n") shouldBe Lexed(List(plain("x")), List(UnterminatedString(loc(1, 3))))
+    block("```") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1))))
+    block("```<") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1))))
+    block("```\n  ${`a\n```") shouldBe Lexed(Nil, List(UnterminatedName(loc(2, 5))))
+  }
+
+  "A raw triple-quoted string" should "take the layout of a double-quoted one, and the escapes of '…'" in {
+    lex("'''\n  it's\n  a''''") shouldBe Lexed(List(quoted(Text("it's\na'"))), Nil)
+    lex("'''\n  ${x} \\d\\\\ \\''' \\t\n  \"\"\"\n  '''") shouldBe
+      Lexed(List(quoted(Text("${x} \\d\\ ''' \\t\n\"\"\""))), Nil)
+    lex("'''>\n  a\n  b\rc\n  '''") shouldBe Lexed(List(quoted(Text("a bc"))), List(LoneCarriageReturn(loc(3, 4))))
+  }
+
+  it should "end the source when it is not closed" in {
+    lex("'''a b") shouldBe Lexed(Nil, List(UnknownMarker(loc(1, 4), "a b"), UnterminatedString(loc(1, 1))))
+    lex("'''\n  a") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1))))
   }
 
   "An unquoted scalar" should "run to whitespace, a comma, a closing brace or bracket" in {
@@ -273,10 +422,6 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
         List(plain("a"), plain("b"), Comma, plain("c"), RightBrace, plain("d"), RightBracket, plain("e"), Newline,
           plain("f{g[h")),
         Nil)
-  }
-
-  it should "be reported when it starts with an apostrophe" in {
-    lex("'x' it's") shouldBe Lexed(List(plain("'x'"), plain("it's")), List(ApostropheAtStart(loc(1, 1))))
   }
 
   it should "report quotes inside it and keep them" in {
