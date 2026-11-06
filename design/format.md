@@ -50,7 +50,7 @@ loader path.
 | Include placement | Anywhere in the tree, not just at file top level |
 | Include sources | Relative paths, classpath resources; optional variant that tolerates a missing file |
 | Comments | `//` and nesting `/* */`; `/** */` reserved for doc comments (§3) |
-| Multi-line strings | Triple quotes, with the escapes of `"…"` and `${…}`; a block or a one-line form; indent markers, Java's rule by default (§5) |
+| Multi-line strings | Triple quotes, with the escapes of `"…"` and `${…}`; always a block; indent markers, Java's rule by default (§5) |
 | Raw strings | `'…'` and `'''…'''`, as Perl's single quotes: no substitutions, `\'` and `\\` the only escapes (§5) |
 | Special words | Avoided — `#`-prefixed directives instead, as an open, extensible set. `null` is the one exception |
 | Error model | `Either`, no Cats; as many errors per run as can be reported honestly (§11) |
@@ -72,7 +72,7 @@ loader path.
   quotes and comments such characters are content.
 - **NEL, U+2028 and U+2029 are errors anywhere**, quotes and comments included, as a lone CR is:
   some tools show them as a line break and others do not. In `"…"` and backticks they are written
-  `\u0085`, `\u2028`, `\u2029`; in `"""…"""` not yet (§5).
+  `\u0085`, `\u2028`, `\u2029`, and in `"""…"""` as well (§5).
 - **A tab in indentation is an error**, already in v1, as in YAML. Indentation is the whitespace
   before the first token of a line; a blank or comment-only line has none. Between tokens a tab is
   whitespace like a space. Inside `"""…"""` leading whitespace is content (§5), tabs included.
@@ -174,7 +174,7 @@ so it merges; replacing a block is written `key := { … }`.
 **Triple-quoted scalars** — `"""…"""`, with the escape set of `"…"` (§3) and `${…}`, which is
 substituted here as in any scalar (§3, §9). As in Java's text blocks, a triple-quoted string is not
 raw: what it saves over `"…"` is escaping quotes and writing newlines, not escaping backslashes. A
-backslash is `\\`, so a regex is written `"""^\\d+"$"""`; any other `\` outside the set is an error,
+backslash is `\\`; any other `\` outside the set is an error,
 as in `"…"`, so a forgotten one is reported rather than kept. `\"""` still writes a literal `"""`
 — `\"` and then two quotes, which do not close — and `\${` a literal `${`. A lone CR, NEL, U+2028
 and U+2029 (§3) are written `\r`, `\u0085`, `\u2028`, `\u2029`.
@@ -190,26 +190,22 @@ and all, untouched. `'it\'s'` is `it's`, and a value ending in `\` ends in `\\`:
 As in Perl, a doubled backslash collapses — `'\\host\share'` is `\host\share` — so a UNC path is
 written `'\\\\host\share'`.
 
-`'…'` is one line, like `"…"`. `'''…'''` takes the two forms and the layout rules below exactly as
+`'…'` is one line, like `"…"`. `'''…'''` is a block and takes the layout rules below exactly as
 `"""…"""` does, a literal `'''` being `\'''`; everything said below of `"""` holds of `'''` alike.
 A lone CR, NEL, U+2028 and U+2029 cannot be written in a raw string, being errors anywhere (§3); a
 value holding one is written in `"…"` or `"""…"""`.
 
-What follows the opening delimiter picks one of two forms, which differ in layout only — the
-content rules above are the same in both:
-
-- **Block**: the end of the line right after the delimiter. Whitespace before it is an error, though
-  not a fatal one: it is reported and the block is read on. The rules below apply.
-- **One line**: anything else. The string must close on the same line and is taken as written,
-  with no newline or indent processing: `pattern: """^\\d+"$"""`. A newline before the closing
-  delimiter is an error with a hint to start the block on the next line — a first line written
-  after the delimiter has no column in common with the lines below it.
+**A triple-quoted string is always a block**: its content starts on the line after the opening
+delimiter, and what stands between the delimiter and the end of its line is a marker (below) or
+nothing. There is no one-line form — a short value with quotes in it is written in `"…"` with `\"`,
+or in `'…'`: `pattern: '^\d+"$'`. Text after the delimiter is an unknown marker, `"""abc"""`
+included, and whitespace there is an error; neither is fatal, the block being read on (§11).
 
 A run of more than three quotes closes the string at its last three, so a value may end in `"`:
-`"""say "hi""""` is `say "hi"`. After the closing delimiter comes what follows any value — a
-separator, a comment, the end of the block; a substitution belongs inside the quotes (§9).
+a last line `say "hi""""` gives `say "hi"`. After the closing delimiter comes what follows any
+value — a separator, a comment, the end of the block; a substitution belongs inside the quotes (§9).
 
-In a block, the newline immediately after the opening delimiter is dropped, and so is the one
+The newline immediately after the opening delimiter is dropped, and so is the one
 immediately before the closing delimiter, together with the whitespace between it and the
 delimiter. These newline rules hold whatever the indent rule is.
 
@@ -233,8 +229,9 @@ The indent rule is picked by a marker between the opening delimiter and the end 
 | `"""=` | kept as written |
 | `""">` | as with no marker, then folded (below) |
 
-A marker must end its line, so `"""<x"""` is a one-line string holding `<x`, and an unknown one is
-an error. Markers do not combine, with one exception: an explicit width, below.
+Anything else between the delimiter and the end of the line is an unknown marker: an error, not a
+fatal one, and the block is read as with no marker. Markers do not combine, with one exception: an
+explicit width, below.
 
 **Folding** under `""">` comes after the indent is stripped, by the rule for no marker or by an
 explicit width. As in YAML, a newline between two lines left with no indent becomes a space, an empty line becomes a newline,
@@ -263,8 +260,8 @@ not depend on the editor or on git's `core.autocrlf`. A substituted value keeps 
 
 **Trailing whitespace** is stripped from every line of a block, under any marker and before folding,
 so a line holding only whitespace becomes empty. It is stripped from the source text, before
-substitution: a substituted value keeps its own. The one-line form keeps it, its closing delimiter
-making it visible. A block line that has to end in whitespace ends in an escape: `\t`, `\u0020`.
+substitution: a substituted value keeps its own. A line that has to end in whitespace ends in an
+escape: `\t`, `\u0020`.
 
 Indents are compared character by character, so a tab never matches a space. Under no marker, two
 indents of which neither is a prefix of the other (a tab where the other has a space) are an error,
@@ -1065,6 +1062,9 @@ alternative listed here should not be re-proposed without new information.
   delimiter unwritable; Perl's escapes also give `'''` a literal `\'''`. The cost of Perl's rule:
   `\\` collapses, so a UNC path doubles its leading backslashes.
 
+  **Superseded in session 9:** the one-line form of `"""` and `'''` is gone; `'^\d+"$'` is how a
+  regex is written now.
+
 **Confirmed after session 8** — proposed during the review of step 2b and written into the spec
 then; confirmed by the user on 2026-11-06, before step 2c:
 
@@ -1081,3 +1081,16 @@ then; confirmed by the user on 2026-11-06, before step 2c:
 - **Whitespace other than space and tab inside `${…}`**: `${a<NBSP>b}` is one
   `InvalidSubstitution`, and the NBSP is skipped with the rest of the broken substitution, with no
   error of its own (§3, §9). One error per mistake, as §11 wants. Rejected: reporting both.
+
+### Session 9 — 2026-11-06
+
+- **No one-line form of `"""` and `'''`** (§5): a triple-quoted string is always a block. The
+  user's call, finding the rules around the one-line form too tangled — which text after the
+  delimiter is a marker and which a value, whether an unclosed line is fatal — for what it bought:
+  a short value with quotes is written in `"…"` with `\"`, or in `'…'`, which needs no escape for
+  `"` or `\`. Supersedes session 7's two forms, and with them the example `"""^\\d+"$"""`.
+- **Whatever follows the opening delimiter on its line is the marker** (§5): one that is not known
+  — `|`, `abc`, `a b`, `abc"""` — is an `UnknownMarker`, not fatal, and the block is read as with no
+  marker. The user's call, against making any of it fatal: a fatal error ends the source for good,
+  while a `"""` with a wrong marker is likely to be closed further down and read. Whitespace after
+  an unknown marker is part of that one error; after a known marker or none, an error of its own.

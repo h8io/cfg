@@ -42,8 +42,9 @@ private[defg] object Token {
   /** `#name`, before its arguments */
   final case class Directive(name: String) extends Kind
 
-  /** A scalar in value position, unquoted or in `"…"`, as text and the substitutions inside it, in order. Consecutive
-    * text is one part; `""` has no parts.
+  /** A scalar in value position, as text and the substitutions inside it, in order: unquoted, or `quoted` in any of
+    * `"…"`, `"""…"""`, `'…'` and `'''…'''`, its escapes interpreted and the layout of a block applied. Consecutive text
+    * is one part; `""` has no parts.
     */
   final case class Scalar(parts: Vector[Part], quoted: Boolean) extends Kind
 
