@@ -48,13 +48,13 @@ final case class UnterminatedString(location: SourceLocation) extends DefError
 final case class WhitespaceAfterDelimiter(location: SourceLocation) extends DefError
 
 /** What stands between the opening delimiter of a triple-quoted block and the end of its line, when it is not one of
-  * `<`, `=`, `>`, a width `1`–`9`, or `>` and a width; `marker` is what was written, trailing whitespace included. The
+  * `<`, `>`, `+`, a width `1`–`9`, or `+` and a width; `marker` is what was written, trailing whitespace included. The
   * block is read as with no marker. A string meant to be one line and not closed on it gives this error too: a block
   * starts on the line after the delimiter.
   */
 final case class UnknownMarker(location: SourceLocation, marker: String) extends DefError
 
-/** A width after `<` or `=`, which fix the indent themselves; the block is read with the marker alone. */
+/** A width after `<` or `>`, which fix the indent themselves; the block is read with the marker alone. */
 final case class WidthWithMarker(location: SourceLocation) extends DefError
 
 /** With no marker, two lines of a triple-quoted block whose indents are not one a prefix of the other, such as a tab

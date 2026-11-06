@@ -141,8 +141,8 @@ rules (`format.md` §5), are a part of their own.
 - Always a block (no one-line form since session 9): whatever follows the opening delimiter on its
   line is the marker, an unknown one an error, not fatal; whitespace after the delimiter or a known
   marker is an error, not fatal; first and last newline dropped; trailing whitespace stripped; CRLF
-  to LF; indent by marker — none (Java's rule, the closing delimiter's column counting), `<`, `=`,
-  `>` (folding), and a width `N` or `>N` relative to the opening line; mismatched indents are
+  to LF; indent by marker — none (Java's rule, the closing delimiter's column counting), `<`,
+  `>` (kept), `+` (folding), and a width `N` or `+N` relative to the opening line; mismatched indents are
   errors.
 - An unterminated `"""` ends the source (§11).
 - Raw strings (§5): `'…'` on one line and `'''…'''` with the layout of `"""`; no

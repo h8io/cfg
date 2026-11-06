@@ -336,32 +336,32 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   it should "strip all of the indent under <" in
     value("```<\n    a\n  b\n    \\u0020\\u0020c\n  ```", "a\nb\n  c")
 
-  it should "keep the indent under =" in
-    value("```=\n  a\n    b\n  ```", "  a\n    b")
+  it should "keep the indent under >" in
+    value("```>\n  a\n    b\n  ```", "  a\n    b")
 
-  it should "fold under > as YAML does" in {
-    value("```>\n  a\n  b\n\n  c\n    d\n  e\n  f\n  ```", "a b\nc\n  d\ne f")
-    value("```>\n  a\n\n\n  b\\nc\n  d\n  ```", "a\n\nb\nc d")
-    value("```>\n\n  a\n\n  ```", "\na\n")
-    value("```>\n\n\n```", "\n")
+  it should "fold under + as YAML does under >" in {
+    value("```+\n  a\n  b\n\n  c\n    d\n  e\n  f\n  ```", "a b\nc\n  d\ne f")
+    value("```+\n  a\n\n\n  b\\nc\n  d\n  ```", "a\n\nb\nc d")
+    value("```+\n\n  a\n\n  ```", "\na\n")
+    value("```+\n\n\n```", "\n")
   }
 
   it should "strip the opening line's indent and an explicit width" in {
     value("  ```2\n      abc\n\n    ```", "  abc\n")
     value("```1\n  a\n   b\n```", " a\n  b")
-    value("  ```>2\n    a\n    b\n      c\n  ```", "a b\n  c")
+    value("  ```+2\n    a\n    b\n      c\n  ```", "a b\n  c")
   }
 
   it should "report a line short of an explicit width" in
     value("  ```2\n    a\n   b\n\tc\n  ```", "a\nb\nc", InsufficientIndent(loc(3, 4)), InsufficientIndent(loc(4, 1)))
 
-  it should "report a width after < or =, and read the marker alone" in {
+  it should "report a width after < or >, and read the marker alone" in {
     value("```<2\n    a\n  ```", "a", WidthWithMarker(loc(1, 5)))
-    value("```=2\n    a\n  ```", "    a", WidthWithMarker(loc(1, 5)))
+    value("```>2\n    a\n  ```", "    a", WidthWithMarker(loc(1, 5)))
   }
 
   it should "report an unknown marker, and read the block as with none" in
-    List("|", ">>", "0", "12", "<=", "abc", "a\"b", "//", "a b", "| ").foreach { marker =>
+    List("=", "|", ">>", "++", "0", "12", "<>", "abc", "a\"b", "//", "a b", "| ").foreach { marker =>
       withClue(marker) {
         value(s"```$marker\n    a\n  ```", "  a", UnknownMarker(loc(1, 4), marker))
       }
@@ -408,7 +408,7 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
     lex("'''\n  it's\n  a''''") shouldBe Lexed(List(quoted(Text("it's\na'"))), Nil)
     lex("'''\n  ${x} \\d\\\\ \\''' \\t\n  \"\"\"\n  '''") shouldBe
       Lexed(List(quoted(Text("${x} \\d\\ ''' \\t\n\"\"\""))), Nil)
-    lex("'''>\n  a\n  b\rc\n  '''") shouldBe Lexed(List(quoted(Text("a bc"))), List(LoneCarriageReturn(loc(3, 4))))
+    lex("'''+\n  a\n  b\rc\n  '''") shouldBe Lexed(List(quoted(Text("a bc"))), List(LoneCarriageReturn(loc(3, 4))))
   }
 
   it should "end the source when it is not closed" in {

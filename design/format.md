@@ -226,19 +226,22 @@ The indent rule is picked by a marker between the opening delimiter and the end 
 |---|---|
 | `"""` | the common indent is stripped, Java's rule (below) |
 | `"""<` | all of it is stripped |
-| `"""=` | kept as written |
-| `""">` | as with no marker, then folded (below) |
+| `""">` | kept as written |
+| `"""+` | as with no marker, then folded (below) |
 
 Anything else between the delimiter and the end of the line is an unknown marker: an error, not a
 fatal one, and the block is read as with no marker. Markers do not combine, with one exception: an
 explicit width, below.
 
-**Folding** under `""">` comes after the indent is stripped, by the rule for no marker or by an
-explicit width. As in YAML, a newline between two lines left with no indent becomes a space, an empty line becomes a newline,
+`<` and `>` are a pair: the text pushed to the left edge, or left where it stands.
+
+**Folding** under `"""+` comes after the indent is stripped, by the rule for no marker or by an
+explicit width. As YAML does under `>`, a newline between two lines left with no indent becomes a
+space, an empty line becomes a newline,
 and a line indented deeper is not folded — neither it nor the newlines around it — so a list or a
 code sample inside prose survives.
 
-**An explicit width** is a digit from 1 to 9 after the delimiter, `"""2`, or after `>`, `""">2`. As
+**An explicit width** is a digit from 1 to 9 after the delimiter, `"""2`, or after `+`, `"""+2`. As
 in YAML it counts from the indent of the line holding the opening delimiter: that indent and then N
 whitespace characters are stripped from every non-blank line, and a line that does not start with
 them is an error. The closing delimiter's column does not count then. Counting from that line
@@ -253,7 +256,7 @@ server {
 // value: "  abc" — 2 + 2 stripped; nested one level deeper, 4 + 2, the same value
 ```
 
-A width with any other marker is an error: `<` and `=` fix the indent themselves.
+A width with any other marker is an error: `<` and `>` fix the indent themselves.
 
 **Every newline in a block is LF** in the value, whether the file has LF or CRLF, so the value does
 not depend on the editor or on git's `core.autocrlf`. A substituted value keeps its own newlines.
@@ -946,7 +949,8 @@ alternative listed here should not be re-proposed without new information.
 - **Indent markers after the opening `"""` of a block** (§5): `<` strips all leading whitespace, `|`
   the first line's indent, `=` none, `>` folds as in YAML; no marker is Java's rule, the closing
   delimiter's column counting. The user's idea and choice of symbols. Rejected: `>` for keeping
-  whitespace, which a YAML reader would take for folding.
+  whitespace, which a YAML reader would take for folding. **Superseded in session 9:** `>` keeps
+  the indent, `+` folds, `=` is gone.
 - **The newline rules hold under every marker** (§5) — markers change leading whitespace only. The
   user's call, on a proposal.
 - **Indents compare character by character; a mismatch is an error** (§5), including a line under
@@ -1094,3 +1098,11 @@ then; confirmed by the user on 2026-11-06, before step 2c:
   marker. The user's call, against making any of it fatal: a fatal error ends the source for good,
   while a `"""` with a wrong marker is likely to be closed further down and read. Whitespace after
   an unknown marker is part of that one error; after a known marker or none, an error of its own.
+- **`>` keeps the indent, `+` folds; `=` is gone** (§5). The user's call: `<` and `>` read as a
+  pair — the text pushed to the left edge, or left where it stands — which is more logical than
+  YAML's `>` for folding, and compatibility with YAML is not a goal for markers. Reverses session 7,
+  which rejected `>` for keeping whitespace as misleading to a YAML reader. The width goes with
+  folding: `"""+2`; `"""<2` and `""">2` are errors, as `"""=2` was. `=` becomes an unknown marker,
+  free again; keeping it as a synonym of `>` was rejected — one spelling per rule. Noted when the
+  symbol was picked: YAML's `|+` means keeping trailing newlines, so `+` does not read as folding
+  to a YAML reader either.
