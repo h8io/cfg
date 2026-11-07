@@ -1,4 +1,4 @@
-# DEF — implementation plan
+# Ψ (Psi) — implementation plan
 
 Step-by-step plan for implementing the format specified in [`format.md`](format.md). The work is
 large, so it is cut into steps small enough to finish in one session each, and this file is what a
@@ -6,11 +6,11 @@ new session reads to find out where things stand.
 
 ## How to work with this plan
 
-- **One step, one branch, one PR.** Branch `def/NN-slug` (e.g. `def/03-parser`), PR against `main`.
+- **One step, one branch, one PR.** Branch `psi/NN-slug` (e.g. `psi/03-parser`), PR against `main`.
   A step is done when its PR is merged; the PR flips the step's status below to `done` in the same
   diff, so `main` always shows the true state.
 - **Resuming.** Find the first step that is not `done`. If its status is `in progress`, its branch
-  and PR exist — check them out (`gh pr list --head def/NN-slug`), read the PR description and the
+  and PR exist — check them out (`gh pr list --head psi/NN-slug`), read the PR description and the
   step's *Progress* notes, and continue from there. Never start step N+1 before step N is merged
   unless the step says it is independent.
 - **A step that turns out too big** is split here, in this file, into `NNa`/`NNb`, and only the first
@@ -35,11 +35,11 @@ URL ──read──▶ Source ──lex/parse──▶ Ast ──expand directi
                                     (per source, with recovery)       (N sources)   (phase-gated)
 ```
 
-| Piece | Package member (all under `h8io.cfg.impl.defg`) | Visibility |
+| Piece | Package member (all under `h8io.cfg.impl.psi`) | Visibility |
 |---|---|---|
-| Loader | `DEF` | public |
-| Locations | `DefLocation`, `SourceLocation`, `ReferenceLocation`, `ConcatenationLocation`, `SystemPropertyLocation`, `EnvLocation` (§10) | public |
-| Errors | `DefError` (each with a `location`), `DefErrors` (non-empty, a `CfgError`) (§11) | public |
+| Loader | `Psi` | public |
+| Locations | `PsiLocation`, `SourceLocation`, `ReferenceLocation`, `ConcatenationLocation`, `SystemPropertyLocation`, `EnvLocation` (§10) | public |
+| Errors | `PsiError` (each with a `location`), `PsiErrors` (non-empty, a `CfgError`) (§11) | public |
 | Directive API | handler trait + registry passed to the loader (§6) | public, designed in step 10 |
 | Source | the text of one URL, with offset → line/column | private |
 | Lexer | mode-driven: the parser asks for the next token *in key mode* or *in value mode* | private |
@@ -52,8 +52,8 @@ Why a mode-driven lexer: the same characters mean different things on the two si
 but `a:b` in key position is an error. The future indentation syntax (§13) needs tokens to carry
 their column and whether they start a line, so every token records both from the start.
 
-Error accumulation without Cats: a small private result type (value + `List[DefError]`) with `map`,
-`flatMap` and a combinator that collects errors from independent parts. `DefErrors` is built from it
+Error accumulation without Cats: a small private result type (value + `List[PsiError]`) with `map`,
+`flatMap` and a combinator that collects errors from independent parts. `PsiErrors` is built from it
 at the phase gate.
 
 ## Steps
@@ -65,7 +65,7 @@ at the phase gate.
 | 2a | Protocol: tags as a set, backticked keys, YAML tags without `!` | done |
 | 2b | Source and lexer | done |
 | 2c | Lexer: triple-quoted and raw strings | done |
-| 2d | Rename DEF to Ψ (Psi) | todo |
+| 2d | Rename DEF to Ψ (Psi) | done |
 | 3 | Ast and parser: core syntax | todo |
 | 4 | Parser: substitutions and directives | todo |
 | 5 | Parser: error recovery | todo |
@@ -85,13 +85,13 @@ at the phase gate.
 
 ### 1. Module skeleton, locations, errors
 
-- `build.sbt`: `val defg = (project in file("impl/def"))`, `name := "cfg-def"`, depends on `cfg` only,
+- `build.sbt`: `val psi = (project in file("impl/psi"))`, `name := "cfg-psi"`, depends on `cfg` only,
   `publish / skip := true`. Add to `root / aggregate` (needed for coverage), **not** to `pages` yet.
 - Location hierarchy from §10 with `description` exactly as specified:
-  `file:/etc/app/app.def:12:9`, and for a reference
-  `file:/etc/app/app.def:12:9 (${db.url} from base.def:3:7)`. Chains render recursively. `<source>`,
+  `file:/etc/app/app.psi:12:9`, and for a reference
+  `file:/etc/app/app.psi:12:9 (${db.url} from base.psi:3:7)`. Chains render recursively. `<source>`,
   line and column as decided in `format.md` §10.
-- `DefError` (sealed, every case has a `location`), `DefErrors` (head + tail, `CfgError`), and the
+- `PsiError` (sealed, every case has a `location`), `PsiErrors` (head + tail, `CfgError`), and the
   private result type. Start with the error cases this step can test; later steps add theirs.
 - **Spec gaps:** none left — `<source>` and column counting were settled in session 4, the
   `description` of the other locations and the first error case (an unreadable source) in session 7
@@ -216,15 +216,15 @@ code is the lexer alone and nothing is published.
 
 - `MapImpl`/`SeqImpl` as thin views over `Map`/`Vector` (§12), `Node.INull` for `null`, `-` on maps,
   ids assigned while wrapping.
-- `DEF.apply(urls: URL*): Either[DefErrors, Node.IMap[Id.Root]]`; no URLs gives an empty root map,
+- `Psi.apply(urls: URL*): Either[PsiErrors, Node.IMap[Id.Root]]`; no URLs gives an empty root map,
   as `YAML` does. The phase gate of §11 is wired here.
 - Until steps 9–11 land, a `${…}` or a directive reaching this phase is reported as a
   "not supported yet" error, so the loader is total from the first version.
-- Test resources under `impl/def/src/test/resources/*.def`.
+- Test resources under `impl/psi/src/test/resources/*.psi`.
 
 ### 8. Renderer and round-trip property tests
 
-- Render a Tree (and `MapImpl`/`SeqImpl.toString`) as DEF source: quoted keys and scalars where
+- Render a Tree (and `MapImpl`/`SeqImpl.toString`) as Psi source: quoted keys and scalars where
   needed, tags, `null`, nested blocks.
 - ScalaCheck generator for Trees; property: render → parse → merge gives the same tree. This is the
   main defence against parser corner cases, and it guards §3's `Id.path` promise from the other side.
@@ -281,7 +281,7 @@ code is the lexer alone and nothing is published.
 
 - Every error message names what was found, where, and what to do: `a:b` → put a space after `:`,
   `a: foo bar` → quote the value, a merge over `${…}` → use `:=`.
-- `DefErrors` renders as one readable multi-line report.
+- `PsiErrors` renders as one readable multi-line report.
 - A test file per category asserting the exact texts.
 
 ### 13. Hardening
@@ -293,7 +293,7 @@ code is the lexer alone and nothing is published.
 
 ### 14. Docs and release
 
-- A DEF page on the docs site (`docs/`), listed in `pages/sidebars.js`, the module added to `pages`.
+- A Psi page on the docs site (`docs/`), listed in `pages/sidebars.js`, the module added to `pages`.
 - `CLAUDE.md` (module layout and a loader section) and `README.md`.
 - `format.md`: status block says what is implemented; §1's note on `impl/yaml` is out of date.
 - Remove `publish / skip`.

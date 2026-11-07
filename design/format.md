@@ -1,17 +1,18 @@
-# DEF — design notes
+# Ψ (Psi) — design notes
 
-Working document for the new loader module under `impl/`. The format is **DEF** — *Declarative
-Extensible Format*:
+Working document for the new loader module under `impl/`. The format is **Ψ**, written *Psi* where
+a name has to be ASCII: just the letter, no acronym — the soul of an application, its
+configuration. Until session 10 it was DEF, *Declarative Extensible Format* (§14).
 
 | Where | Name |
 |---|---|
-| Format | DEF |
-| Module directory | `impl/def` |
-| sbt project | `defg` — `def` cannot be a `val` |
-| Artifact | `cfg-def` |
-| Package | `h8io.cfg.impl.defg` — *def* + *cfg* |
-| Loader object | `DEF`, as `HOCON` and `YAML` |
-| File extension | `.def` |
+| Format | Ψ, Psi |
+| Module directory | `impl/psi` |
+| sbt project | `psi` |
+| Artifact | `cfg-psi` |
+| Package | `h8io.cfg.impl.psi` |
+| Loader object | `Psi` |
+| File extensions | `.Ψ`, `.ψ` and `.psi`, searched in that order — one extension where file names ignore case |
 
 **Status:** under discussion, expected to span several sessions. §2 lists what is settled, §13 what
 is still open, and §14 logs how each decision was reached so a later session does not reopen a
@@ -99,7 +100,7 @@ loader path.
   a value starting with `//` or `/*` is written in quotes. `#` has no meaning of its own here.
   A comment counts as whitespace, so it never separates: a newline inside `/* … */` is not a
   newline, and `a: 1 /*⏎*/ b: 2` needs a `,`. A `//` comment ends before its newline, which stays.
-- **Doc comments** — `/** … */` is reserved for documentation that DSLs built on DEF may one day
+- **Doc comments** — `/** … */` is reserved for documentation that DSLs built on Psi may one day
   want in the source. v1 ignores it, but accepts it only before a field, a sequence element or a
   directive; anywhere else (between a tag and its value, after a value on the same line) it is an
   error. Doc comments carry no meaning for values, so giving them one later breaks no v1 file. That
@@ -354,13 +355,13 @@ Only tags written in the source reach `ISome.tags`; nothing is ever inferred, an
 non-specific tag that resolves to nothing. This matches the rule already settled for `impl/yaml`.
 
 **A value takes any number of tags, and they form a set** — as an element takes CSS classes, which
-is the role tags are meant to play for a later DEF schema. They are written stacked, like
+is the role tags are meant to play for a later Psi schema. They are written stacked, like
 annotations: `@pooled @readonly { … }`. Order carries no meaning, `@a @b` is the same as `@b @a`,
 and a tag written twice counts once: `@a @a x` is `@a x`, not an error.
 
-**Tags mean nothing at this level.** DEF and `cfg` are the low-level protocol; what a tag means,
+**Tags mean nothing at this level.** Psi and `cfg` are the low-level protocol; what a tag means,
 and how particular tags combine when values merge, is for the level above — the `schema` layer and
-the planned DEF schema — to define. So the rules below are deliberately the neutral ones: a set,
+the planned Psi schema — to define. So the rules below are deliberately the neutral ones: a set,
 union on merge and graft, nothing dropped except by `:=`. They lose no tag a higher level might
 need, and they pre-empt none of its choices — that level can still give two tags a conflict, an
 order or a "later wins" of its own.
@@ -554,7 +555,7 @@ composed.
 **`<source>` is the source as it was named**, so the reader sees the name they wrote and can find
 the file by it:
 
-- a source passed to `DEF(urls*)` — the full URL, as the caller gave it (`file:/etc/app/app.def`);
+- a source passed to `Psi(urls*)` — the full URL, as the caller gave it (`file:/etc/app/app.psi`);
 - a source pulled in by `#include` — the argument as written in the directive (`conf.d/extra`,
   `reference`, `https://…`), not the URL it resolves to. A `file` argument is therefore relative to
   the including file, not to the working directory or the top-level source.
@@ -573,17 +574,17 @@ coordinates, and the location of the node it was taken from. `Location` is an op
 this needs no protocol change — the module defines its own hierarchy:
 
 ```scala
-sealed trait DefLocation extends Location
+sealed trait PsiLocation extends Location
 
 // written here
-final case class SourceLocation(source: String, line: Int, column: Int) extends DefLocation
+final case class SourceLocation(source: String, line: Int, column: Int) extends PsiLocation
 // grafted here by `${path}`; `origin` is where the value came from
-final case class ReferenceLocation(at: SourceLocation, path: String, origin: Location) extends DefLocation
+final case class ReferenceLocation(at: SourceLocation, path: String, origin: Location) extends PsiLocation
 // a scalar built by concatenation; one entry per `${…}`, each with its own column
-final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLocation]) extends DefLocation
+final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLocation]) extends PsiLocation
 // origins that are not a file
-final case class SystemPropertyLocation(name: String) extends DefLocation
-final case class EnvLocation(name: String) extends DefLocation
+final case class SystemPropertyLocation(name: String) extends PsiLocation
+final case class EnvLocation(name: String) extends PsiLocation
 ```
 
 `origin` is a `Location`, not a `SourceLocation`, so chains fall out on their own: with
@@ -592,14 +593,14 @@ ReferenceLocation(b-site, "c", SourceLocation(c-site)))`. The environment and sy
 a location of their own instead of a fake file position.
 
 `description` puts the reference site first, because that is where the reader has to go:
-`file:/etc/app/app.def:12:9 (${db.url} from base.def:3:7)`. The other cases follow the same shape:
+`file:/etc/app/app.psi:12:9 (${db.url} from base.psi:3:7)`. The other cases follow the same shape:
 
 | Location | `description` |
 |---|---|
-| `SourceLocation` | `app.def:12:9` |
-| `ReferenceLocation` | `app.def:12:9 (${db.url} from base.def:3:7)` |
-| — in a chain | `app.def:1:4 (${b} from app.def:2:4 (${c} from app.def:3:4))` |
-| `ConcatenationLocation` | `app.def:12:9 (${host} from base.def:3:7, ${port} from env DB_PORT)` |
+| `SourceLocation` | `app.psi:12:9` |
+| `ReferenceLocation` | `app.psi:12:9 (${db.url} from base.psi:3:7)` |
+| — in a chain | `app.psi:1:4 (${b} from app.psi:2:4 (${c} from app.psi:3:4))` |
+| `ConcatenationLocation` | `app.psi:12:9 (${host} from base.psi:3:7, ${port} from env DB_PORT)` |
 | `SystemPropertyLocation` | `system property db.url` |
 | `EnvLocation` | `env DB_PORT` |
 
@@ -617,7 +618,7 @@ written — every source the value was assembled from.
 
 ## 11. Errors
 
-The loader returns `Either[DefErrors, Node.IMap[Id.Root]]`, where `DefErrors` is a non-empty list of
+The loader returns `Either[PsiErrors, Node.IMap[Id.Root]]`, where `PsiErrors` is a non-empty list of
 module-local errors and itself a `CfgError` — `Either` is covariant, so it reads as
 `Either[CfgError, …]` to anyone who does not care. The list is the module's own type (head + `List`),
 because `AndError` and `NonEmptyChain` live in `schema` and Cats is not a dependency here. Every
@@ -730,6 +731,9 @@ mistake is worse than stopping.
      the syntax stays free, `;` being outside `Id.SafeKeyPattern`, so `${a; …}` is an error today.
 
 ## 14. Decision log
+
+The format was called DEF until session 10, and the entries before then keep that name and its
+`impl/def`, `defg`, `Def*` types and `.def` files, as they were written.
 
 Each entry records what was chosen, and — where it matters — what was rejected and why. A rejected
 alternative listed here should not be re-proposed without new information.

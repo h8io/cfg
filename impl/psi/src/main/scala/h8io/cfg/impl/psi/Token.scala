@@ -1,4 +1,4 @@
-package h8io.cfg.impl.defg
+package h8io.cfg.impl.psi
 
 import h8io.cfg.Id
 
@@ -7,9 +7,9 @@ import h8io.cfg.Id
   * @param startsLine
   *   whether no other token stands before it on its line; with its column, what the indentation syntax will need
   */
-private[defg] final case class Token(kind: Token.Kind, location: SourceLocation, startsLine: Boolean)
+private[psi] final case class Token(kind: Token.Kind, location: SourceLocation, startsLine: Boolean)
 
-private[defg] object Token {
+private[psi] object Token {
   sealed trait Kind
 
   case object LeftBrace extends Kind

@@ -1,4 +1,4 @@
-package h8io.cfg.impl.defg
+package h8io.cfg.impl.psi
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -6,7 +6,7 @@ import org.scalatest.matchers.should.Matchers
 import java.io.IOException
 
 class ResultTest extends AnyFlatSpec with Matchers {
-  private def unreadable(source: String): DefError = SourceUnreadable(source, new IOException(source))
+  private def unreadable(source: String): PsiError = SourceUnreadable(source, new IOException(source))
 
   private val e1 = unreadable("e1")
   private val e2 = unreadable("e2")
@@ -46,6 +46,6 @@ class ResultTest extends AnyFlatSpec with Matchers {
   }
 
   it should "give every error, in order, when there are any" in {
-    Result(1, e1 :: e2 :: Nil).toEither shouldBe Left(DefErrors(::(e1, e2 :: Nil)))
+    Result(1, e1 :: e2 :: Nil).toEither shouldBe Left(PsiErrors(::(e1, e2 :: Nil)))
   }
 }

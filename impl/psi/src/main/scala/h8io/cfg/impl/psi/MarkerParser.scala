@@ -1,6 +1,6 @@
-package h8io.cfg.impl.defg
+package h8io.cfg.impl.psi
 
-import h8io.cfg.impl.defg.Lexer.*
+import h8io.cfg.impl.psi.Lexer.*
 
 import scala.collection.mutable
 
@@ -11,10 +11,10 @@ import scala.collection.mutable
   * source of each of its characters, and of the end of the line after them. A syntax error is reported where it stands,
   * once, and nothing else of the line; any error leaves the block to be read as with no marker.
   */
-private[defg] final class MarkerParser(
+private[psi] final class MarkerParser(
     line: String,
     offsets: IndexedSeq[Int],
-    report: (SourceLocation => DefError, Int) => Unit) {
+    report: (SourceLocation => PsiError, Int) => Unit) {
   import MarkerParser.*
 
   private var i = 0
@@ -30,7 +30,7 @@ private[defg] final class MarkerParser(
     }
   }
 
-  private def error(error: SourceLocation => DefError, at: Int): Unit = {
+  private def error(error: SourceLocation => PsiError, at: Int): Unit = {
     failed = true
     report(error, offsets(at))
   }

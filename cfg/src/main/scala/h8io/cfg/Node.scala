@@ -42,7 +42,7 @@ object Node {
   /** A node that is physically present in the source (has [[tags]] and a [[location]]). */
   sealed trait ISome[+I <: Id] extends INode[I] {
 
-    /** The tags written on this node in the source, by name, without the syntax that marks them: `@duration` in DEF and
+    /** The tags written on this node in the source, by name, without the syntax that marks them: `@duration` in Psi and
       * `!duration` in YAML both give `duration`. Order carries no meaning, and nothing is ever inferred, so the set is
       * empty when no tag was written or the backend has none.
       */

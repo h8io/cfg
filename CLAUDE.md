@@ -16,7 +16,7 @@ sbt cfg/testFull
 sbt schema/testFull
 sbt hocon/testFull
 sbt yaml/testFull
-sbt defg/testFull
+sbt psi/testFull
 
 # Run a single test class
 sbt "schema/testOnly h8io.cfg.schema.DecoderTest"
@@ -50,9 +50,10 @@ Two-layer design: `cfg` is the low-level protocol (a format-agnostic ADT for con
 - **`schema`** (artifact `cfg-schema`) — high-level API: `Decoder` and `Property` abstractions that hide ADT manipulation. Depends on `cfg` + Cats + `io.h8:reflect`.
 - **`impl/hocon`** (artifact `cfg-hocon`) — loads HOCON and YAML into the `cfg` AST using `typesafe-config` + `typesafe-config-yaml`.
 - **`impl/yaml`** (artifact `cfg-yaml`) — loads YAML into the `cfg` AST using `snakeyaml-engine` directly, propagating tags.
-- **`impl/def`** (sbt project `defg`, artifact `cfg-def`, package `h8io.cfg.impl.defg`) — DEF, the project's own format
-  with a hand-written parser and no dependencies beyond `cfg`. Being built step by step: the spec is `design/format.md`,
-  the plan with each step's status is `design/plan.md`. `publish / skip` until the plan's last step.
+- **`impl/psi`** (sbt project `psi`, artifact `cfg-psi`, package `h8io.cfg.impl.psi`) — Ψ (Psi), the project's own
+  format, with a hand-written parser and no dependencies beyond `cfg`; files `.Ψ`, `.ψ` or `.psi`. Being built step by
+  step: the spec is `design/format.md`, the plan with each step's status is `design/plan.md`. `publish / skip` until
+  the plan's last step.
 - **root** (artifact `cfg-all`) — aggregate; not published.
 - **pages** — documentation site (sources in `docs/`); not aggregated in root. Two halves: sbt runs mdoc and unidoc,
   then Docusaurus (`pages/package.json`, Node ≥ 20) renders mdoc's output. The navigation is `pages/sidebars.js` — a new
@@ -73,8 +74,8 @@ Two-layer design: `cfg` is the low-level protocol (a format-agnostic ADT for con
 - `Node.INull` — an explicit null value; also a `NodeError`
 - `Node.IScalar` — a string value with its tags and a `Location`
 
-Every `ISome` carries `tags: Set[String]` — the tags written in the source, by name only (`@x` in DEF, `!x` in YAML both
-give `x`), empty when none was written. `Id.path` renders a key that is not bare in backticks, as DEF writes it.
+Every `ISome` carries `tags: Set[String]` — the tags written in the source, by name only (`@x` in Psi, `!x` in YAML both
+give `x`), empty when none was written. `Id.path` renders a key that is not bare in backticks, as Psi writes it.
 - `Node.IMap` / `Node.ISeq` — container nodes; function-like (`key => INode`)
 
 `CfgError` / `NodeError` are traits for all error types; nodes that represent errors implement them directly.

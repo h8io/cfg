@@ -1,4 +1,4 @@
-package h8io.cfg.impl.defg
+package h8io.cfg.impl.psi
 
 import java.io.IOException
 import java.net.URL
@@ -12,7 +12,7 @@ import java.util.Arrays
   * @param name
   *   the source as it was named (`format.md` §10)
   */
-private[defg] final class Source private (val name: String, val text: String) {
+private[psi] final class Source private (val name: String, val text: String) {
 
   /** The offset at which each line starts. A line ends at LF; the CR of a CRLF is not part of it, a lone CR does not
     * end it.
@@ -28,14 +28,14 @@ private[defg] final class Source private (val name: String, val text: String) {
   }
 }
 
-private[defg] object Source {
+private[psi] object Source {
   private def ByteOrderMark: Char = '\uFEFF'
 
   def apply(name: String, text: String): Source =
     new Source(name, if (text.nonEmpty && text.charAt(0) == ByteOrderMark) text.substring(1) else text)
 
   /** Reads `url` as UTF-8; an unreadable source and one that is not UTF-8 are errors. */
-  def read(name: String, url: URL): Either[DefError, Source] =
+  def read(name: String, url: URL): Either[PsiError, Source] =
     try {
       val stream = url.openStream()
       try decode(name, stream.readAllBytes())
@@ -43,7 +43,7 @@ private[defg] object Source {
     } catch { case e: IOException => Left(SourceUnreadable(name, e)) }
 
   /** Decodes `bytes` as UTF-8, pointing at the first byte that is not. */
-  def decode(name: String, bytes: Array[Byte]): Either[DefError, Source] = {
+  def decode(name: String, bytes: Array[Byte]): Either[PsiError, Source] = {
     val decoder = StandardCharsets.UTF_8
       .newDecoder()
       .onMalformedInput(CodingErrorAction.REPORT)
