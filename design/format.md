@@ -1151,6 +1151,18 @@ hold; to be settled before #134 (step 2c) merges:
   to errors. Rejected: forbidding them only outside quotes, where they matter least — a value in
   quotes hides one as well as an unquoted one does.
 
+- **The format becomes Ψ — Psi — once step 2 is done** (plan step 2d), everything renamed: the
+  format, the loader object, the `Def*` types, `impl/def`, the sbt project, the package and the
+  artifact, and this document and the plan with them. The user's call: just the letter, no
+  acronym — the idea is the soul of an application, its configuration. Ψ is a valid identifier and
+  no keyword, so the `defg` workaround of session 3 goes: `impl/psi`, sbt project `psi`, artifact
+  `cfg-psi`, package `h8io.cfg.impl.psi`. A Greek letter also matches the user's `xi`. Three
+  extensions are accepted — `.Ψ`, `.ψ` and `.psi`, the ASCII one for whoever cannot type the
+  others — and a search for a file tries them in that order. Supersedes session 3's DEF and
+  `.def`. Noted against it: PSI is also IntelliJ's Program Structure Interface, the API an IntelliJ
+  plugin for the format would be written in, and `.psi` has minor binary uses (PrimalScript help,
+  Psion audio, PhotoScape images) and ParaSail's interface files.
+
 **Open after session 10** — still to be settled before #134 (step 2c) merges:
 
 - **Markers**, as left after session 9 (above).
@@ -1158,3 +1170,11 @@ hold; to be settled before #134 (step 2c) merges:
   overrides and isolates, U+202A–U+202E and U+2066–U+2069, which make source read differently
   from how it is parsed ("Trojan Source"), and the invisible ones such as U+200B and U+2060. Not
   restricted anywhere today, as control characters were not.
+
+To be settled in step 2d, the rename:
+
+- **The loader object**: `Psi`, `PSI` — the `HOCON`/`YAML` convention, though Psi is no acronym —
+  or `Ψ` itself, legal in Scala but hard to type at a call site.
+- **`.Ψ` and `.ψ` on a case-insensitive file system**, the default on Windows and macOS: they are
+  one name there, so the two files cannot sit side by side, a search for `.Ψ` finds a `.ψ`, and the
+  priority between them holds only on Linux. Likewise `.PSI` would be found as `.psi`.

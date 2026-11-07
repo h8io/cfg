@@ -65,6 +65,7 @@ at the phase gate.
 | 2a | Protocol: tags as a set, backticked keys, YAML tags without `!` | done |
 | 2b | Source and lexer | done |
 | 2c | Lexer: triple-quoted and raw strings | done |
+| 2d | Rename DEF to Ψ (Psi) | todo |
 | 3 | Ast and parser: core syntax | todo |
 | 4 | Parser: substitutions and directives | todo |
 | 5 | Parser: error recovery | todo |
@@ -153,6 +154,19 @@ rules (`format.md` §5), are a part of their own.
 (`format.md` §5, §14), as were directive names, `${` in and out of quotes, the byte order mark and a
 tag before `"""` (§3, §5, §6). Session 9 dropped the one-line form of `"""` when 2c started, and
 settled that any text after the opening delimiter is a marker, an unknown one not fatal (§5, §14).
+
+### 2d. Rename DEF to Ψ (Psi)
+
+Decided in session 10 (`format.md` §14), to be done once 2c is merged and before step 3, while the
+code is the lexer alone and nothing is published.
+
+- Everything: `impl/def` to `impl/psi`, sbt project `defg` to `psi`, artifact `cfg-def` to `cfg-psi`,
+  package `h8io.cfg.impl.defg` to `h8io.cfg.impl.psi`, the `Def*` types, the loader object, the
+  name in `format.md`, in this plan and in `CLAUDE.md`, and the branch prefix `def/` to `psi/` from
+  step 3 on.
+- Extensions `.Ψ`, `.ψ`, `.psi`, searched in that order.
+- **Spec gaps:** the loader object's name, and the two extensions on a case-insensitive file
+  system (`format.md` §14, after session 10).
 
 ### 3. Ast and parser: core syntax
 
@@ -252,7 +266,8 @@ settled that any text after the opening delimiter is a marker, an unknown one no
   `optional = true` tolerates a missing target (§6).
 - Cycle detection on the URL stack; nested includes; includes inside blocks land at the right path.
 - Errors inside an included source are collected along with everyone else's.
-- **Spec gaps:** whether `file` without an extension gets `.def` appended (HOCON tries several);
+- **Spec gaps:** whether `file` without an extension gets one appended — `.Ψ`, `.ψ`, `.psi` in
+  that order (session 10), first found or every one found merged, as HOCON does;
   which class loader `resource` uses; whether an optional include swallows only "not found" or also
   I/O and parse errors (it should only swallow "not found").
 
