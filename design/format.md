@@ -205,10 +205,11 @@ A lone CR, NEL, U+2028, U+2029 and the control characters other than tab cannot 
 raw string, being errors anywhere (§3); a value holding one is written in `"…"` or `"""…"""`.
 
 **A triple-quoted string is always a block**: its content starts on the line after the opening
-delimiter, and what stands between the delimiter and the end of its line is a marker (below) or
-nothing. There is no one-line form — a short value with quotes in it is written in `"…"` with `\"`,
-or in `'…'`: `pattern: '^\d+"$'`. Text after the delimiter is an unknown marker, `"""abc"""`
-included, and whitespace there is an error; neither is fatal, the block being read on (§11).
+delimiter, and what stands between the delimiter and the end of its line are its markers (below),
+or nothing. There is no one-line form — a short value with quotes in it is written in `"…"` with
+`\"`, or in `'…'`: `pattern: '^\d+"$'`. Text after the delimiter that is not markers, `"""abc"""`
+included, is an error, and so is whitespace there; neither is fatal, the block being read on
+(§11).
 
 A run of more than three quotes closes the string at its last three, so a value may end in `"`:
 a last line `say "hi""""` gives `say "hi"`. After the closing delimiter comes what follows any
@@ -229,43 +230,57 @@ key: """
 // value: "abc\ndef\n"
 ```
 
-The indent rule is picked by a marker between the opening delimiter and the end of its line:
+The layout of a block is picked by **markers** between the opening delimiter and the end of its
+line. A marker is a name — a run of the symbols `! # $ % & * + - . : ; < = > ? @ ^ | ~`, or a name
+by the key rule (§3) — followed, if it takes any, by its arguments in parentheses, written as a
+directive's are (§6): `name = literal`, separated by `,`, a literal being a string in `"…"` (with
+its escapes, `${` an error) or `'…'`, an integer, or a bare name. Arguments are named, never
+positional. Markers are separated by whitespace; none may stand before the first or after the last.
+`/` is not a symbol, being kept for a comment after the markers, which v1 does not allow.
 
-| Opening | Leading whitespace of each line |
+| Marker | Effect |
 |---|---|
-| `"""` | the common indent is stripped, Java's rule (below) |
-| `"""<` | all of it is stripped |
-| `""">` | kept as written |
-| `"""+` | as with no marker, then folded (below) |
+| none | the common indent is stripped, Java's rule (below) |
+| `<` | all of the indent is stripped |
+| `>` | the indent is kept as written |
+| `width(n = N)` | the opening line's indent and N more are stripped (below) |
+| `+` | lines are folded (below) |
 
-Anything else between the delimiter and the end of the line is an unknown marker: an error, not a
-fatal one, and the block is read as with no marker. Markers do not combine, with one exception: an
-explicit width, below.
+**Markers are applied left to right**, each to the lines the one before it left, once trailing
+whitespace is stripped and the closing delimiter's line set aside: `"""< +` strips the indent and
+then folds, while `"""+ <` folds lines that still carry their indent — which leaves them as they
+are — and then strips it. `<`, `>` and `width` set the indent, and a block takes at most one of
+them; with none, Java's rule comes first, so `"""+` folds what that rule left.
+
+**The set of markers is open**, as the set of directives is (§6): the loader is built with the
+marker handlers it knows, the ones above being the built-in set, and a handler maps the lines of a
+block to lines (§14, session 10). Each of these is reported, none of them fatal, and the block is
+then read as with no marker: a marker the loader does not know, an argument a marker does not take
+or is given twice, a value it cannot take, an argument it requires and was not given, and a second
+marker that sets the indent. Markers that cannot be read at all — `"""2`, `"""<x`, `"""abc"""` —
+are one error, where they stop fitting, and the rest of the line is not looked at. Whitespace after
+the delimiter or after the last marker is an error as well, but the markers are applied.
 
 `<` and `>` are a pair: the text pushed to the left edge, or left where it stands.
 
-**Folding** under `"""+` comes after the indent is stripped, by the rule for no marker or by an
-explicit width. As YAML does under `>`, a newline between two lines left with no indent becomes a
+**Folding** under `+`, as YAML does under `>`: a newline between two lines with no indent becomes a
 space, an empty line becomes a newline,
 and a line indented deeper is not folded — neither it nor the newlines around it — so a list or a
 code sample inside prose survives.
 
-**An explicit width** is a digit from 1 to 9 after the delimiter, `"""2`, or after `+`, `"""+2`. As
-in YAML it counts from the indent of the line holding the opening delimiter: that indent and then N
-whitespace characters are stripped from every non-blank line, and a line that does not start with
-them is an error. The closing delimiter's column does not count then. Counting from that line
+**An explicit width** is `width(n = N)`, N a positive integer. As in YAML it counts from the indent
+of the line holding the opening delimiter: that indent and then N whitespace characters are
+stripped from every non-blank line, and a line that does not start with them is an error. The closing delimiter's column does not count then. Counting from that line
 keeps the value when a formatter shifts the whole block:
 
 ```
 server {
-  banner: """2
+  banner: """width(n = 2)
       abc
     """
 }
 // value: "  abc" — 2 + 2 stripped; nested one level deeper, 4 + 2, the same value
 ```
-
-A width with any other marker is an error: `<` and `>` fix the indent themselves.
 
 **Every newline in a block is LF** in the value, whether the file has LF or CRLF, so the value does
 not depend on the editor or on git's `core.autocrlf`. A substituted value keeps its own newlines.
@@ -1180,15 +1195,29 @@ hold; to be settled before #134 (step 2c) merges:
   loader that wants `<` or `#include` alongside its own handlers registers them again, so the
   built-in handlers have to be public values.
 
+- **Markers are written as directives are called** (§5): a name — a run of symbols or a name by
+  the key rule — and named arguments in parentheses, `name = literal`, markers separated by
+  whitespace. The user's pick of three: a bare list with a number glued to a name (`"""2 +`)
+  leaves no room for an argument that is not a number; `name=value` pairs would be a third syntax
+  beside `key: value` and `arg = literal`. One call syntax for both extension points. With it,
+  agreed with the user: symbols and letters do not mix in a name, so `<+` is one unknown marker,
+  not two; arguments are named only, as a directive's — a positional form can be allowed later
+  without breaking a file, not taken back; the width is `width(n = N)`, any positive integer
+  rather than one digit, and `"""2` and `"""+2` are gone (`"""width(n = 2) +`); markers apply left
+  to right, so `"""+ <` and `"""< +` differ, Java's rule first when none sets the indent, and a
+  second one setting it is an error. Any error in the markers reads the block as with no marker,
+  as an unknown marker did in session 9; whitespace around them is reported and the markers kept.
+  `/` stays out of the symbols for a comment after the markers. Implemented in 2c, the built-in
+  set hard-coded until step 10.
+- **A marker the user gave as an example: `replace(str1, str2)`**, replacing text in the lines of a
+  block — at the layout stage, so in the written text only, escapes and substitutions being opaque
+  there. Not to be implemented now. Written as the user wrote it, it takes positional arguments,
+  which the entry above rules out for v1.
+
 **Open after session 10** — still to be settled before #134 (step 2c) merges:
 
-- **The syntax of markers**, now that names are longer than one character and a handler may take
-  parameters — the width `N` being one such. Also how markers combine: as a chain of handlers
-  applied left to right, each lines to lines, `"""< +` would be stripped then folded; the rule for
-  no marker (Java's) then applies when no marker in the chain sets the indent, so handlers would
-  have to say whether they do. The user is thinking it over. What any v1 syntax must keep: every
-  text after the delimiter that is not a known marker stays an error, so that a later extension
-  breaks no file.
+- **Positional arguments** for markers, and so for directives, the call syntax being one:
+  `replace(str1, str2)` reads better than `replace(from = str1, to = str2)`.
 - **Format characters.** Raised with the control characters and not decided: the bidirectional
   overrides and isolates, U+202A–U+202E and U+2066–U+2069, which make source read differently
   from how it is parsed ("Trojan Source"), and the invisible ones such as U+200B and U+2060. Not

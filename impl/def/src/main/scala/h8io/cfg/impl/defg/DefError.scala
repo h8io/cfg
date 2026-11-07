@@ -48,20 +48,40 @@ final case class StrayCommentEnd(location: SourceLocation) extends DefError
   */
 final case class UnterminatedString(location: SourceLocation) extends DefError
 
-/** Whitespace between the opening delimiter of a triple-quoted block, or its marker, and the end of the line; the error
-  * points at the first whitespace character.
+/** Whitespace right after the opening delimiter of a triple-quoted block, or at the end of its line after the markers;
+  * the error points at the first whitespace character. The markers are applied all the same.
   */
 final case class WhitespaceAfterDelimiter(location: SourceLocation) extends DefError
 
-/** What stands between the opening delimiter of a triple-quoted block and the end of its line, when it is not one of
-  * `<`, `>`, `+`, a width `1`–`9`, or `+` and a width; `marker` is what was written, trailing whitespace included. The
-  * block is read as with no marker. A string meant to be one line and not closed on it gives this error too: a block
-  * starts on the line after the delimiter.
+/** The markers after the opening delimiter of a triple-quoted block cannot be read: names separated by whitespace, each
+  * with arguments in parentheses or none (`format.md` §5). The error points at the first character that does not fit,
+  * the rest of the line is not looked at, and the block is read as with no marker. A string meant to be one line and
+  * not closed on it gives this error, or an [[UnknownMarker]]: a block starts on the line after the delimiter.
   */
-final case class UnknownMarker(location: SourceLocation, marker: String) extends DefError
+final case class InvalidMarker(location: SourceLocation) extends DefError
 
-/** A width after `<` or `>`, which fix the indent themselves; the block is read with the marker alone. */
-final case class WidthWithMarker(location: SourceLocation) extends DefError
+/** A marker the loader has no handler for; `name` is its name. The block is read as with no marker. */
+final case class UnknownMarker(location: SourceLocation, name: String) extends DefError
+
+/** A second marker that sets the indent, such as `>` after `<`; the block is read as with no marker. */
+final case class ConflictingIndent(location: SourceLocation) extends DefError
+
+/** An argument the marker does not take; `argument` is its name. */
+final case class UnknownArgument(location: SourceLocation, argument: String) extends DefError
+
+/** An argument given twice; the error points at the second. */
+final case class DuplicateArgument(location: SourceLocation, argument: String) extends DefError
+
+/** An argument the marker requires and was not given; the error points at the marker. */
+final case class MissingArgument(location: SourceLocation, argument: String) extends DefError
+
+/** An argument whose value the marker cannot take, such as a width that is not a positive integer; the error points at
+  * the value.
+  */
+final case class InvalidArgument(location: SourceLocation, argument: String) extends DefError
+
+/** `\${` in a string argument, which is literal; escaped, it is text. */
+final case class SubstitutionInArgument(location: SourceLocation) extends DefError
 
 /** With no marker, two lines of a triple-quoted block whose indents are not one a prefix of the other, such as a tab
   * where the other has a space; the error points at the first character that differs.

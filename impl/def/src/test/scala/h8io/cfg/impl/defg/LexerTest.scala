@@ -323,11 +323,13 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   private def value(text: String, value: String, errors: DefError*): Unit =
     block(text) shouldBe Lexed(List(quoted(Text(value))), errors.toList)
 
-  "A triple-quoted string" should "always be a block, what follows its delimiter on the line a marker" in {
-    value("```abc```\n  d\n  ```", "d", UnknownMarker(loc(1, 4), "abc\"\"\""))
-    block("x ```a b\nc```") shouldBe Lexed(List(plain("x"), quoted(Text("c"))), List(UnknownMarker(loc(1, 6), "a b")))
-    block("```a b") shouldBe Lexed(Nil, List(UnknownMarker(loc(1, 4), "a b"), UnterminatedString(loc(1, 1))))
-    value("```a\\\n  b\n  ```", "b", UnknownMarker(loc(1, 4), "a\\"))
+  "A triple-quoted string" should "always be a block, what follows its delimiter on the line its markers" in {
+    value("```abc```\n  d\n  ```", "d", InvalidMarker(loc(1, 7)))
+    block("x ```a b\nc```") shouldBe
+      Lexed(List(plain("x"), quoted(Text("c"))), List(UnknownMarker(loc(1, 6), "a"), UnknownMarker(loc(1, 8), "b")))
+    block("```a b") shouldBe
+      Lexed(Nil, List(UnknownMarker(loc(1, 4), "a"), UnknownMarker(loc(1, 6), "b"), UnterminatedString(loc(1, 1))))
+    value("```a\\\n  b\n  ```", "b", InvalidMarker(loc(1, 5)))
   }
 
   it should "close at the last three quotes of a longer run" in {
@@ -378,29 +380,90 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   }
 
   it should "strip the opening line's indent and an explicit width" in {
-    value("  ```2\n      abc\n\n    ```", "  abc\n")
-    value("```1\n  a\n   b\n```", " a\n  b")
-    value("  ```+2\n    a\n    b\n      c\n  ```", "a b\n  c")
+    value("  ```width(n = 2)\n      abc\n\n    ```", "  abc\n")
+    value("```width(n=1)\n  a\n   b\n```", " a\n  b")
+    value("  ```width( n = 2 ) +\n    a\n    b\n      c\n  ```", "a b\n  c")
   }
 
   it should "report a line short of an explicit width" in
-    value("  ```2\n    a\n   b\n\tc\n  ```", "a\nb\nc", InsufficientIndent(loc(3, 4)), InsufficientIndent(loc(4, 1)))
+    value("  ```width(n = 2)\n    a\n   b\n\tc\n  ```", "a\nb\nc", InsufficientIndent(loc(3, 4)),
+      InsufficientIndent(loc(4, 1)))
 
-  it should "report a width after < or >, and read the marker alone" in {
-    value("```<2\n    a\n  ```", "a", WidthWithMarker(loc(1, 5)))
-    value("```>2\n    a\n  ```", "    a", WidthWithMarker(loc(1, 5)))
+  it should "apply its markers left to right, Java's rule first when none sets the indent" in {
+    value("```< +\n    a\n  b\n  ```", "a b")
+    value("```+ <\n    a\n  b\n  ```", "a\nb")
+    value("```> +\n  a\n  b\n```", "  a\n  b")
+    value("```> +\na\nb\n```", "a b")
+    value("```+ +\n  a\n\n\n\n  b\n  ```", "a\n\nb")
+    value("```< \t +\n  a\n  b\n  ```", "a b")
+    value("```<()\n    a\n  ```", "a")
+  }
+
+  it should "report a second marker that sets the indent, and read the block as with no marker" in {
+    value("```< >\n    a\n  ```", "  a", ConflictingIndent(loc(1, 6)))
+    value("```width(n = 2) <\n    a\n  ```", "  a", ConflictingIndent(loc(1, 17)))
   }
 
   it should "report an unknown marker, and read the block as with none" in
-    List("=", "|", ">>", "++", "0", "12", "<>", "abc", "a\"b", "//", "a b", "| ").foreach { marker =>
+    List("=", "|", ">>", "++", "<>", "<+", "-", "abc", "a-b", "x1").foreach { marker =>
       withClue(marker) {
         value(s"```$marker\n    a\n  ```", "  a", UnknownMarker(loc(1, 4), marker))
       }
     }
 
-  it should "report whitespace after the delimiter or the marker" in {
+  it should "report markers that cannot be read where they stop fitting, and read the block as with none" in
+    List(
+      "0" -> 4,
+      "12" -> 4,
+      "<2" -> 5,
+      "+2" -> 5,
+      "<x" -> 5,
+      "//" -> 4,
+      "a\"b" -> 5,
+      "< (x = 1)" -> 6,
+      "<(" -> 6,
+      "<(x)" -> 7,
+      "<(x =)" -> 9,
+      "<(x = 1" -> 11,
+      "<(x = 1 2)" -> 12,
+      "<(x = 1,)" -> 12,
+      "<(x = 01)" -> 11,
+      "<(x = -)" -> 11,
+      "<(x = \"a)" -> 10,
+      "<(x = 'a)" -> 10
+    ).foreach { case (marker, column) =>
+      withClue(marker) {
+        value(s"```$marker\n    a\n  ```", "  a", InvalidMarker(loc(1, column)))
+      }
+    }
+
+  it should "report the arguments a marker does not take, and read the block as with no marker" in {
+    value("```<(x = 1)\n    a\n  ```", "  a", UnknownArgument(loc(1, 6), "x"))
+    value("```<(x = abc, y = -5, z = 0)\n    a\n  ```", "  a", UnknownArgument(loc(1, 6), "x"),
+      UnknownArgument(loc(1, 15), "y"), UnknownArgument(loc(1, 23), "z"))
+    value("```width\n    a\n  ```", "  a", MissingArgument(loc(1, 4), "n"))
+    value("```width(n = 1, n = 2)\n    a\n  ```", "  a", DuplicateArgument(loc(1, 17), "n"))
+    List("0", "-1", "\"2\"", "'2'", "two", "2147483648").foreach { width =>
+      withClue(width) {
+        value(s"```width(n = $width)\n    a\n  ```", "  a", InvalidArgument(loc(1, 14), "n"))
+      }
+    }
+  }
+
+  it should "read strings in arguments with the escapes of their quotes, and no substitutions" in {
+    value("```<(x = \"\\t\")\n    a\n  ```", "  a", UnknownArgument(loc(1, 6), "x"))
+    value("```<(x = 'a\\'b\\\\c\\d')\n    a\n  ```", "  a", UnknownArgument(loc(1, 6), "x"))
+    value("```<(x = \"a\\qb\")\n    a\n  ```", "  a", InvalidEscape(loc(1, 12), "\\q"),
+      UnknownArgument(loc(1, 6), "x"))
+    value("```<(x = \"$" + "{y}\")\n    a\n  ```", "  a", SubstitutionInArgument(loc(1, 11)),
+      UnknownArgument(loc(1, 6), "x"))
+    value("```<(x = \"a\\\n    a\n  ```", "  a", InvalidEscape(loc(1, 12), "\\"), InvalidMarker(loc(1, 10)))
+  }
+
+  it should "report whitespace after the delimiter or the markers, and apply the markers" in {
     value("```  \n  a\n  ```", "a", WhitespaceAfterDelimiter(loc(1, 4)))
-    value("```<\t\n  a\n  ```", "a", WhitespaceAfterDelimiter(loc(1, 5)))
+    value("```<\t\n    a\n  b\n  ```", "a\nb", WhitespaceAfterDelimiter(loc(1, 5)))
+    value("``` >\n    a\n  ```", "    a", WhitespaceAfterDelimiter(loc(1, 4)))
   }
 
   it should "report a line break of another kind after the delimiter, and leave it out of the marker" in
@@ -443,7 +506,8 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   }
 
   it should "end the source when it is not closed" in {
-    lex("'''a b") shouldBe Lexed(Nil, List(UnknownMarker(loc(1, 4), "a b"), UnterminatedString(loc(1, 1))))
+    lex("'''a b") shouldBe
+      Lexed(Nil, List(UnknownMarker(loc(1, 4), "a"), UnknownMarker(loc(1, 6), "b"), UnterminatedString(loc(1, 1))))
     lex("'''\n  a") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1))))
   }
 
