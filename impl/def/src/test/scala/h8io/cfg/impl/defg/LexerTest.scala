@@ -112,7 +112,7 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   }
 
   "Whitespace other than space and tab" should "be reported and read as whitespace" in {
-    val foreign = List('\u00A0', '\u2007', '\u202F', '\u3000', '\f', '\u000B', '\u001F', '\uFEFF')
+    val foreign = List('\u00A0', '\u2007', '\u202F', '\u3000', '\uFEFF')
     foreign.foreach { c =>
       withClue(c.toInt.toHexString) {
         lex(s"a${c}b") shouldBe Lexed(List(plain("a"), plain("b")), List(ForeignWhitespace(loc(1, 2), c)))
@@ -144,6 +144,37 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
 
   they should "be written as an escape inside quotes" in {
     lex("\"\\u2028\"") shouldBe Lexed(List(quoted(Text("\u2028"))), Nil)
+  }
+
+  "Control characters other than tab" should
+    "be reported anywhere, read as whitespace outside quotes and dropped inside" in
+    List('\u0000', '\u0001', '\u0008', '\f', '\u000B', '\u001B', '\u001F', '\u007F', '\u0080', '\u009F').foreach { c =>
+      withClue(c.toInt.toHexString) {
+        lex(s"a${c}b") shouldBe Lexed(List(plain("a"), plain("b")), List(ControlCharacter(loc(1, 2), c)))
+        key(s"a:${c}b") shouldBe Lexed(List(bare("a"), Colon, bare("b")), List(ControlCharacter(loc(1, 3), c)))
+        lex("\"a" + c.toString + "b\" `c" + c.toString + "d`") shouldBe
+          Lexed(List(quoted(Text("ab")), Name("cd", quoted = true)),
+            List(ControlCharacter(loc(1, 3), c), ControlCharacter(loc(1, 9), c)))
+        lex("'a" + c.toString + "b'") shouldBe Lexed(List(quoted(Text("ab"))), List(ControlCharacter(loc(1, 3), c)))
+        lex("\"\"\"<" + c.toString + "\n  a" + c.toString + "b\n  \"\"\"") shouldBe
+          Lexed(List(quoted(Text("ab"))), List(ControlCharacter(loc(1, 5), c), ControlCharacter(loc(2, 4), c)))
+        lex("'''\n  a" + c.toString + "b\n  '''") shouldBe
+          Lexed(List(quoted(Text("ab"))), List(ControlCharacter(loc(2, 4), c)))
+        lex(s"// x${c}y\n/* x${c}y */ z") shouldBe
+          Lexed(List(Newline, plain("z")), List(ControlCharacter(loc(1, 5), c), ControlCharacter(loc(2, 5), c)))
+        lex(s"$${a${c}b} x") shouldBe
+          Lexed(List(scalar(), plain("b"), RightBrace, plain("x")),
+            List(InvalidSubstitution(loc(1, 1)), ControlCharacter(loc(1, 4), c)))
+      }
+    }
+
+  they should "be written as an escape inside quotes and backticks" in {
+    lex("\"\\u0001\\f\"") shouldBe Lexed(List(quoted(Text("\u0001\f"))), Nil)
+    key("`\\u0000`") shouldBe Lexed(List(Name("\u0000", quoted = true)), Nil)
+  }
+
+  "A tab" should "be content inside quotes" in {
+    lex("\"a\tb\" 'c\td'") shouldBe Lexed(List(quoted(Text("a\tb")), quoted(Text("c\td"))), Nil)
   }
 
   "Comments" should "run to the end of the line, leaving the newline" in {

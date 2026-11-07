@@ -23,8 +23,14 @@ final case class LoneCarriageReturn(location: SourceLocation) extends DefError
 /** NEL, U+2028 or U+2029 anywhere, quotes included; `char` is the one written. In quotes it is written `\\uXXXX`. */
 final case class ForeignLineBreak(location: SourceLocation, char: Char) extends DefError
 
-/** A whitespace character other than space and tab outside quotes and comments, such as NBSP; `char` is the one
-  * written.
+/** A control character other than tab, LF and the CR of a CRLF anywhere, quotes and comments included, C1 and DEL as
+  * well; `char` is the one written. NEL and a lone CR have errors of their own. In `"…"`, backticks and `"""…"""` it is
+  * written as an escape; a raw string cannot hold one.
+  */
+final case class ControlCharacter(location: SourceLocation, char: Char) extends DefError
+
+/** A whitespace character other than space and tab outside quotes and comments, such as NBSP, that is not a control
+  * character; `char` is the one written.
   */
 final case class ForeignWhitespace(location: SourceLocation, char: Char) extends DefError
 
