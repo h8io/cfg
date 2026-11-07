@@ -732,9 +732,6 @@ mistake is worse than stopping.
 
 ## 14. Decision log
 
-The format was called DEF until session 10, and the entries before then keep that name and its
-`impl/def`, `defg`, `Def*` types and `.def` files, as they were written.
-
 Each entry records what was chosen, and — where it matters — what was rejected and why. A rejected
 alternative listed here should not be re-proposed without new information.
 
@@ -857,6 +854,8 @@ alternative listed here should not be re-proposed without new information.
   the user did not like. The extension `.def` was checked: GitHub Linguist
   maps it to no language, and its other uses (Windows linker module-definition files, Apptainer
   container definitions, Modula-2) barely overlap with a Scala project's resources.
+
+  **Superseded in session 10:** the format is Ψ (Psi), and the entries of this log call it so.
 - **Correction to session 1:** `native` is not a Scala 2 keyword (Scala has the `@native` annotation,
   not a reserved word). The collision with Scala Native alone is enough to keep it rejected.
 
@@ -899,7 +898,7 @@ alternative listed here should not be re-proposed without new information.
   two spellings of one thing. Both quotes being escapable in both forms follows from the one set.
 - **Comments are `//` and nesting `/* */`; `/** */` is reserved for doc comments** (§3). The user's
   call. Reasons: C-style comments suit the user's taste better than `#`, which reads as a scripting
-  language, and DEF is meant as a base for DSLs, which may want documented configuration — `/** */`
+  language, and Psi is meant as a base for DSLs, which may want documented configuration — `/** */`
   is the familiar form, `#` has none (`##` would be weak). Comments open only outside an unquoted
   scalar, so URLs need no quotes, at the price of `a: 1//x` being one scalar; values starting with
   `//` or `/*` (globs) need quotes. Block comments nest, as in Scala. Doc comments are positioned
@@ -908,7 +907,7 @@ alternative listed here should not be re-proposed without new information.
 - **`ISome.tag` holds the tag's name only**, without the prefix or the quotes (§5). The user's call:
   both are syntax of the format and meaningless in the value. `impl/yaml` drops the leading `!` to
   match, a breaking change to `cfg-yaml`. Rejected: keeping YAML's `!` (the string would depend on
-  the syntax that wrote it); letting DEF and YAML differ.
+  the syntax that wrote it); letting Psi and YAML differ.
 - **Tags need a prefix.** Rejected: `key: tag value`, unambiguous since an unquoted scalar holds no
   whitespace, because it takes over the position the "stray word is an error" rule guards:
   `greeting: Hello world` with forgotten quotes would become tag `Hello`, `[a b]` with a forgotten
