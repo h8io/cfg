@@ -1163,9 +1163,32 @@ hold; to be settled before #134 (step 2c) merges:
   plugin for the format would be written in, and `.psi` has minor binary uses (PrimalScript help,
   Psion audio, PhotoScape images) and ParaSail's interface files.
 
+- **Markers are an open set, as directives are** (§5, §6). The user's idea: the loader is built
+  with marker handlers as it is with directive handlers —
+  `Psi.builder.withMarkers(markers: (String, MarkerProcessor)*).withDirectives(directives: (String,
+  DirectiveProcessor)*)` — the format fixing only the syntax of a marker, and names may be longer
+  than one character. `<`, `>`, `+` and the width become handlers registered by default, as
+  `#include` is the built-in directive; a name not registered is an `UnknownMarker`, as now.
+- **A marker handler works on the layout** — the user's pick of three stages. It gets the lines of
+  the block with escapes and substitutions already read and opaque, and gives lines back; this is
+  the stage the built-in markers work at. Rejected: the lexical stage, which could turn
+  substitution off or change its delimiters (§13 item 4) but would expose the lexer, the common
+  case being settled by `'''…'''` anyway; the value stage, transforming the finished string, which
+  would run only after substitution (§8) and give a value a meaning, the job of tags and decoders at
+  the higher level (session 6).
+- **`withMarkers` and `withDirectives` replace the built-in set**, not add to it: the user's call. A
+  loader that wants `<` or `#include` alongside its own handlers registers them again, so the
+  built-in handlers have to be public values.
+
 **Open after session 10** — still to be settled before #134 (step 2c) merges:
 
-- **Markers**, as left after session 9 (above).
+- **The syntax of markers**, now that names are longer than one character and a handler may take
+  parameters — the width `N` being one such. Also how markers combine: as a chain of handlers
+  applied left to right, each lines to lines, `"""< +` would be stripped then folded; the rule for
+  no marker (Java's) then applies when no marker in the chain sets the indent, so handlers would
+  have to say whether they do. The user is thinking it over. What any v1 syntax must keep: every
+  text after the delimiter that is not a known marker stays an error, so that a later extension
+  breaks no file.
 - **Format characters.** Raised with the control characters and not decided: the bidirectional
   overrides and isolates, U+202A–U+202E and U+2066–U+2069, which make source read differently
   from how it is parsed ("Trojan Source"), and the invisible ones such as U+200B and U+2060. Not

@@ -73,7 +73,7 @@ at the phase gate.
 | 7 | Node views and the loader, end to end | todo |
 | 8 | Renderer and round-trip property tests | todo |
 | 9 | Substitutions | todo |
-| 10 | Directive framework | todo |
+| 10 | Directive and marker framework | todo |
 | 11 | `#include` | todo |
 | 12 | Error messages and hints | todo |
 | 13 | Hardening | todo |
@@ -248,7 +248,12 @@ code is the lexer alone and nothing is published.
   are looked up in system properties and the environment: the path as written (`${java.home}`,
   `${HOME}`), and only for single-segment paths in the environment?
 
-### 10. Directive framework
+### 10. Directive and marker framework
+
+- Markers become handlers too (session 10, `format.md` §14): a builder,
+  `Psi.builder.withMarkers(…).withDirectives(…)`, each replacing the built-in set, whose handlers are
+  public values; a marker handler maps the lines of a block to lines, at the layout stage. Until
+  this step the lexer keeps the built-in markers hard-coded, as 2c wrote them.
 
 - The public extension API (§6): a handler gets the literal arguments, the location and a context
   (the including source's URL, the URL stack for cycle detection, a way to parse another source) and
@@ -258,8 +263,8 @@ code is the lexer alone and nothing is published.
 - Statement-position results merge positionally into the enclosing block, so fields below override
   them (§6, §7).
 - **Spec gaps:** the API shape itself — it is public and hard to change later, so it is reviewed with
-  the user before coding. Whether the loader takes the handler set as a parameter of `DEF.apply`, of a
-  `DEF` instance, or both.
+  the user before coding: what a marker handler gets and returns, what a directive handler gets. The
+  builder settles how the loader takes its handlers.
 
 ### 11. `#include`
 
