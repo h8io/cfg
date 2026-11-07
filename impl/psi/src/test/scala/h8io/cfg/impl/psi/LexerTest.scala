@@ -1,13 +1,13 @@
-package h8io.cfg.impl.defg
+package h8io.cfg.impl.psi
 
 import h8io.cfg.Id
-import h8io.cfg.impl.defg.Token.*
+import h8io.cfg.impl.psi.Token.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
 /** What was read up to the end, and the errors found. */
-private final case class Lexed[+A](read: List[A], errors: List[DefError])
+private final case class Lexed[+A](read: List[A], errors: List[PsiError])
 
 class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks {
 
@@ -347,7 +347,7 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
 
   private def block(text: String): Lexed[Kind] = lex(tq(text))
 
-  private def value(text: String, value: String, errors: DefError*): Unit =
+  private def value(text: String, value: String, errors: PsiError*): Unit =
     block(text) shouldBe Lexed(List(quoted(Text(value))), errors.toList)
 
   "A triple-quoted string" should "always be a block, what follows its delimiter on the line its markers" in {

@@ -1,4 +1,4 @@
-package h8io.cfg.impl.defg
+package h8io.cfg.impl.psi
 
 import org.scalatest.{EitherValues, Inside}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -50,19 +50,19 @@ class SourceTest extends AnyFlatSpec with Matchers with EitherValues with Inside
   }
 
   "read" should "read a URL" in {
-    val file = Files.createTempFile("source", ".def")
+    val file = Files.createTempFile("source", ".psi")
     try {
       Files.write(file, "a: 1".getBytes(StandardCharsets.UTF_8))
-      val source = Source.read("app.def", file.toUri.toURL).value
-      source.name shouldBe "app.def"
+      val source = Source.read("app.psi", file.toUri.toURL).value
+      source.name shouldBe "app.psi"
       source.text shouldBe "a: 1"
     } finally Files.delete(file)
   }
 
   it should "report a URL that cannot be read" in {
-    val file = Files.createTempFile("source", ".def")
+    val file = Files.createTempFile("source", ".psi")
     Files.delete(file)
-    inside(Source.read("gone.def", file.toUri.toURL).left.value) { case SourceUnreadable("gone.def", _: IOException) =>
+    inside(Source.read("gone.psi", file.toUri.toURL).left.value) { case SourceUnreadable("gone.psi", _: IOException) =>
     }
   }
 }

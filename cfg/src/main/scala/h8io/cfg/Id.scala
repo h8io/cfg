@@ -34,7 +34,7 @@ object Id {
   /** A named field inside a map node.
     *
     * A key that is not a letter or `_` followed by letters, digits, `_` and `-` is rendered in [[path]] in backticks,
-    * escaped, so the output is always unambiguous — and valid DEF, where a quoted key is written the same way.
+    * escaped, so the output is always unambiguous — and valid Psi, where a quoted key is written the same way.
     *
     * @param key
     *   the field name

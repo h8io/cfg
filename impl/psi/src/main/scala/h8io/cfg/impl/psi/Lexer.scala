@@ -1,8 +1,8 @@
-package h8io.cfg.impl.defg
+package h8io.cfg.impl.psi
 
 import h8io.cfg.Id
-import h8io.cfg.impl.defg.Lexer.*
-import h8io.cfg.impl.defg.Token.*
+import h8io.cfg.impl.psi.Lexer.*
+import h8io.cfg.impl.psi.Token.*
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -12,15 +12,15 @@ import scala.collection.mutable
   * Errors are collected rather than thrown. A fatal one — an unterminated quote or comment — leaves nothing to
   * resynchronise on, so the lexer reports it and answers [[Token.End]] from then on (§11).
   */
-private[defg] final class Lexer(source: Source) {
+private[psi] final class Lexer(source: Source) {
   private val text = source.text
   private var offset = 0
   private var atLineStart = true
   private var ended = false
-  private val reported = mutable.ListBuffer.empty[DefError]
+  private val reported = mutable.ListBuffer.empty[PsiError]
 
   /** The errors found so far, in order. */
-  def errors: List[DefError] = reported.toList
+  def errors: List[PsiError] = reported.toList
 
   def next(mode: Mode): Token = {
     val tab = if (atLineStart) indentationTab() else -1
@@ -34,18 +34,18 @@ private[defg] final class Lexer(source: Source) {
     Token(kind, source.location(start), startsLine)
   }
 
-  private def report(error: SourceLocation => DefError, at: Int): Unit = {
+  private def report(error: SourceLocation => PsiError, at: Int): Unit = {
     reported += error(source.location(at))
     ()
   }
 
   /** Reports a fatal error: nothing after it can be trusted, so the source ends here. */
-  private def stop(error: SourceLocation => DefError, at: Int): Unit = {
+  private def stop(error: SourceLocation => PsiError, at: Int): Unit = {
     report(error, at)
     ended = true
   }
 
-  private def fail(error: SourceLocation => DefError, at: Int): Kind = {
+  private def fail(error: SourceLocation => PsiError, at: Int): Kind = {
     stop(error, at)
     End
   }
@@ -240,7 +240,7 @@ private[defg] final class Lexer(source: Source) {
     } else unquoted()
 
   /** A tag or directive name after its prefix: bare, or in backticks. */
-  private def name(missing: SourceLocation => DefError, prefix: Int): Option[String] =
+  private def name(missing: SourceLocation => PsiError, prefix: Int): Option[String] =
     if (at(offset, '`')) backticked(offset)
     else {
       val start = offset
