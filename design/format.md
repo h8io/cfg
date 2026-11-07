@@ -233,9 +233,11 @@ key: """
 The layout of a block is picked by **markers** between the opening delimiter and the end of its
 line. A marker is a name — a run of the symbols `! # $ % & * + - . : ; < = > ? @ ^ | ~`, or a name
 by the key rule (§3) — followed, if it takes any, by its arguments in parentheses, written as a
-directive's are (§6): `name = literal`, separated by `,`, a literal being a string in `"…"` (with
-its escapes, `${` an error) or `'…'`, an integer, or a bare name. Arguments are named, never
-positional. Markers are separated by whitespace; none may stand before the first or after the last.
+directive's are (§6): `name = literal` or a literal alone, separated by `,`, a literal being a
+string in `"…"` (with its escapes, `${` an error) or `'…'`, an integer, or a bare name. As in
+Scala, positional arguments go to the parameters in order and come before the named ones:
+`width(2)` and `width(n = 2)` are one. Markers are separated by whitespace; none may stand before
+the first or after the last.
 `/` is not a symbol, being kept for a comment after the markers, which v1 does not allow.
 
 | Marker | Effect |
@@ -255,9 +257,10 @@ them; with none, Java's rule comes first, so `"""+` folds what that rule left.
 **The set of markers is open**, as the set of directives is (§6): the loader is built with the
 marker handlers it knows, the ones above being the built-in set, and a handler maps the lines of a
 block to lines (§14, session 10). Each of these is reported, none of them fatal, and the block is
-then read as with no marker: a marker the loader does not know, an argument a marker does not take
-or is given twice, a value it cannot take, an argument it requires and was not given, and a second
-marker that sets the indent. Markers that cannot be read at all — `"""2`, `"""<x`, `"""abc"""` —
+then read as with no marker: a marker the loader does not know; a named argument it does not take,
+a positional one past its last parameter, a positional one after a named one, an argument given
+twice — by name, or by position and then by name; a value it cannot take, an argument it requires
+and was not given; and a second marker that sets the indent. Markers that cannot be read at all — `"""2`, `"""<x`, `"""abc"""` —
 are one error, where they stop fitting, and the rest of the line is not looked at. Whitespace after
 the delimiter or after the last marker is an error as well, but the markers are applied.
 
@@ -390,7 +393,9 @@ in the language: keys, path segments, tags and directives.
 
 Arguments are separated like everything else, by `,` or a newline, so a long directive can be split
 across lines. They keep `name = literal`, not `name: literal`: a directive is a call with named
-arguments, as in Scala, not a block of fields.
+arguments, as in Scala, not a block of fields. As in Scala, an argument may also be positional — a
+literal alone, going to the handler's parameters in order — and positional arguments come before
+the named ones; markers take arguments the same way (§5).
 
 Argument literals are strings, bare identifiers, `true`/`false` and integers. Arguments are
 **literal only — no substitutions**. This is not a simplification, it is forced by the phase order in
@@ -1201,8 +1206,7 @@ hold; to be settled before #134 (step 2c) merges:
   leaves no room for an argument that is not a number; `name=value` pairs would be a third syntax
   beside `key: value` and `arg = literal`. One call syntax for both extension points. With it,
   agreed with the user: symbols and letters do not mix in a name, so `<+` is one unknown marker,
-  not two; arguments are named only, as a directive's — a positional form can be allowed later
-  without breaking a file, not taken back; the width is `width(n = N)`, any positive integer
+  not two; arguments are named only, as a directive's (superseded below); the width is `width(n = N)`, any positive integer
   rather than one digit, and `"""2` and `"""+2` are gone (`"""width(n = 2) +`); markers apply left
   to right, so `"""+ <` and `"""< +` differ, Java's rule first when none sets the indent, and a
   second one setting it is an error. Any error in the markers reads the block as with no marker,
@@ -1212,12 +1216,18 @@ hold; to be settled before #134 (step 2c) merges:
 - **A marker the user gave as an example: `replace(str1, str2)`**, replacing text in the lines of a
   block — at the layout stage, so in the written text only, escapes and substitutions being opaque
   there. Not to be implemented now. Written as the user wrote it, it takes positional arguments,
-  which the entry above rules out for v1.
+  which the entry below allows.
+- **Positional arguments are allowed**, for markers and directives alike (§5, §6), the call syntax
+  being one: the user's call, raised by `replace(str1, str2)`, which reads better than
+  `replace(from = str1, to = str2)`. Scala's rules: positional arguments go to the parameters in
+  the order the handler declares them, and come before the named ones; `width(2)` is
+  `width(n = 2)`. New errors: `ExtraArgument`, a positional argument past the last parameter, and
+  `PositionalAfterNamed`; an argument given by position and again by name is a
+  `DuplicateArgument`. Supersedes "named only" above, the same session. A handler's parameter order
+  becomes part of its public contract, which the API of step 10 has to carry.
 
 **Open after session 10** — still to be settled before #134 (step 2c) merges:
 
-- **Positional arguments** for markers, and so for directives, the call syntax being one:
-  `replace(str1, str2)` reads better than `replace(from = str1, to = str2)`.
 - **Format characters.** Raised with the control characters and not decided: the bidirectional
   overrides and isolates, U+202A–U+202E and U+2066–U+2069, which make source read differently
   from how it is parsed ("Trojan Source"), and the invisible ones such as U+200B and U+2060. Not

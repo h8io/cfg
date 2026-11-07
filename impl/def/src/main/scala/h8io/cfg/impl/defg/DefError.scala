@@ -66,10 +66,16 @@ final case class UnknownMarker(location: SourceLocation, name: String) extends D
 /** A second marker that sets the indent, such as `>` after `<`; the block is read as with no marker. */
 final case class ConflictingIndent(location: SourceLocation) extends DefError
 
-/** An argument the marker does not take; `argument` is its name. */
+/** A named argument the marker does not take; `argument` is its name. */
 final case class UnknownArgument(location: SourceLocation, argument: String) extends DefError
 
-/** An argument given twice; the error points at the second. */
+/** A positional argument past the last parameter. */
+final case class ExtraArgument(location: SourceLocation) extends DefError
+
+/** A positional argument after a named one: positional arguments come first, as in Scala. */
+final case class PositionalAfterNamed(location: SourceLocation) extends DefError
+
+/** An argument given twice, by name or by position and then by name; the error points at the second. */
 final case class DuplicateArgument(location: SourceLocation, argument: String) extends DefError
 
 /** An argument the marker requires and was not given; the error points at the marker. */
