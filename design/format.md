@@ -1171,10 +1171,12 @@ hold; to be settled before #134 (step 2c) merges:
   from how it is parsed ("Trojan Source"), and the invisible ones such as U+200B and U+2060. Not
   restricted anywhere today, as control characters were not.
 
-To be settled in step 2d, the rename:
+Settled for step 2d, the rename, later in session 10:
 
-- **The loader object**: `Psi`, `PSI` — the `HOCON`/`YAML` convention, though Psi is no acronym —
-  or `Ψ` itself, legal in Scala but hard to type at a call site.
-- **`.Ψ` and `.ψ` on a case-insensitive file system**, the default on Windows and macOS: they are
-  one name there, so the two files cannot sit side by side, a search for `.Ψ` finds a `.ψ`, and the
-  priority between them holds only on Linux. Likewise `.PSI` would be found as `.psi`.
+- **The loader object is `Psi`.** The user's call. Rejected: `PSI`, which follows `HOCON` and
+  `YAML` but makes an acronym of a letter; `Ψ` itself, legal in Scala but hard to type at a call
+  site.
+- **On a case-insensitive file system `.Ψ` and `.ψ` are one extension**, and the spec says so: on
+  Windows and macOS by default the two files cannot sit side by side, a search for `.Ψ` finds a
+  `.ψ`, and the order between them holds only where case matters, as on Linux. Likewise a `.PSI`
+  is found as `.psi` there. Agreed with the user; nothing in the format works around it.

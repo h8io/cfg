@@ -165,8 +165,9 @@ code is the lexer alone and nothing is published.
   name in `format.md`, in this plan and in `CLAUDE.md`, and the branch prefix `def/` to `psi/` from
   step 3 on.
 - Extensions `.Ψ`, `.ψ`, `.psi`, searched in that order.
-- **Spec gaps:** the loader object's name, and the two extensions on a case-insensitive file
-  system (`format.md` §14, after session 10).
+- The loader object is `Psi`; on a case-insensitive file system `.Ψ` and `.ψ` are one extension,
+  which the spec states (`format.md` §14, session 10).
+- **Spec gaps:** none.
 
 ### 3. Ast and parser: core syntax
 
