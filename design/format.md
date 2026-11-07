@@ -67,12 +67,20 @@ loader path.
   newline is LF or CRLF; a lone CR is an error.
 - **Whitespace** is space and tab, nothing else — YAML's set, which Scala 3 and Python widen only
   with ASCII control characters such as form feed. Every other whitespace character outside quotes
-  and comments is an error: NBSP and the other Unicode spaces, FF, VT, and a byte order mark past
-  the start. Each is reported where it stands and then read as whitespace, as a lone CR is. Inside
-  quotes and comments such characters are content.
+  and comments is an error: NBSP and the other Unicode spaces, and a byte order mark past the start.
+  Each is reported where it stands and then read as whitespace, as a lone CR is. Inside quotes and
+  comments such characters are content. FF and VT are control characters, errors anywhere (below).
 - **NEL, U+2028 and U+2029 are errors anywhere**, quotes and comments included, as a lone CR is:
   some tools show them as a line break and others do not. In `"…"` and backticks they are written
   `\u0085`, `\u2028`, `\u2029`, and in `"""…"""` as well (§5).
+- **Control characters other than tab are errors anywhere**, quotes and comments included: U+0000
+  to U+001F but tab, LF and the CR of a CRLF, then DEL and U+0080 to U+009F, FF and VT among them;
+  NEL and a lone CR keep the errors above. No reader sees them, so a value would differ from what
+  is on the screen. Each is reported where it stands and then read as whitespace outside quotes and
+  dropped inside quotes and comments, as a lone CR is. In `"…"`, backticks and `"""…"""` one is
+  written as an escape, `\u0001`, or `\b` and `\f` for the two that have one; a raw string cannot
+  hold one (§5). A tab is content inside quotes, whitespace between tokens, and an error in
+  indentation (below).
 - **A tab in indentation is an error**, already in v1, as in YAML. Indentation is the whitespace
   before the first token of a line; a blank or comment-only line has none. Between tokens a tab is
   whitespace like a space. Inside `"""…"""` leading whitespace is content (§5), tabs included.
@@ -177,7 +185,8 @@ raw: what it saves over `"…"` is escaping quotes and writing newlines, not esc
 backslash is `\\`; any other `\` outside the set is an error,
 as in `"…"`, so a forgotten one is reported rather than kept. `\"""` still writes a literal `"""`
 — `\"` and then two quotes, which do not close — and `\${` a literal `${`. A lone CR, NEL, U+2028
-and U+2029 (§3) are written `\r`, `\u0085`, `\u2028`, `\u2029`.
+and U+2029 (§3) are written `\r`, `\u0085`, `\u2028`, `\u2029`, and a control character (§3) as
+`\uXXXX`, `\b` or `\f`.
 
 Escapes are interpreted **after the layout rules** below — the indent, trailing whitespace, folding
 — again as in Java: what an escape produces is kept as written. So `\t` or `\u0020` at the end of a
@@ -192,8 +201,8 @@ written `'\\\\host\share'`.
 
 `'…'` is one line, like `"…"`. `'''…'''` is a block and takes the layout rules below exactly as
 `"""…"""` does, a literal `'''` being `\'''`; everything said below of `"""` holds of `'''` alike.
-A lone CR, NEL, U+2028 and U+2029 cannot be written in a raw string, being errors anywhere (§3); a
-value holding one is written in `"…"` or `"""…"""`.
+A lone CR, NEL, U+2028, U+2029 and the control characters other than tab cannot be written in a
+raw string, being errors anywhere (§3); a value holding one is written in `"…"` or `"""…"""`.
 
 **A triple-quoted string is always a block**: its content starts on the line after the opening
 delimiter, and what stands between the delimiter and the end of its line is a marker (below) or
@@ -1122,4 +1131,30 @@ hold; to be settled before #134 (step 2c) merges:
   at all. Other whitespace (NBSP, FF, VT, …) and tabs are content inside quotes. **Other control
   characters — U+0001 and the like — are not restricted anywhere**, in quotes or out: the lexer
   only catches those Java counts as whitespace (FF, VT, U+001C–U+001F). Open whether they become
-  errors, inside quotes, outside, or both, and how they are written then.
+  errors, inside quotes, outside, or both, and how they are written then. **Settled in session 10**
+  (below).
+
+### Session 10 — 2026-11-07
+
+- **Control characters other than tab are errors anywhere** (§3), quotes and comments included:
+  C0 but tab, LF and the CR of a CRLF, then DEL and C1. The user's call. Until then the line ran
+  where Java's `Character.isWhitespace` happens to draw it: FF, VT and U+001C–U+001F were errors
+  outside quotes and content inside, while U+0001 or ESC passed anywhere. So `a: a<SOH>b` was a
+  scalar of three characters that reads as two, contrary to session 8's rule against invisible
+  differences; a NUL reached a value and failed far downstream; and an ESC in a value quoted by an
+  error message drove the terminal. JSON forbids raw C0 in strings, TOML every control character
+  but tab, YAML everything outside its printable set. Handled as a lone CR is: reported where it
+  stands, read as whitespace outside quotes, dropped inside; inside `${…}` reported on its own
+  beside the `InvalidSubstitution`, the invisible character being the cause. Escapes still write
+  one — an escape is visible — and a raw string cannot hold one, as it cannot hold a lone CR. FF
+  and VT move from `ForeignWhitespace` to the new `ControlCharacter`, and inside quotes from content
+  to errors. Rejected: forbidding them only outside quotes, where they matter least — a value in
+  quotes hides one as well as an unquoted one does.
+
+**Open after session 10** — still to be settled before #134 (step 2c) merges:
+
+- **Markers**, as left after session 9 (above).
+- **Format characters.** Raised with the control characters and not decided: the bidirectional
+  overrides and isolates, U+202A–U+202E and U+2066–U+2069, which make source read differently
+  from how it is parsed ("Trojan Source"), and the invisible ones such as U+200B and U+2060. Not
+  restricted anywhere today, as control characters were not.

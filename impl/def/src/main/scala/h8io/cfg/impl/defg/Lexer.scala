@@ -65,33 +65,41 @@ private[defg] final class Lexer(source: Source) {
     */
   private def isForeignLineBreak(c: Char): Boolean = c == '\u0085' || c == '\u2028' || c == '\u2029'
 
-  /** A character that is an error anywhere because tools disagree on whether it ends a line. */
-  private def isBadBreak(i: Int): Boolean = isLoneCarriageReturn(i) || has(i) && isForeignLineBreak(text.charAt(i))
+  /** A character that is an error anywhere, quotes and comments included (`format.md` §3): a lone CR, NEL, U+2028 or
+    * U+2029, which tools disagree on whether it ends a line, or a control character other than tab, which no reader
+    * sees.
+    */
+  private def isForbidden(i: Int): Boolean =
+    isLoneCarriageReturn(i) || has(i) && (isForeignLineBreak(text.charAt(i)) || isControl(text.charAt(i)))
 
-  /** Whitespace other than space, tab and the newlines — NBSP, the other Unicode spaces, FF, VT, and a byte order mark
-    * past the start (`format.md` §3). An error outside quotes and comments, read as whitespace once reported; content
-    * inside them. All of them are single UTF-16 units.
+  /** Whitespace other than space and the line breaks — NBSP, the other Unicode spaces, and a byte order mark past the
+    * start (`format.md` §3). An error outside quotes and comments, read as whitespace once reported; content inside
+    * them. All of them are single UTF-16 units. Those that are control characters, such as FF and VT, are forbidden.
     */
   private def isForeignSpace(c: Char): Boolean =
-    c != ' ' && c != '\t' && c != '\n' && c != '\r' && !isForeignLineBreak(c) &&
-      (Character.isWhitespace(c) || Character.isSpaceChar(c) || c == '\uFEFF')
+    c != ' ' && !isForeignLineBreak(c) &&
+      (Character.isSpaceChar(c) || c == '\uFEFF')
 
   /** Ends a token: whitespace, a newline, or a character that is read as whitespace once reported. */
   private def isBreak(i: Int): Boolean = {
     val c = text.charAt(i)
-    isSpace(c) || isNewline(i) || isBadBreak(i) || isForeignSpace(c)
+    isSpace(c) || isNewline(i) || isForbidden(i) || isForeignSpace(c)
   }
 
-  /** A lone CR, NEL, U+2028 or U+2029 is reported where it stands and then treated as whitespace — dropped, inside
-    * quotes and comments.
+  /** A forbidden character is reported where it stands and then treated as whitespace — dropped, inside quotes and
+    * comments.
     */
-  private def skipBadBreak(): Boolean =
+  private def skipForbidden(): Boolean =
     if (isLoneCarriageReturn(offset)) {
       report(LoneCarriageReturn.apply, offset)
       offset += 1
       true
     } else if (has(offset) && isForeignLineBreak(text.charAt(offset))) {
       report(ForeignLineBreak(_, text.charAt(offset)), offset)
+      offset += 1
+      true
+    } else if (has(offset) && isControl(text.charAt(offset))) {
+      report(ControlCharacter(_, text.charAt(offset)), offset)
       offset += 1
       true
     } else false
@@ -118,7 +126,7 @@ private[defg] final class Lexer(source: Source) {
     var blank = true
     while (blank && !ended && has(offset))
       if (isSpace(text.charAt(offset))) offset += 1
-      else if (skipBadBreak()) ()
+      else if (skipForbidden()) ()
       else if (isForeignSpace(text.charAt(offset))) {
         report(ForeignWhitespace(_, text.charAt(offset)), offset)
         offset += 1
@@ -135,7 +143,7 @@ private[defg] final class Lexer(source: Source) {
 
   private def skipLineComment(): Unit =
     while (has(offset) && !isNewline(offset))
-      if (!skipBadBreak()) offset += 1
+      if (!skipForbidden()) offset += 1
 
   /** Skips a nesting block comment from its opening, and gives its text; an unterminated one is fatal. */
   private def skipBlockComment(): Option[String] = {
@@ -149,7 +157,7 @@ private[defg] final class Lexer(source: Source) {
       } else if (startsWith("*/")) {
         depth -= 1
         offset += 2
-      } else if (!skipBadBreak()) offset += 1
+      } else if (!skipForbidden()) offset += 1
     if (depth > 0) {
       stop(UnterminatedComment.apply, start)
       None
@@ -251,7 +259,7 @@ private[defg] final class Lexer(source: Source) {
     val value = new StringBuilder
     while (has(offset) && !at(offset, '`') && !isNewline(offset))
       if (at(offset, '\\')) escape(value)
-      else if (!skipBadBreak()) {
+      else if (!skipForbidden()) {
         value += text.charAt(offset)
         offset += 1
       }
@@ -295,7 +303,7 @@ private[defg] final class Lexer(source: Source) {
     while (!ended && has(offset) && !at(offset, '"') && !isNewline(offset))
       if (startsWith("${")) reference(quoted = true).foreach(parts.reference)
       else if (at(offset, '\\')) escape(parts.buffer)
-      else if (!skipBadBreak()) {
+      else if (!skipForbidden()) {
         parts.buffer += text.charAt(offset)
         offset += 1
       }
@@ -330,7 +338,7 @@ private[defg] final class Lexer(source: Source) {
     while (has(offset) && !at(offset, '\'') && !isNewline(offset)) {
       val escaped = rawEscape()
       escaped.foreach(value += _)
-      if (escaped.isEmpty && !skipBadBreak()) {
+      if (escaped.isEmpty && !skipForbidden()) {
         value += text.charAt(offset)
         offset += 1
       }
@@ -357,7 +365,7 @@ private[defg] final class Lexer(source: Source) {
     val markerStart = offset
     val written = new StringBuilder
     while (has(offset) && !isNewline(offset))
-      if (!skipBadBreak()) {
+      if (!skipForbidden()) {
         written += text.charAt(offset)
         offset += 1
       }
@@ -433,9 +441,9 @@ private[defg] final class Lexer(source: Source) {
     }
   }
 
-  /** A character as written, here; a lone CR, NEL, U+2028 or U+2029 is reported and dropped instead. */
+  /** A character as written, here; a forbidden one is reported and dropped instead. */
   private def written(line: mutable.Builder[Piece, Vector[Piece]]): Unit =
-    if (!skipBadBreak()) {
+    if (!skipForbidden()) {
       line += Written(text.charAt(offset))
       offset += 1
     }
@@ -566,19 +574,19 @@ private[defg] final class Lexer(source: Source) {
   }
 
   /** The `}` that closes a broken substitution: the next one on its line, and inside quotes before the closing one. A
-    * lone CR, NEL, U+2028 or U+2029 stops the search too, so that it is reported rather than skipped.
+    * forbidden character stops the search too, so that it is reported rather than skipped.
     */
   private def closingBrace(quoted: Boolean): Int = {
     var i = offset
-    while (has(i) && !at(i, '}') && !isNewline(i) && !isBadBreak(i) && !(quoted && at(i, '"'))) i += 1
+    while (has(i) && !at(i, '}') && !isNewline(i) && !isForbidden(i) && !(quoted && at(i, '"'))) i += 1
     if (at(i, '}')) i else -1
   }
 
   /** With no `}` to close it, a broken substitution runs to where the scalar around it would end — or, inside quotes,
-    * to a line break of any kind, so that a bad one is reported rather than skipped.
+    * to a newline or a forbidden character, so that one is reported rather than skipped.
     */
   private def endsAfterReference(i: Int, quoted: Boolean): Boolean =
-    if (quoted) at(i, '"') || isNewline(i) || isBadBreak(i) else endsUnquoted(i)
+    if (quoted) at(i, '"') || isNewline(i) || isForbidden(i) else endsUnquoted(i)
 
   /** The segments of a path below `parent`: a key first, then `.key` or `[index]` any number of times. */
   private def path(parent: Id): Option[Id.Branch] = key(parent).flatMap(segments)
@@ -647,6 +655,11 @@ private object Lexer {
 
   /** Whitespace inside a line: space and tab, nothing else (`format.md` §3). */
   def isSpace(c: Char): Boolean = c == ' ' || c == '\t'
+
+  /** A control character other than tab, LF and CR (`format.md` §3), C1 and DEL included; NEL is one, with an error of
+    * its own. LF and CR are line breaks, a lone CR being forbidden too.
+    */
+  def isControl(c: Char): Boolean = Character.getType(c) == Character.CONTROL && c != '\t' && c != '\n' && c != '\r'
 
   /** What a line of a triple-quoted string holds before its layout is applied (`format.md` §5): a character as written,
     * what an escape produced — never whitespace to the layout, which comes first — or a substitution.
