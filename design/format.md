@@ -67,8 +67,7 @@ loader path.
   newline is LF or CRLF; a lone CR is an error.
 - **Whitespace** is space and tab, nothing else — YAML's set, which Scala 3 and Python widen only
   with ASCII control characters such as form feed. Every other whitespace character outside quotes
-  and comments is an error: NBSP and the other Unicode spaces, and a byte order mark past the start.
-  Each is reported where it stands and then read as whitespace, as a lone CR is. Inside quotes and
+  and comments is an error: NBSP and the other Unicode spaces. Each is reported where it stands and then read as whitespace, as a lone CR is. Inside quotes and
   comments such characters are content. FF and VT are control characters, errors anywhere (below).
 - **NEL, U+2028 and U+2029 are errors anywhere**, quotes and comments included, as a lone CR is:
   some tools show them as a line break and others do not. In `"…"` and backticks they are written
@@ -81,6 +80,14 @@ loader path.
   written as an escape, `\u0001`, or `\b` and `\f` for the two that have one; a raw string cannot
   hold one (§5). A tab is content inside quotes, whitespace between tokens, and an error in
   indentation (below).
+- **Bidirectional formatting and invisible characters are errors anywhere**, as control characters
+  are: the embeddings, overrides and isolates U+202A–U+202E and U+2066–U+2069, which make source
+  display in another order than it parses ("Trojan Source"); the zero-width space U+200B; the word
+  joiner and the invisible operators U+2060–U+2064; and U+FEFF past the start of a source. Handled
+  as control characters are, and written the same way: `\u202E` in `"…"`, backticks and
+  `"""…"""`, never in a raw string. Left alone, being needed in text: the joiners U+200C and
+  U+200D (Persian, the Indic scripts, emoji sequences), the marks of direction U+200E and U+200F
+  (right-to-left text), and the soft hyphen U+00AD.
 - **A tab in indentation is an error**, already in v1, as in YAML. Indentation is the whitespace
   before the first token of a line; a blank or comment-only line has none. Between tokens a tab is
   whitespace like a space. Inside `"""…"""` leading whitespace is content (§5), tabs included.
@@ -201,8 +208,8 @@ written `'\\\\host\share'`.
 
 `'…'` is one line, like `"…"`. `'''…'''` is a block and takes the layout rules below exactly as
 `"""…"""` does, a literal `'''` being `\'''`; everything said below of `"""` holds of `'''` alike.
-A lone CR, NEL, U+2028, U+2029 and the control characters other than tab cannot be written in a
-raw string, being errors anywhere (§3); a value holding one is written in `"…"` or `"""…"""`.
+A lone CR, NEL, U+2028, U+2029, the control characters other than tab and the invisible characters
+(§3) cannot be written in a raw string, being errors anywhere (§3); a value holding one is written in `"…"` or `"""…"""`.
 
 **A triple-quoted string is always a block**: its content starts on the line after the opening
 delimiter, and what stands between the delimiter and the end of its line are its markers (below),
@@ -1226,12 +1233,18 @@ hold; to be settled before #134 (step 2c) merges:
   `DuplicateArgument`. Supersedes "named only" above, the same session. A handler's parameter order
   becomes part of its public contract, which the API of step 10 has to carry.
 
-**Open after session 10** — still to be settled before #134 (step 2c) merges:
+- **Bidirectional formatting and invisible characters are errors anywhere, as control characters
+  are, and `\uXXXX` still writes them** (§3): the user's call, on the question left open by the
+  entry on control characters. The set — U+202A–U+202E, U+2066–U+2069, U+200B, U+2060–U+2064 and
+  U+FEFF past the start — was drawn on the proposal: the explicit bidirectional formatting of
+  Unicode's bidi algorithm, the characters CVE-2021-42574 ("Trojan Source") is about and Rust lints
+  against, and the zero-width characters with no use in text. U+FEFF past the start moves from
+  `ForeignWhitespace`, an error outside quotes only, to the new `InvisibleCharacter`. Not taken:
+  the whole of Unicode's Cf category, which would forbid the joiners U+200C and U+200D that Persian,
+  the Indic scripts and emoji sequences need, the marks of direction U+200E and U+200F that
+  right-to-left text uses, the soft hyphen, and the tag characters of flag emoji.
 
-- **Format characters.** Raised with the control characters and not decided: the bidirectional
-  overrides and isolates, U+202A–U+202E and U+2066–U+2069, which make source read differently
-  from how it is parsed ("Trojan Source"), and the invisible ones such as U+200B and U+2060. Not
-  restricted anywhere today, as control characters were not.
+Nothing is left open before #134 (step 2c) merges.
 
 Settled for step 2d, the rename, later in session 10:
 
