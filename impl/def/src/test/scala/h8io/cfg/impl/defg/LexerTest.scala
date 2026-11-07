@@ -112,7 +112,7 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   }
 
   "Whitespace other than space and tab" should "be reported and read as whitespace" in {
-    val foreign = List('\u00A0', '\u2007', '\u202F', '\u3000', '\uFEFF')
+    val foreign = List('\u00A0', '\u2007', '\u202F', '\u3000')
     foreign.foreach { c =>
       withClue(c.toInt.toHexString) {
         lex(s"a${c}b") shouldBe Lexed(List(plain("a"), plain("b")), List(ForeignWhitespace(loc(1, 2), c)))
@@ -172,6 +172,33 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
     lex("\"\\u0001\\f\"") shouldBe Lexed(List(quoted(Text("\u0001\f"))), Nil)
     key("`\\u0000`") shouldBe Lexed(List(Name("\u0000", quoted = true)), Nil)
   }
+
+  "Bidirectional formatting and invisible characters" should
+    "be reported anywhere, read as whitespace outside quotes and dropped inside" in
+    List('\u202A', '\u202E', '\u2066', '\u2069', '\u200B', '\u2060', '\u2064', '\uFEFF').foreach { c =>
+      withClue(c.toInt.toHexString) {
+        lex(s"a${c}b") shouldBe Lexed(List(plain("a"), plain("b")), List(InvisibleCharacter(loc(1, 2), c)))
+        lex("\"a" + c.toString + "b\" `c" + c.toString + "d` 'e" + c.toString + "f'") shouldBe
+          Lexed(
+            List(quoted(Text("ab")), Name("cd", quoted = true), quoted(Text("ef"))),
+            List(InvisibleCharacter(loc(1, 3), c), InvisibleCharacter(loc(1, 9), c), InvisibleCharacter(loc(1, 15), c))
+          )
+        lex(s"// x${c}y\n/* x${c}y */ z") shouldBe
+          Lexed(List(Newline, plain("z")), List(InvisibleCharacter(loc(1, 5), c), InvisibleCharacter(loc(2, 5), c)))
+      }
+    }
+
+  they should "be written as an escape inside quotes and backticks" in {
+    lex("\"\\u202E\"") shouldBe Lexed(List(quoted(Text("\u202E"))), Nil)
+    key("`\\u200B`") shouldBe Lexed(List(Name("\u200B", quoted = true)), Nil)
+  }
+
+  they should "leave the joiners and the marks of direction alone" in
+    List('\u200C', '\u200D', '\u200E', '\u200F', '\u00AD').foreach { c =>
+      withClue(c.toInt.toHexString) {
+        lex("\"a" + c.toString + "b\"") shouldBe Lexed(List(quoted(Text("a" + c.toString + "b"))), Nil)
+      }
+    }
 
   "A tab" should "be content inside quotes" in {
     lex("\"a\tb\" 'c\td'") shouldBe Lexed(List(quoted(Text("a\tb")), quoted(Text("c\td"))), Nil)

@@ -66,19 +66,22 @@ private[defg] final class Lexer(source: Source) {
   private def isForeignLineBreak(c: Char): Boolean = c == '\u0085' || c == '\u2028' || c == '\u2029'
 
   /** A character that is an error anywhere, quotes and comments included (`format.md` §3): a lone CR, NEL, U+2028 or
-    * U+2029, which tools disagree on whether it ends a line, or a control character other than tab, which no reader
-    * sees.
+    * U+2029, which tools disagree on whether it ends a line; a control character other than tab; or an invisible
+    * character, which makes the source read otherwise than it parses.
     */
   private def isForbidden(i: Int): Boolean =
-    isLoneCarriageReturn(i) || has(i) && (isForeignLineBreak(text.charAt(i)) || isControl(text.charAt(i)))
+    isLoneCarriageReturn(i) || has(i) && {
+      val c = text.charAt(i)
+      isForeignLineBreak(c) || isControl(c) || isInvisible(c)
+    }
 
-  /** Whitespace other than space and the line breaks — NBSP, the other Unicode spaces, and a byte order mark past the
-    * start (`format.md` §3). An error outside quotes and comments, read as whitespace once reported; content inside
-    * them. All of them are single UTF-16 units. Those that are control characters, such as FF and VT, are forbidden.
+  /** Whitespace other than space and the line breaks — NBSP and the other Unicode spaces (`format.md` §3). An error
+    * outside quotes and comments, read as whitespace once reported; content inside them. All of them are single UTF-16
+    * units. Those that are control characters, such as FF and VT, are forbidden.
     */
   private def isForeignSpace(c: Char): Boolean =
     c != ' ' && !isForeignLineBreak(c) &&
-      (Character.isSpaceChar(c) || c == '\uFEFF')
+      Character.isSpaceChar(c)
 
   /** Ends a token: whitespace, a newline, or a character that is read as whitespace once reported. */
   private def isBreak(i: Int): Boolean = {
@@ -100,6 +103,10 @@ private[defg] final class Lexer(source: Source) {
       true
     } else if (has(offset) && isControl(text.charAt(offset))) {
       report(ControlCharacter(_, text.charAt(offset)), offset)
+      offset += 1
+      true
+    } else if (has(offset) && isInvisible(text.charAt(offset))) {
+      report(InvisibleCharacter(_, text.charAt(offset)), offset)
       offset += 1
       true
     } else false
@@ -638,6 +645,16 @@ private object Lexer {
     * its own. LF and CR are line breaks, a lone CR being forbidden too.
     */
   def isControl(c: Char): Boolean = Character.getType(c) == Character.CONTROL && c != '\t' && c != '\n' && c != '\r'
+
+  /** A character that makes source read otherwise than it parses (`format.md` §3): the bidirectional embeddings,
+    * overrides and isolates, U+202A–U+202E and U+2066–U+2069; the zero-width space U+200B; the word joiner and the
+    * invisible operators, U+2060–U+2064; and U+FEFF past the start of a source.
+    */
+  def isInvisible(c: Char): Boolean = {
+    val code = c.toInt
+    code >= 0x202a && code <= 0x202e || code >= 0x2066 && code <= 0x2069 || code == 0x200b ||
+    code >= 0x2060 && code <= 0x2064 || code == 0xfeff
+  }
 
   def isNameStart(cp: Int): Boolean = Character.isLetter(cp) || cp == '_'
 

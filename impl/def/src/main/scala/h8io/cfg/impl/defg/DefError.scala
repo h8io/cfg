@@ -29,6 +29,12 @@ final case class ForeignLineBreak(location: SourceLocation, char: Char) extends 
   */
 final case class ControlCharacter(location: SourceLocation, char: Char) extends DefError
 
+/** A bidirectional formatting or invisible character anywhere, quotes and comments included: U+202A–U+202E,
+  * U+2066–U+2069, U+200B, U+2060–U+2064, or U+FEFF past the start; `char` is the one written. In `"…"`, backticks and
+  * `"""…"""` it is written as an escape; a raw string cannot hold one.
+  */
+final case class InvisibleCharacter(location: SourceLocation, char: Char) extends DefError
+
 /** A whitespace character other than space and tab outside quotes and comments, such as NBSP, that is not a control
   * character; `char` is the one written.
   */
