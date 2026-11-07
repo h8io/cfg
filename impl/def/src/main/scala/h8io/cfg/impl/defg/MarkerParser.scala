@@ -127,20 +127,20 @@ private[defg] final class MarkerParser(
     }
   }
 
+  /** `name = literal`, or a literal alone, positional. */
   private def argument(): Option[Argument] = {
     val start = i
     identifier()
-    if (i == start) invalid
-    else {
-      val name = line.substring(start, i)
+    val name = line.substring(start, i)
+    skipSpaces()
+    if (i > start && at(i, '=')) {
+      i += 1
       skipSpaces()
-      if (!at(i, '=')) invalid
-      else {
-        i += 1
-        skipSpaces()
-        val valueStart = i
-        literal().map(Argument(name, start, _, valueStart))
-      }
+      val valueStart = i
+      literal().map(Argument(Some(name), start, _, valueStart))
+    } else {
+      i = start
+      literal().map(Argument(None, start, _, start))
     }
   }
 
@@ -228,39 +228,51 @@ private[defg] final class MarkerParser(
   }
 
   private def builtIn(call: Call): Option[Stage] =
-    call.name match {
-      case "<" => none(call, StripIndent)
-      case ">" => none(call, KeepIndent)
-      case "+" => none(call, Fold)
-      case "width" =>
-        validate(call, Set("n"))
-        val n = call.arguments.find(_.name == "n")
-        if (n.isEmpty) error(MissingArgument(_, "n"), call.at)
-        n.map {
-          case Argument(_, _, IntegerLiteral(width), _) if width >= 1 && width <= Int.MaxValue =>
-            WidthIndent(width.toInt)
-          case argument =>
-            error(InvalidArgument(_, argument.name), argument.valueAt)
-            WidthIndent(1)
-        }
-      case name =>
-        error(UnknownMarker(_, name), call.at)
+    builtIns.get(call.name) match {
+      case Some(BuiltIn(parameters, stage)) => stage(call, bind(call, parameters))
+      case None =>
+        error(UnknownMarker(_, call.name), call.at)
         None
     }
 
-  /** `stage`, for a marker that takes no arguments. */
-  private def none(call: Call, stage: Stage): Option[Stage] = {
-    validate(call, Set.empty)
-    Some(stage)
+  /** The markers every loader knows until handlers can be registered (plan step 10), each with its parameters. */
+  private def builtIns: Map[String, BuiltIn] =
+    Map(
+      "<" -> BuiltIn(Vector.empty, (_, _) => Some(StripIndent)),
+      ">" -> BuiltIn(Vector.empty, (_, _) => Some(KeepIndent)),
+      "+" -> BuiltIn(Vector.empty, (_, _) => Some(Fold)),
+      "width" -> BuiltIn(Vector("n"), width)
+    )
+
+  private def width(call: Call, arguments: Map[String, Argument]): Option[Stage] = {
+    val n = arguments.get("n")
+    if (n.isEmpty) error(MissingArgument(_, "n"), call.at)
+    n.map {
+      case Argument(_, _, IntegerLiteral(width), _) if width >= 1 && width <= Int.MaxValue => WidthIndent(width.toInt)
+      case argument =>
+        error(InvalidArgument(_, "n"), argument.valueAt)
+        WidthIndent(1)
+    }
   }
 
-  /** Reports the arguments of `call` not in `known`, and every one given again. */
-  private def validate(call: Call, known: Set[String]): Unit = {
-    val seen = mutable.Set.empty[String]
-    call.arguments.foreach { argument =>
-      if (!known(argument.name)) error(UnknownArgument(_, argument.name), argument.at)
-      else if (!seen.add(argument.name)) error(DuplicateArgument(_, argument.name), argument.at)
+  /** The arguments of `call` by the parameter they go to — positional ones in order, then named ones, as in Scala —
+    * every one that goes to none, or to one already given, reported.
+    */
+  private def bind(call: Call, parameters: Vector[String]): Map[String, Argument] = {
+    val bound = mutable.LinkedHashMap.empty[String, Argument]
+    var named = false
+    call.arguments.zipWithIndex.foreach {
+      case (argument @ Argument(None, at, _, _), index) =>
+        if (named) error(PositionalAfterNamed.apply, at)
+        else if (index >= parameters.length) error(ExtraArgument.apply, at)
+        else bound(parameters(index)) = argument
+      case (argument @ Argument(Some(name), at, _, _), _) =>
+        named = true
+        if (!parameters.contains(name)) error(UnknownArgument(_, name), at)
+        else if (bound.contains(name)) error(DuplicateArgument(_, name), at)
+        else bound(name) = argument
     }
+    bound.toMap
   }
 }
 
@@ -274,7 +286,12 @@ private object MarkerParser {
   def isDigit(c: Char): Boolean = c >= '0' && c <= '9'
 
   final case class Call(name: String, at: Int, arguments: Vector[Argument])
-  final case class Argument(name: String, at: Int, value: Literal, valueAt: Int)
+
+  /** An argument, named or positional. */
+  final case class Argument(name: Option[String], at: Int, value: Literal, valueAt: Int)
+
+  /** A built-in marker: its parameters, in order, and the stage it picks from its arguments by parameter. */
+  final case class BuiltIn(parameters: Vector[String], stage: (Call, Map[String, Argument]) => Option[Stage])
 
   sealed trait Literal
   final case class StringLiteral(value: String) extends Literal

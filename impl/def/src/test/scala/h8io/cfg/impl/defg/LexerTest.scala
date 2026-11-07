@@ -382,6 +382,7 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   it should "strip the opening line's indent and an explicit width" in {
     value("  ```width(n = 2)\n      abc\n\n    ```", "  abc\n")
     value("```width(n=1)\n  a\n   b\n```", " a\n  b")
+    value("  ```width(2)\n      abc\n\n    ```", "  abc\n")
     value("  ```width( n = 2 ) +\n    a\n    b\n      c\n  ```", "a b\n  c")
   }
 
@@ -422,7 +423,6 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
       "a\"b" -> 5,
       "< (x = 1)" -> 6,
       "<(" -> 6,
-      "<(x)" -> 7,
       "<(x =)" -> 9,
       "<(x = 1" -> 11,
       "<(x = 1 2)" -> 12,
@@ -443,6 +443,11 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
       UnknownArgument(loc(1, 15), "y"), UnknownArgument(loc(1, 23), "z"))
     value("```width\n    a\n  ```", "  a", MissingArgument(loc(1, 4), "n"))
     value("```width(n = 1, n = 2)\n    a\n  ```", "  a", DuplicateArgument(loc(1, 17), "n"))
+    value("```width(2, n = 3)\n    a\n  ```", "  a", DuplicateArgument(loc(1, 13), "n"))
+    value("```<(x)\n    a\n  ```", "  a", ExtraArgument(loc(1, 6)))
+    value("```width(2, 3)\n    a\n  ```", "  a", ExtraArgument(loc(1, 13)))
+    value("```width(n = 2, 3)\n    a\n  ```", "  a", PositionalAfterNamed(loc(1, 17)))
+    value("```width(two)\n    a\n  ```", "  a", InvalidArgument(loc(1, 10), "n"))
     List("0", "-1", "\"2\"", "'2'", "two", "2147483648").foreach { width =>
       withClue(width) {
         value(s"```width(n = $width)\n    a\n  ```", "  a", InvalidArgument(loc(1, 14), "n"))
