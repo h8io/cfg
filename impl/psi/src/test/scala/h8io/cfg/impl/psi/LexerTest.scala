@@ -106,9 +106,33 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
       Lexed(List(plain("a")), List(TabInIndentation(loc(1, 1)), ForeignWhitespace(loc(1, 2), '\u00A0')))
   }
 
+  it should "be reported in its place among the errors on its line" in {
+    lex("\u00A0\ta") shouldBe
+      Lexed(List(plain("a")), List(ForeignWhitespace(loc(1, 1), '\u00A0'), TabInIndentation(loc(1, 2))))
+  }
+
   it should "not be reported on a blank or comment-only line" in {
-    lex("\t\n\t// x\n\t/* x */\r\n\t/* x\n */ a\n\t") shouldBe
-      Lexed(List(Newline, Newline, Newline, plain("a"), Newline), Nil)
+    lex("\t\n\t// x\n\t/* x */\r\n\t/* x\n */\n\t") shouldBe
+      Lexed(List(Newline, Newline, Newline, Newline), Nil)
+  }
+
+  it should "be reported after a comment, which is whitespace" in {
+    lex("/* c */\ta") shouldBe Lexed(List(plain("a")), List(TabInIndentation(loc(1, 8))))
+    lex("  /* c */ /* d */\t\ta") shouldBe Lexed(List(plain("a")), List(TabInIndentation(loc(1, 18))))
+  }
+
+  it should "be reported on either side of a comment that spans lines, the line going on past it" in {
+    lex("\t/* c\n */ a") shouldBe Lexed(List(plain("a")), List(TabInIndentation(loc(1, 1))))
+    lex("/* c\n */\ta") shouldBe Lexed(List(plain("a")), List(TabInIndentation(loc(2, 4))))
+  }
+
+  it should "not be reported after a comment that carries a line with a token on past a newline" in {
+    lex("a /* c\n*/\tb") shouldBe Lexed(List(plain("a"), plain("b")), Nil)
+  }
+
+  "A token after a comment that spans lines" should "continue the line before the comment" in {
+    tokens("a /* c\n*/ b", KeyMode) shouldBe
+      Lexed(List(Token(bare("a"), loc(1, 1), startsLine = true), Token(bare("b"), loc(2, 4), startsLine = false)), Nil)
   }
 
   "Whitespace other than space and tab" should "be reported and read as whitespace" in {
@@ -416,6 +440,17 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   it should "report a line short of an explicit width" in
     value("  ```width(n = 2)\n    a\n   b\n\tc\n  ```", "a\nb\nc", InsufficientIndent(loc(3, 4)),
       InsufficientIndent(loc(4, 1)))
+
+  it should "report every line short of a width that the opening line's indent would take past Int.MaxValue" in {
+    value("```width(2147483647)\n  abc\n```", "abc", InsufficientIndent(loc(2, 3)))
+    List("2147483647", "2147483646").foreach { width =>
+      withClue(width) {
+        value(s"  ```width($width)\n    abc\n  ```", "abc", InsufficientIndent(loc(2, 5)))
+        value(s"    ```width(n = $width)\n      abc\n      def\n    ```", "abc\ndef", InsufficientIndent(loc(2, 7)),
+          InsufficientIndent(loc(3, 7)))
+      }
+    }
+  }
 
   it should "apply its markers left to right, Java's rule first when none sets the indent" in {
     value("```< +\n    a\n  b\n  ```", "a b")

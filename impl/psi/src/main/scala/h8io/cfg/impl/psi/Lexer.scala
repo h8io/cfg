@@ -23,10 +23,7 @@ private[psi] final class Lexer(source: Source) {
   def errors: List[PsiError] = reported.toList
 
   def next(mode: Mode): Token = {
-    val tab = if (atLineStart) indentationTab() else -1
-    val before = reported.length
     skipBlanks()
-    if (tab >= 0 && holdsToken(tab)) reported.insert(before, TabInIndentation(source.location(tab)))
     val start = offset
     val startsLine = atLineStart
     val kind = if (ended || offset >= text.length) End else read(mode)
@@ -111,29 +108,26 @@ private[psi] final class Lexer(source: Source) {
       true
     } else false
 
-  /** The first tab in the indentation of the line starting here, or -1: indentation is the whitespace before the first
-    * token of a line (`format.md` §3).
-    */
-  private def indentationTab(): Int = {
-    var i = offset
-    while (at(i, ' ')) i += 1
-    if (at(i, '\t')) i else -1
-  }
-
-  /** Whether the line of `tab` holds a token, now that whitespace and comments are skipped: a blank or comment-only
-    * line has no indentation, and neither has a line that a block comment carries on past.
-    */
-  private def holdsToken(tab: Int): Boolean =
-    !ended && has(offset) && !isNewline(offset) && text.lastIndexOf('\n', offset - 1) < tab
-
   /** Skips spaces, tabs, comments and stray comment ends — everything that is whitespace to the grammar — and the
     * characters read as whitespace once reported. Newlines are tokens.
+    *
+    * At the start of a line what it skips is the line's indentation, comments included, and the first tab in it is
+    * reported, in its place among the errors, if a token follows: a blank or comment-only line has no indentation
+    * (`format.md` §3). A line is what newline tokens delimit, so one that a block comment carries on past is still the
+    * same line.
     */
   private def skipBlanks(): Unit = {
+    var tab = -1
+    var tabIndex = 0
     var blank = true
     while (blank && !ended && has(offset))
-      if (isSpace(text.charAt(offset))) offset += 1
-      else if (skipForbidden()) ()
+      if (isSpace(text.charAt(offset))) {
+        if (atLineStart && tab < 0 && text.charAt(offset) == '\t') {
+          tab = offset
+          tabIndex = reported.length
+        }
+        offset += 1
+      } else if (skipForbidden()) ()
       else if (isForeignSpace(text.charAt(offset))) {
         report(ForeignWhitespace(_, text.charAt(offset)), offset)
         offset += 1
@@ -143,6 +137,8 @@ private[psi] final class Lexer(source: Source) {
         report(StrayCommentEnd.apply, offset)
         offset += 2
       } else blank = false
+    if (tab >= 0 && !ended && has(offset) && !isNewline(offset))
+      reported.insert(tabIndex, TabInIndentation(source.location(tab)))
   }
 
   /** A doc comment opens here: `/` and two `*`, but not followed by `/`, which makes an empty ordinary comment. */
@@ -440,9 +436,15 @@ private[psi] final class Lexer(source: Source) {
       case WidthIndent(width) =>
         val opening = indentOf(start)
         body.map(line =>
-          if (line.pieces.isEmpty) line else line.drop(widthIndent(line, opening, opening.length + width)))
+          if (line.pieces.isEmpty) line else line.drop(widthIndent(line, opening, required(opening, width))))
       case Fold => fold(body)
     }
+
+  /** The indent an explicit width asks for: the opening line's and `width` more. A width can be as large as an `Int`,
+    * so the sum is capped there rather than overflowing to a negative indent; no line is that long, so every line is
+    * short of it, as when the opening line has no indent.
+    */
+  private def required(opening: String, width: Int): Int = math.min(opening.length.toLong + width, Int.MaxValue).toInt
 
   /** The indent of the line holding `offset`. */
   private def indentOf(offset: Int): String = {
