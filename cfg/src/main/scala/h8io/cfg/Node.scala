@@ -20,23 +20,40 @@ object Node {
 
   /** A missing key — the node was looked up but did not exist in the parent container.
     *
-    * Also a [[NodeError]]; decoding fails when this node is encountered.
+    * Also a [[NodeError]]; decoding fails when this node is encountered. Only a container creates one, from its own id,
+    * so `id.parent` is always `parent.id`. That is why this is not a case class: Scala 2 would keep its `apply` and
+    * `copy` public whatever the constructor's access.
     *
     * @param id
     *   path at which the key was expected
     * @param parent
     *   the container that was queried
     */
-  final case class INone[+I <: Id](id: I, parent: Container[?]) extends INode[I] with NodeError {
+  final class INone[+I <: Id] private[cfg] (val id: I, val parent: Container[?]) extends INode[I] with NodeError {
     def node: INone[I] = this
+
+    override def equals(that: Any): Boolean =
+      that match {
+        case none: INone[?] => id == none.id && parent == none.parent
+        case _ => false
+      }
+
+    override def hashCode: Int = (id, parent).##
+
+    override def toString: String = s"INone(${id.toString}, ${parent.toString})"
+  }
+
+  object INone {
+    private[cfg] def apply[I <: Id](id: I, parent: Container[?]): INone[I] = new INone(id, parent)
+    def unapply[I <: Id](node: INone[I]): Option[(I, IContainer[Id, ?])] = Some((node.id, node.parent))
   }
 
   /** Type alias for [[INone]] with an unspecified path type. */
   type None = INone[Id]
 
   object None {
-    def apply[I <: Id](id: I, parent: Container[?]): INone[I] = INone(id, parent)
-    def unapply[I <: Id](node: INone[I]): Option[(I, IContainer[Id, ?])] = Some((node.id, node.parent))
+    private[cfg] def apply[I <: Id](id: I, parent: Container[?]): INone[I] = INone(id, parent)
+    def unapply[I <: Id](node: INone[I]): Option[(I, IContainer[Id, ?])] = INone.unapply(node)
   }
 
   /** A node that is physically present in the source (has [[tags]] and a [[location]]). */
@@ -115,15 +132,17 @@ object Node {
     def knownSize: Int
   }
 
-  /** A container node (map or sequence) that is both a function from child ids to child nodes and an iterable over its
-    * present children.
+  /** A container node (map or sequence): an iterable over its present children.
+    *
+    * A child is looked up by its segment alone — a key or an index — and the container builds the child's id from its
+    * own, so a node it returns, missing or not, always sits directly below it.
     *
     * @tparam I
     *   path type of this node
     * @tparam CI
     *   path type of child nodes
     */
-  sealed trait IContainer[+I <: Id, CI <: Id] extends IValue[I] with (CI => INode[CI]) with Iterable[ISome[CI]] {
+  sealed trait IContainer[+I <: Id, CI <: Id] extends IValue[I] with Iterable[ISome[CI]] {
     override final def isEmpty: Boolean = size == 0
     override final def knownSize: Int = size
   }
@@ -132,12 +151,12 @@ object Node {
 
   /** A map (object) node whose children are addressed by [[Id.Key]].
     *
-    * Supports string-keyed lookup via the convenience overload `apply(key: String)` which constructs an [[Id.Key]]
-    * relative to this node's own id. The `-` operator returns a copy of the map with the given key removed.
+    * The `-` operator returns a copy of the map with the given key removed.
     */
   trait IMap[+I <: Id] extends IContainer[I, Id.Key] {
-    def apply(key: Id.Key): INode[Id.Key]
-    final def apply(key: String): INode[Id.Key] = apply(Id.Key(key, id))
+
+    /** The child at `key`, with the id `Id.Key(key, id)`; an [[INone]] if there is none. */
+    def apply(key: String): INode[Id.Key]
 
     /** Returns this map without the entry for `key`. A no-op if `key` is absent. */
     def -(key: String): IMap[I]
@@ -146,14 +165,11 @@ object Node {
   /** Type alias for [[IMap]] with an unspecified path type. */
   type Map = IMap[Id]
 
-  /** A sequence node whose children are addressed by [[Id.Index]].
-    *
-    * Supports integer-indexed lookup via the convenience overload `apply(index: Int)` which constructs an [[Id.Index]]
-    * relative to this node's own id.
-    */
+  /** A sequence node whose children are addressed by [[Id.Index]]. */
   trait ISeq[+I <: Id] extends IContainer[I, Id.Index] {
-    def apply(index: Id.Index): INode[Id.Index]
-    final def apply(index: Int): INode[Id.Index] = apply(Id.Index(index, id))
+
+    /** The child at `index`, with the id `Id.Index(index, id)`; an [[INone]] if `index` is out of bounds. */
+    def apply(index: Int): INode[Id.Index]
   }
 
   /** Type alias for [[ISeq]] with an unspecified path type. */

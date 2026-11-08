@@ -10,8 +10,10 @@ private[yaml] final case class MapImpl[+I <: Id](id: I, underlying: MappingNode)
 
   private lazy val index: Map[String, NodeTuple] = entries.toMap
 
-  override def apply(key: Id.Key): INode[Id.Key] =
-    index.get(key.key).fold[INode[Id.Key]](Node.None(key, this))(tuple => wrap(key, tuple.getValueNode))
+  override def apply(key: String): INode[Id.Key] = {
+    val childId = Id.Key(key, id)
+    index.get(key).fold[INode[Id.Key]](Node.None(childId, this))(tuple => wrap(childId, tuple.getValueNode))
+  }
 
   override def tags: Set[String] = tagOf(underlying)
 

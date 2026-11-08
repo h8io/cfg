@@ -6,9 +6,9 @@ import h8io.cfg.*
 import scala.jdk.CollectionConverters.*
 
 private[hocon] final case class MapImpl[+I <: Id](id: I, underlying: ConfigObject) extends Node.IMap[I] {
-  override def apply(key: Id.Key): INode[Id.Key] =
-    if (underlying.containsKey(key.key)) wrap(key, underlying.get(key.key))
-    else Node.None(key, this)
+  override def apply(key: String): INode[Id.Key] =
+    if (underlying.containsKey(key)) wrap(Id.Key(key, id), underlying.get(key))
+    else Node.None(Id.Key(key, id), this)
 
   override def tags: Set[String] = Set.empty
 
