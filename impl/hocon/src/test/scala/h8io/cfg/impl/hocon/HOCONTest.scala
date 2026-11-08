@@ -1,11 +1,13 @@
 package h8io.cfg.impl.hocon
 
+import com.typesafe.config.ConfigException
 import h8io.cfg.impl.hocon.context.*
 import h8io.cfg.{Id, Node}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import java.net.URL
+import java.nio.file.Files
 
 class HOCONTest extends AnyFlatSpec with Matchers {
   "HOCON" should "read application.conf with a empty URL list" in {
@@ -58,4 +60,16 @@ class HOCONTest extends AnyFlatSpec with Matchers {
   }
 
   private def resource(path: String): URL = getClass.getClassLoader.getResource(path)
+
+  it should "reject a URL that cannot be read, whatever its syntax" in
+    Seq("conf", "json", "properties", "yaml").foreach { extension =>
+      val url = Files.createTempDirectory("hocon").resolve(s"nonexistent.$extension").toUri.toURL
+      a[ConfigException.IO] should be thrownBy HOCON(url)
+    }
+
+  it should "keep an include inside a URL optional" in {
+    HOCON(resource("including.conf"))("including") should matchPattern {
+      case Node.Scalar(Id.Key("including", Id.Root), NoTags, "true", _) =>
+    }
+  }
 }
