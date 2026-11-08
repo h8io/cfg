@@ -98,7 +98,7 @@ give `x`), empty when none was written. `Id.path` renders a key that is not bare
 
 ### HOCON loader (`h8io.cfg.impl.hocon`)
 
-`hocon.apply(urls: URL*)` parses and merges the given URLs (HOCON or YAML), loads the result through `ConfigFactory.load` (for substitution resolution), and wraps it as `Node.IMap[Id.Root]`. YAML support comes from `io.h8:typesafe-config-yaml` with `stringsOnly = true` (all scalars become strings). An explicitly passed URL that cannot be read is an error, whatever its syntax; an `include` inside one stays optional unless written `include required(…)`. Tags are not set by the HOCON loader (`tags` always empty).
+`HOCON.apply(urls: URL*)` parses and merges the given URLs (HOCON or YAML), loads the result through `ConfigFactory.load` (for substitution resolution), and wraps it as `Node.IMap[Id.Root]`. YAML support comes from `io.h8:typesafe-config-yaml` with `stringsOnly = true` (all scalars become strings). An explicitly passed URL that cannot be read is an error, whatever its syntax; an `include` inside one stays optional unless written `include required(…)`. With no URLs it loads the standard application config instead: system properties, `application.*` and `reference.conf` from the classpath. Tags are not set by the HOCON loader (`tags` always empty).
 
 ### YAML loader (`h8io.cfg.impl.yaml`)
 
