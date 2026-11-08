@@ -107,8 +107,8 @@ loader path.
   want in the source. v1 ignores it, but accepts it only before a field, a sequence element or a
   directive; anywhere else (between a tag and its value, after a value on the same line) it is an
   error. Doc comments carry no meaning for values, so giving them one later breaks no v1 file. That
-  will take a field such as `doc: Option[String]` on `ISome` — a change to `cfg`, for `schema` to
-  read (generated reference docs, decoder messages) — so the lexer emits a doc comment as a token
+  will take a field such as `doc: Option[String]` on `ISome` — a change to `cfg`, for a higher level
+  to read (generated reference docs, error messages) — so the lexer emits a doc comment as a token
   and the Ast keeps it on the node it precedes from the start.
 - **Bare keys** match `Id.SafeKeyPattern` exactly — `^[\p{L}_][\p{L}\p{N}_-]*$`. Anything else is
   written as a quoted key. A key that would pass bare may be quoted too: `` `port` `` and `port` are
@@ -363,8 +363,8 @@ annotations: `@pooled @readonly { … }`. Order carries no meaning, `@a @b` is t
 and a tag written twice counts once: `@a @a x` is `@a x`, not an error.
 
 **Tags mean nothing at this level.** Psi and `cfg` are the low-level protocol; what a tag means,
-and how particular tags combine when values merge, is for the level above — the `schema` layer and
-the planned Psi schema — to define. So the rules below are deliberately the neutral ones: a set,
+and how particular tags combine when values merge, is for the level above — whatever consumes the
+tree, and the planned Psi schema — to define. So the rules below are deliberately the neutral ones: a set,
 union on merge and graft, nothing dropped except by `:=`. They lose no tag a higher level might
 need, and they pre-empt none of its choices — that level can still give two tags a conflict, an
 order or a "later wins" of its own.
@@ -639,7 +639,7 @@ written — every source the value was assembled from.
 The loader returns `Either[PsiErrors, Node.IMap[Id.Root]]`, where `PsiErrors` is a non-empty list of
 module-local errors and itself a `CfgError` — `Either` is covariant, so it reads as
 `Either[CfgError, …]` to anyone who does not care. The list is the module's own type (head + `List`),
-because `AndError` and `NonEmptyChain` live in `schema` and Cats is not a dependency here. Every
+because `cfg` has no type that accumulates errors and Cats is not a dependency here. Every
 error carries a `Location`.
 
 The goal is **as many errors per run as can be reported without inventing any**: a user fixing a
