@@ -33,7 +33,7 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
   it should "return a Node.None object" in {
     val obj = hocon"""scalar: 13"""
     val map = MapImpl(Id.Root, obj)
-    map("unexistent") should matchPattern { case Node.None(Id.Key("unexistent", Id.Root), `map`) => }
+    map("unexistent") should matchPattern { case Node.None(Id.Key("unexistent", Id.Root)) => }
   }
 
   it should "return a Node.Seq object" in {

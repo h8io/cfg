@@ -13,14 +13,14 @@ class HOCONTest extends AnyFlatSpec with Matchers {
     cfg("application-config") should matchPattern {
       case Node.Scalar(Id.Key("application-config", Id.Root), NoTags, "true", _) =>
     }
-    cfg("base-config") should matchPattern { case Node.None(Id.Key("base-config", Id.Root), _) => }
-    cfg("override-config") should matchPattern { case Node.None(Id.Key("override-config", Id.Root), _) => }
+    cfg("base-config") should matchPattern { case Node.None(Id.Key("base-config", Id.Root)) => }
+    cfg("override-config") should matchPattern { case Node.None(Id.Key("override-config", Id.Root)) => }
     cfg("answer") should matchPattern { case Node.Scalar(Id.Key("answer", Id.Root), NoTags, "42", _) => }
     cfg("reference") should matchPattern { case Node.Scalar(Id.Key("reference", Id.Root), NoTags, "true", _) => }
     cfg("source") should matchPattern { case Node.Scalar(Id.Key("source", Id.Root), NoTags, "reference", _) => }
     cfg("src") should matchPattern { case Node.Scalar(Id.Key("src", Id.Root), NoTags, "reference", _) => }
-    cfg("property") should matchPattern { case Node.None(Id.Key("property", Id.Root), _) => }
-    cfg("nullable") should matchPattern { case Node.None(Id.Key("nullable", Id.Root), _) => }
+    cfg("property") should matchPattern { case Node.None(Id.Key("property", Id.Root)) => }
+    cfg("nullable") should matchPattern { case Node.None(Id.Key("nullable", Id.Root)) => }
     cfg("yaml-config") should matchPattern { case Node.Scalar(Id.Key("yaml-config", Id.Root), NoTags, "true", _) => }
     cfg("hocon-config") should matchPattern { case Node.Scalar(Id.Key("hocon-config", Id.Root), NoTags, "true", _) => }
     cfg("json-config") should matchPattern { case Node.Scalar(Id.Key("json-config", Id.Root), NoTags, "true", _) => }
@@ -31,10 +31,10 @@ class HOCONTest extends AnyFlatSpec with Matchers {
 
   it should "read from a single URL" in {
     val cfg = HOCON(resource("base.conf"))
-    cfg("application-config") should matchPattern { case Node.None(Id.Key("application-config", Id.Root), _) => }
+    cfg("application-config") should matchPattern { case Node.None(Id.Key("application-config", Id.Root)) => }
     cfg("base-config") should matchPattern { case Node.Scalar(Id.Key("base-config", Id.Root), NoTags, "true", _) => }
-    cfg("override-config") should matchPattern { case Node.None(Id.Key("override-config", Id.Root), _) => }
-    cfg("answer") should matchPattern { case Node.None(Id.Key("answer", Id.Root), _) => }
+    cfg("override-config") should matchPattern { case Node.None(Id.Key("override-config", Id.Root)) => }
+    cfg("answer") should matchPattern { case Node.None(Id.Key("answer", Id.Root)) => }
     cfg("reference") should matchPattern { case Node.Scalar(Id.Key("reference", Id.Root), NoTags, "true", _) => }
     cfg("source") should matchPattern { case Node.Scalar(Id.Key("source", Id.Root), NoTags, "reference", _) => }
     cfg("src") should matchPattern { case Node.Scalar(Id.Key("src", Id.Root), NoTags, "reference", _) => }
@@ -44,12 +44,12 @@ class HOCONTest extends AnyFlatSpec with Matchers {
 
   it should "read from two URLs" in {
     val cfg = HOCON(resource("base.conf"), resource("override.conf"))
-    cfg("application-config") should matchPattern { case Node.None(Id.Key("application-config", Id.Root), _) => }
+    cfg("application-config") should matchPattern { case Node.None(Id.Key("application-config", Id.Root)) => }
     cfg("base-config") should matchPattern { case Node.Scalar(Id.Key("base-config", Id.Root), NoTags, "true", _) => }
     cfg("override-config") should matchPattern {
       case Node.Scalar(Id.Key("override-config", Id.Root), NoTags, "true", _) =>
     }
-    cfg("answer") should matchPattern { case Node.None(Id.Key("answer", Id.Root), _) => }
+    cfg("answer") should matchPattern { case Node.None(Id.Key("answer", Id.Root)) => }
     cfg("reference") should matchPattern { case Node.Scalar(Id.Key("reference", Id.Root), NoTags, "true", _) => }
     cfg("source") should matchPattern { case Node.Scalar(Id.Key("source", Id.Root), NoTags, "overridden", _) => }
     cfg("src") should matchPattern { case Node.Scalar(Id.Key("src", Id.Root), NoTags, "overridden", _) => }

@@ -12,7 +12,7 @@ private[yaml] final case class MapImpl[+I <: Id](id: I, underlying: MappingNode)
 
   override def apply(key: String): INode[Id.Key] = {
     val childId = Id.Key(key, id)
-    index.get(key).fold[INode[Id.Key]](Node.None(childId, this))(tuple => wrap(childId, tuple.getValueNode))
+    index.get(key).fold[INode[Id.Key]](Node.None(childId))(tuple => wrap(childId, tuple.getValueNode))
   }
 
   override def tags: Set[String] = tagOf(underlying)

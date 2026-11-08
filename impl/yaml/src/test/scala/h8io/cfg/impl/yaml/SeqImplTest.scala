@@ -9,19 +9,19 @@ import org.scalatest.matchers.should.Matchers
 class SeqImplTest extends AnyFlatSpec with Matchers with Inside {
   "apply" should "return Node.None if index is negative" in {
     val seq = SeqImpl(Id.Root, list"[~, 42, 17]")
-    seq(-13) should matchPattern { case Node.INone(Id.Index(-13, Id.Root), `seq`) => }
+    seq(-13) should matchPattern { case Node.INone(Id.Index(-13, Id.Root)) => }
   }
 
   it should "return Node.None if index is equal to the sequence size" in {
     val seq = SeqImpl(Id.Root, list"[1, 1, 2, 3, 5, 8]")
     val index = seq.size
-    seq(index) should matchPattern { case Node.INone(Id.Index(`index`, Id.Root), `seq`) => }
+    seq(index) should matchPattern { case Node.INone(Id.Index(`index`, Id.Root)) => }
   }
 
   it should "return Node.None if index is greater than the sequence size" in {
     val seq = SeqImpl(Id.Root, list"[one, two, three]")
     val index = seq.size + 17
-    seq(index) should matchPattern { case Node.INone(Id.Index(`index`, Id.Root), `seq`) => }
+    seq(index) should matchPattern { case Node.INone(Id.Index(`index`, Id.Root)) => }
   }
 
   it should "return Node.Null" in {

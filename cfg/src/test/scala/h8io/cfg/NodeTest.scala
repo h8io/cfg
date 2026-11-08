@@ -9,44 +9,17 @@ class NodeTest extends AnyFlatSpec with Matchers with MockFactory {
 
   "None" should "be created successfully" in {
     val key = Id.Key("unexistent", Id.Root)
-    val parent = mock[Node.Map]
-    Node.None(key, parent) shouldBe Node.INone(key, parent)
+    Node.None(key) shouldBe Node.INone(key)
   }
 
   it should "be correctly extracted" in {
     val key = Id.Key("unexistent", Id.Root)
-    val parent = mock[Node.Map]
-    Node.INone(key, parent) should matchPattern { case Node.None(`key`, `parent`) => }
+    Node.INone(key) should matchPattern { case Node.None(`key`) => }
   }
 
   it should "be the node of its own error" in {
-    val none = Node.INone(Id.Key("unexistent", Id.Root), mock[Node.Map])
+    val none = Node.INone(Id.Key("unexistent", Id.Root))
     none.node should be theSameInstanceAs none
-  }
-
-  it should "be equal only to a None with the same id and parent" in {
-    val key = Id.Key("unexistent", Id.Root)
-    val parent = mock[Node.Map]
-    val none = Node.INone(key, parent)
-    none shouldEqual Node.INone(key, parent)
-    none.hashCode shouldBe Node.INone(key, parent).hashCode
-    none should not equal Node.INone(Id.Key("other", Id.Root), parent)
-    none should not equal Node.INone(key, mock[Node.Map])
-    none should not equal key
-  }
-
-  it should "show its id and parent" in {
-    val parent = new Node.IMap[Id.Root] {
-      def id: Id.Root = Id.Root
-      def apply(key: String): INode[Id.Key] = Node.None(Id.Key(key, id), this)
-      def -(key: String): Node.IMap[Id.Root] = this
-      def tags: Set[String] = Set.empty
-      def location: Location = mock[Location]
-      def iterator: Iterator[Node.ISome[Id.Key]] = Iterator.empty
-      override def size: Int = 0
-      override def toString: String = "{}"
-    }
-    parent("unexistent").toString shouldBe "INone(Key(unexistent,Root), {})"
   }
 
   "Null" should "be created successfully" in {
