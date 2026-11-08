@@ -21,7 +21,7 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside {
 
   it should "return a Node.None object" in {
     val map = MapImpl(Id.Root, yaml"scalar: 13")
-    map("unexistent") should matchPattern { case Node.None(Id.Key("unexistent", Id.Root), `map`) => }
+    map("unexistent") should matchPattern { case Node.None(Id.Key("unexistent", Id.Root)) => }
   }
 
   it should "return a Node.Seq object" in

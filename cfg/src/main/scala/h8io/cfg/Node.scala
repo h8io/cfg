@@ -20,40 +20,21 @@ object Node {
 
   /** A missing key — the node was looked up but did not exist in the parent container.
     *
-    * Also a [[NodeError]]; decoding fails when this node is encountered. Only a container creates one, from its own id,
-    * so `id.parent` is always `parent.id`. That is why this is not a case class: Scala 2 would keep its `apply` and
-    * `copy` public whatever the constructor's access.
+    * Also a [[NodeError]]; decoding fails when this node is encountered.
     *
     * @param id
     *   path at which the key was expected
-    * @param parent
-    *   the container that was queried
     */
-  final class INone[+I <: Id] private[cfg] (val id: I, val parent: Container[?]) extends INode[I] with NodeError {
+  final case class INone[+I <: Id](id: I) extends INode[I] with NodeError {
     def node: INone[I] = this
-
-    override def equals(that: Any): Boolean =
-      that match {
-        case none: INone[?] => id == none.id && parent == none.parent
-        case _ => false
-      }
-
-    override def hashCode: Int = (id, parent).##
-
-    override def toString: String = s"INone(${id.toString}, ${parent.toString})"
-  }
-
-  object INone {
-    private[cfg] def apply[I <: Id](id: I, parent: Container[?]): INone[I] = new INone(id, parent)
-    def unapply[I <: Id](node: INone[I]): Option[(I, IContainer[Id, ?])] = Some((node.id, node.parent))
   }
 
   /** Type alias for [[INone]] with an unspecified path type. */
   type None = INone[Id]
 
   object None {
-    private[cfg] def apply[I <: Id](id: I, parent: Container[?]): INone[I] = INone(id, parent)
-    def unapply[I <: Id](node: INone[I]): Option[(I, IContainer[Id, ?])] = INone.unapply(node)
+    def apply[I <: Id](id: I): INone[I] = INone(id)
+    def unapply[I <: Id](node: INone[I]): Option[I] = Some(node.id)
   }
 
   /** A node that is physically present in the source (has [[tags]] and a [[location]]). */
@@ -145,8 +126,6 @@ object Node {
     override final def isEmpty: Boolean = size == 0
     override final def knownSize: Int = size
   }
-
-  private type Container[CI <: Id] = IContainer[Id, CI]
 
   /** A map (object) node whose children are addressed by [[Id.Key]].
     *

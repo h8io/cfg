@@ -8,7 +8,7 @@ import scala.jdk.CollectionConverters.*
 private[hocon] final case class SeqImpl[+I <: Id](id: I, underlying: ConfigList) extends Node.ISeq[I] {
   override def apply(index: Int): INode[Id.Index] = {
     val childId = Id.Index(index, id)
-    if (childId.fits(underlying.size)) wrap(childId, underlying.get(index)) else Node.None(childId, this)
+    if (childId.fits(underlying.size)) wrap(childId, underlying.get(index)) else Node.None(childId)
   }
 
   override def tags: Set[String] = Set.empty

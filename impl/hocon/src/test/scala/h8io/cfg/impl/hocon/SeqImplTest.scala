@@ -14,21 +14,21 @@ import scala.util.Random
 class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory {
   "apply" should "return Node.None if index is negative" in {
     val seq = SeqImpl(Id.Root, hocon"""list: [null, 42, 17]""".toConfig.getList("list"))
-    inside(seq(-13)) { case Node.INone(Id.Index(-13, Id.Root), `seq`) => }
+    inside(seq(-13)) { case Node.INone(Id.Index(-13, Id.Root)) => }
   }
 
   it should "return Node.None if index is equal to the array size" in {
     val list = hocon"""list: [1, 1, 2, 3, 5, 8]""".toConfig.getList("list")
     val seq = SeqImpl(Id.Root, list)
     val index = list.size
-    seq(index) should matchPattern { case Node.INone(Id.Index(`index`, Id.Root), `seq`) => }
+    seq(index) should matchPattern { case Node.INone(Id.Index(`index`, Id.Root)) => }
   }
 
   it should "return Node.None if index is greater than the array size" in {
     val list = hocon"""list: [one, two, three]""".toConfig.getList("list")
     val seq = SeqImpl(Id.Root, list)
     val index = list.size + 17
-    seq(index) should matchPattern { case Node.INone(Id.Index(`index`, Id.Root), `seq`) => }
+    seq(index) should matchPattern { case Node.INone(Id.Index(`index`, Id.Root)) => }
   }
 
   it should "return Node.Null" in {

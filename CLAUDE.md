@@ -76,8 +76,7 @@ Every `ISome` carries `tags: Set[String]` — the tags written in the source, by
 give `x`), empty when none was written. `Id.path` renders a key that is not bare in backticks, as Psi writes it.
 - `Node.IMap` / `Node.ISeq` — container nodes, looked up by a bare key or index (`map("port")`, `seq(0)`); the
   container builds the child's `Id` from its own, so a child, `INone` included, always sits directly below it. `INone`
-  is constructible only inside `h8io.cfg` (loaders included), and is a plain class rather than a case class because
-  Scala 2 keeps a case class's `apply` and `copy` public whatever its constructor's access.
+  carries only its `Id`, not the container it was missing from.
 
 `CfgError` / `NodeError` are traits for all error types; nodes that represent errors implement them directly.
 

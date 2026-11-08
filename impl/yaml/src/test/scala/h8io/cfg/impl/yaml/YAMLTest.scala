@@ -11,7 +11,7 @@ class YAMLTest extends AnyFlatSpec with Matchers with Inside {
   "YAML" should "return an empty root map for an empty URL list" in {
     val cfg = YAML()
     cfg shouldBe empty
-    cfg("anything") should matchPattern { case Node.None(Id.Key("anything", Id.Root), _) => }
+    cfg("anything") should matchPattern { case Node.None(Id.Key("anything", Id.Root)) => }
     cfg.location.description shouldBe LocationImpl.Unknown
   }
 
@@ -22,13 +22,13 @@ class YAMLTest extends AnyFlatSpec with Matchers with Inside {
   it should "read from a single URL" in {
     val cfg = YAML(resource("base.yaml"))
     cfg("base-config") should matchPattern { case Node.Scalar(Id.Key("base-config", Id.Root), NoTags, "true", _) => }
-    cfg("override-config") should matchPattern { case Node.None(Id.Key("override-config", Id.Root), _) => }
+    cfg("override-config") should matchPattern { case Node.None(Id.Key("override-config", Id.Root)) => }
     cfg("source") should matchPattern { case Node.Scalar(Id.Key("source", Id.Root), NoTags, "base", _) => }
     cfg("property") should matchPattern { case Node.Scalar(Id.Key("property", Id.Root), NoTags, "12", _) => }
     cfg("nullable") should matchPattern { case Node.Null(Id.Key("nullable", Id.Root), NoTags, _) => }
     inside(cfg("server")) { case server: Node.IMap[?] =>
       server("port") should matchPattern { case Node.Scalar(_, NoTags, "8080", _) => }
-      server("secure") should matchPattern { case Node.None(_, _) => }
+      server("secure") should matchPattern { case Node.None(Id.Key("secure", Id.Key("server", Id.Root))) => }
     }
   }
 
