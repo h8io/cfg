@@ -76,12 +76,6 @@ object Node {
     def unapply[I <: Id](node: INull[I]): Option[(I, Set[String], Location)] = Some((node.id, node.tags, node.location))
   }
 
-  /** A present, non-error node — either a scalar or a container. */
-  sealed trait IValue[+I <: Id] extends ISome[I]
-
-  /** Type alias for [[IValue]] with an unspecified path type. */
-  type Value = IValue[Id]
-
   /** A leaf node holding a single string value.
     *
     * Scalars are always represented as strings; type conversion is the decoder's responsibility.
@@ -95,7 +89,7 @@ object Node {
     * @param location
     *   source location
     */
-  final case class IScalar[+I <: Id](id: I, tags: Set[String], value: String, location: Location) extends IValue[I]
+  final case class IScalar[+I <: Id](id: I, tags: Set[String], value: String, location: Location) extends ISome[I]
 
   /** Type alias for [[IScalar]] with an unspecified path type. */
   type Scalar = IScalar[Id]
@@ -122,7 +116,7 @@ object Node {
     * @tparam CI
     *   path type of child nodes
     */
-  sealed trait IContainer[+I <: Id, CI <: Id] extends IValue[I] with Iterable[ISome[CI]] {
+  sealed trait IContainer[+I <: Id, CI <: Id] extends ISome[I] with Iterable[ISome[CI]] {
     override final def isEmpty: Boolean = size == 0
     override final def knownSize: Int = size
   }
