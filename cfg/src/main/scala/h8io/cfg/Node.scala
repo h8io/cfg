@@ -92,8 +92,7 @@ object Node {
 
   object Null {
     def apply[I <: Id](id: I, tags: Set[String], location: Location): INull[I] = INull(id, tags, location)
-    def unapply[I <: Id](node: INull[I]): Option[(I, Set[String], Location)] =
-      Some((node.id, node.tags, node.location))
+    def unapply[I <: Id](node: INull[I]): Option[(I, Set[String], Location)] = Some((node.id, node.tags, node.location))
   }
 
   /** A present, non-error node — either a scalar or a container. */
