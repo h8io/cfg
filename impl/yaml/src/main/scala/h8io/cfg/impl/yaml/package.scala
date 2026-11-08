@@ -12,7 +12,7 @@ import org.snakeyaml.engine.v2.scanner.StreamReader
 import org.snakeyaml.engine.v2.schema.{CoreSchema, Schema}
 
 import java.io.Reader
-import java.util.{Collections, List as JList, Optional}
+import java.util.{Collections, IdentityHashMap, List as JList, Optional}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 
@@ -28,9 +28,37 @@ package object yaml {
 
   /** Composes a single YAML document, returning an empty mapping for an empty input. */
   private[yaml] def compose(settings: LoadSettings, reader: Reader): YamlNode =
-    new Composer(settings, new ParserImpl(settings, new StreamReader(settings, reader)))
-      .getSingleNode
-      .orElse(emptyMapping)
+    validated(
+      new Composer(settings, new ParserImpl(settings, new StreamReader(settings, reader)))
+        .getSingleNode
+        .orElse(emptyMapping))
+
+  /** Rejects a node that an alias makes contain itself, which a config tree cannot hold and `merge` would recurse into
+    * forever. An anchor reused anywhere outside its own subtree is fine, and each node is visited once however often it
+    * is reused. Keys need no check: snakeyaml-engine refuses keys that are not scalars by default, recursive ones
+    * included, which is also what makes `keyOf`'s cast safe.
+    */
+  private[yaml] def validated(root: YamlNode): YamlNode = {
+    def identitySet = Collections.newSetFromMap(new IdentityHashMap[YamlNode, java.lang.Boolean]).asScala
+    val visited = identitySet
+    val inProgress = identitySet
+    def visit(node: YamlNode): Unit =
+      if (!visited(node)) {
+        if (!inProgress.add(node))
+          throw new YamlEngineException(
+            s"An alias makes the ${node.getNodeType.toString} at ${LocationImpl(node).description} contain itself")
+        node match {
+          case mapping: MappingNode =>
+            mapping.getValue.asScala.foreach(tuple => visit(tuple.getValueNode))
+          case sequence: SequenceNode => sequence.getValue.asScala.foreach(visit)
+          case _ =>
+        }
+        inProgress -= node
+        visited += node
+      }
+    visit(root)
+    root
+  }
 
   private[yaml] def emptyMapping: MappingNode =
     new MappingNode(
@@ -89,20 +117,24 @@ package object yaml {
   /** Overlays `next` onto `previous`: mappings are merged key by key, anything else is replaced outright. */
   private[yaml] def merge(previous: YamlNode, next: YamlNode): YamlNode =
     (previous, next) match {
-      case (base: MappingNode, overlay: MappingNode) =>
-        val original = entriesOf(base)
-        val overrides = entriesOf(overlay)
-        val index = overrides.toMap
-        val defined = original.iterator.map(_._1).toSet
-        val updated = original.map { case (key, tuple) =>
-          index.get(key).fold(tuple) { other =>
-            new NodeTuple(other.getKeyNode, merge(tuple.getValueNode, other.getValueNode))
-          }
-        }
-        val added = overrides.collect { case (key, tuple) if !defined(key) => tuple }
-        copyOf(overlay, (updated ++ added).asJava)
+      case (base: MappingNode, overlay: MappingNode) => mergeMappings(base, overlay)
       case _ => next
     }
+
+  /** Overlays the mapping `overlay` onto `base`, key by key. */
+  private[yaml] def mergeMappings(base: MappingNode, overlay: MappingNode): MappingNode = {
+    val original = entriesOf(base)
+    val overrides = entriesOf(overlay)
+    val index = overrides.toMap
+    val defined = original.iterator.map(_._1).toSet
+    val updated = original.map { case (key, tuple) =>
+      index.get(key).fold(tuple) { other =>
+        new NodeTuple(other.getKeyNode, merge(tuple.getValueNode, other.getValueNode))
+      }
+    }
+    val added = overrides.collect { case (key, tuple) if !defined(key) => tuple }
+    copyOf(overlay, (updated ++ added).asJava)
+  }
 
   private[yaml] def render(node: YamlNode): String =
     new Present(DumpOptions).emitToString(new Serialize(DumpOptions).serializeOne(node).iterator)
