@@ -13,13 +13,12 @@ sbt +testFull
 
 # Run tests for a single module
 sbt cfg/testFull
-sbt schema/testFull
 sbt hocon/testFull
 sbt yaml/testFull
 sbt psi/testFull
 
 # Run a single test class
-sbt "schema/testOnly h8io.cfg.schema.DecoderTest"
+sbt "yaml/testOnly h8io.cfg.impl.yaml.YAMLTest"
 
 # Format source
 sbt scalafmt
@@ -42,12 +41,11 @@ sbt pages/mdoc
 
 ## Architecture
 
-Two-layer design: `cfg` is the low-level protocol (a format-agnostic ADT for config trees); `schema` is the high-level API where direct ADT manipulation is hidden behind decoders and properties.
+`cfg` is the protocol: a format-agnostic ADT for config trees, which the loaders in `impl/` produce.
 
 ### Module layout
 
 - **`cfg`** — low-level protocol: core AST and error types. No external dependencies.
-- **`schema`** (artifact `cfg-schema`) — high-level API: `Decoder` and `Property` abstractions that hide ADT manipulation. Depends on `cfg` + Cats + `io.h8:reflect`.
 - **`impl/hocon`** (artifact `cfg-hocon`) — loads HOCON and YAML into the `cfg` AST using `typesafe-config` + `typesafe-config-yaml`.
 - **`impl/yaml`** (artifact `cfg-yaml`) — loads YAML into the `cfg` AST using `snakeyaml-engine` directly, propagating tags.
 - **`impl/psi`** (sbt project `psi`, artifact `cfg-psi`, package `h8io.cfg.impl.psi`) — Ψ (Psi), the project's own
@@ -79,27 +77,6 @@ give `x`), empty when none was written. `Id.path` renders a key that is not bare
 - `Node.IMap` / `Node.ISeq` — container nodes; function-like (`key => INode`)
 
 `CfgError` / `NodeError` are traits for all error types; nodes that represent errors implement them directly.
-
-### Decoding layer (`h8io.cfg.schema`)
-
-`Decoder[+T]` is a type alias for `Node.Value => Validated[CfgError, T]`. The `Decoder` companion provides:
-- `Decoder[T](node)` — summons the implicit decoder and catches non-fatal exceptions as `Decoder.Thrown`
-- `>=>` — monadic sequencing (Kleisli-style)
-- `||` — alternative: try left, fall back to right, merging errors as `OrError`
-- `Monad[Decoder]` and `SemigroupK[Decoder]` instances
-
-`BaseDecoder[T]` is a convenience base class that dispatches `apply` to `parse(scalar)`, `parse(map)`, or `parse(seq)`; override only the cases you support.
-
-`Property[+T]` is `Node.Map => Validated[CfgError, T]` with a `name`. The two concrete implementations are:
-- `MandatoryProperty[T]` — looks up `name` and decodes; `INone` and `INull` are errors
-- `OptionalProperty[T]` — same but `INone` returns `None` and wraps result in `Option`
-
-Error algebra in `h8io.cfg.schema.errors`:
-- `&` on `CfgError` builds an `AndError` (collect-all, used when decoding multiple fields in parallel via `Applicative`)
-- `|` builds an `OrError` (tried-alternatives)
-
-Built-in decoders (all `implicit`, mixed in via `decoders` package object):
-- `string`, `primitives` (Boolean, numeric types), `numbers`, `time`, `collections` (Vector, Map)
 
 ### HOCON loader (`h8io.cfg.impl.hocon`)
 
@@ -153,4 +130,4 @@ sbt 2 differs from sbt 1 in ways that matter here:
 - Use `def` not `val` for implicit/constant definitions.
 - Explicit `Set.empty` for HOCON tags (never omit or infer). Tests match no tags with a stable `NoTags`, since
   `Set.empty` cannot stand in a pattern.
-- Tests use ScalaTest + ScalaMock + ScalaCheck; Cats law tests use `discipline-scalatest`.
+- Tests use ScalaTest + ScalaMock + ScalaCheck.
