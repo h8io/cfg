@@ -244,7 +244,9 @@ code is the lexer alone and nothing is published.
   `EnvLocation`.
 - Remove the "not supported yet" path for `${…}` from step 7.
 - **Spec gaps:** `${?x}` as a sequence element — drop the element? `${?x}` as one part of a
-  concatenation? The Id of a grafted node is its new position, not its origin — confirm. Which names
+  concatenation? The Id of a grafted node is its new position, not its origin — confirm. If so, the graft
+  happens in the Tree and step 7's views give it its new ids while wrapping; `Node` deliberately has no
+  way to hand a container a foreign id, so moving a subtree is never a side effect of a lookup. Which names
   are looked up in system properties and the environment: the path as written (`${java.home}`,
   `${HOME}`), and only for single-segment paths in the environment?
 
