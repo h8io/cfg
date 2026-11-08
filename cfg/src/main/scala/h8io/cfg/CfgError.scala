@@ -1,4 +1,4 @@
 package h8io.cfg
 
-/** Marker trait for all errors that can arise during config loading or decoding. */
+/** Marker trait for errors about a config: raised while loading it, or by whatever reads it. */
 trait CfgError

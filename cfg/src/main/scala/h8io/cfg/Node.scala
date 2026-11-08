@@ -116,7 +116,7 @@ object Node {
     * @tparam CI
     *   path type of child nodes
     */
-  sealed trait IContainer[+I <: Id, CI <: Id] extends ISome[I] with Iterable[ISome[CI]] {
+  sealed trait IContainer[+I <: Id, +CI <: Id] extends ISome[I] with Iterable[ISome[CI]] {
     override final def isEmpty: Boolean = size == 0
     override final def knownSize: Int = size
   }

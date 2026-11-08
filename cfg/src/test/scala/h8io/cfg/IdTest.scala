@@ -4,7 +4,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class IdTest extends AnyFlatSpec with Matchers {
-  "Root.description" should "return the `root` string" in {
+  "Root.path" should "be empty" in {
     Id.Root.path shouldBe empty
   }
 
