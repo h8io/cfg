@@ -20,7 +20,7 @@ object Node {
 
   /** A missing key — the node was looked up but did not exist in the parent container.
     *
-    * Also a [[NodeError]]; decoding fails when this node is encountered.
+    * Also a [[NodeError]].
     *
     * @param id
     *   path at which the key was expected
@@ -55,7 +55,7 @@ object Node {
 
   /** An explicit `null` value in the source.
     *
-    * Also a [[NodeError]]; decoders that do not explicitly handle null will fail.
+    * Also a [[NodeError]].
     *
     * @param id
     *   path of this node
@@ -78,7 +78,7 @@ object Node {
 
   /** A leaf node holding a single string value.
     *
-    * Scalars are always represented as strings; type conversion is the decoder's responsibility.
+    * Scalars are always represented as strings; converting them is up to the consumer.
     *
     * @param id
     *   path of this node
