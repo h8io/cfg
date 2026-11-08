@@ -1,9 +1,9 @@
 # cfg
 
-`cfg` is a Scala library for loading and decoding configuration trees.
+`cfg` is a Scala library for loading configuration trees.
 
 To install the package:
 
 ```scala
-libraryDependencies += "io.h8" %% "cfg-schema" % "@VERSION@"
+libraryDependencies += "io.h8" %% "cfg" % "@VERSION@"
 ```

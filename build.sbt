@@ -103,10 +103,6 @@ libraryDependencies ++=
 val cfg = (project in file("cfg"))
   .settings(name := ProjectName)
 
-val schema = (project in file("schema"))
-  .settings(name := "cfg-schema", libraryDependencies ++= Seq(Cats, IzumiReflect))
-  .dependsOn(cfg)
-
 val hocon = (project in file("impl/hocon"))
   .settings(name := "cfg-hocon", libraryDependencies += Config)
   .dependsOn(cfg)
@@ -123,7 +119,7 @@ val psi = (project in file("impl/psi"))
 val root = (project in file("."))
   .enablePlugins(ScoverageSummaryPlugin)
   .settings(name := "cfg-all", publish / skip := true)
-  .aggregate(cfg, hocon, psi, schema, yaml)
+  .aggregate(cfg, hocon, psi, yaml)
 
 val pages = (project in file("pages"))
   .settings(
@@ -143,5 +139,5 @@ val pages = (project in file("pages"))
     mdocVariables :=
       Map("VERSION" -> (if (isSnapshot.value) previousStableVersion.value else None).getOrElse(version.value))
   )
-  .dependsOn(cfg, hocon, schema, yaml)
+  .dependsOn(cfg, hocon, yaml)
   .enablePlugins(ScalaUnidocPlugin, MdocPlugin)
