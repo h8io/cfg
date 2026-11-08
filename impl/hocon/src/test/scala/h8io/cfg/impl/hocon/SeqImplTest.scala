@@ -85,7 +85,7 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     }
   }
 
-  "tag" should "always return None" in {
+  "tags" should "always be empty" in {
     SeqImpl(Id.Root, mock[ConfigList]).tags shouldBe Set.empty
   }
 

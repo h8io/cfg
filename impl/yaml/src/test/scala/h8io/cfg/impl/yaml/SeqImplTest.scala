@@ -51,11 +51,11 @@ class SeqImplTest extends AnyFlatSpec with Matchers with Inside {
       }.toList should contain theSameElementsInOrderAs List("n" -> "2", "o" -> "1")
     }
 
-  "tag" should "return None when the source carries no tag" in {
+  "tags" should "be empty when the source carries no tag" in {
     SeqImpl(Id.Root, list"[1, 2]").tags shouldBe Set.empty
   }
 
-  it should "return the tag written in the source" in {
+  it should "hold the tag written in the source" in {
     SeqImpl(Id.Root, list"!identifiers [1, 2]").tags shouldBe Set("identifiers")
   }
 

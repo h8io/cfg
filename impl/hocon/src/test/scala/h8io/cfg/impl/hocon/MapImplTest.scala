@@ -75,7 +75,7 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside with MockFactory
     }
   }
 
-  "tag" should "always return None" in {
+  "tags" should "always be empty" in {
     MapImpl(Id.Root, mock[ConfigObject]).tags shouldBe Set.empty
   }
 

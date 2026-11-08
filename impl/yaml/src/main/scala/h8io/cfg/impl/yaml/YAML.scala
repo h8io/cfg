@@ -9,9 +9,8 @@ import java.net.URL
 
 /** YAML backend for the `cfg` protocol.
   *
-  * Load one or more YAML files and receive a `Node.IMap[Id.Root]` ready for decoding. Parsing is done by
-  * `snakeyaml-engine` with the YAML 1.2 core schema, so `~`, `null`, `Null` and `NULL` are nulls, and `<<` merge keys
-  * are resolved while composing.
+  * Load one or more YAML files and receive a `Node.IMap[Id.Root]`. Parsing is done by `snakeyaml-engine` with the YAML
+  * 1.2 core schema, so `~`, `null`, `Null` and `NULL` are nulls, and `<<` merge keys are resolved while composing.
   *
   * ==Merging==
   * When multiple URLs are supplied they are overlaid in order — later files take precedence over earlier ones
@@ -25,7 +24,7 @@ import java.net.URL
   * `postgres`, and so does the verbatim `!<postgres>`. YAML allows one tag per node, so the set has at most one
   * element. It is empty whenever the tag was inferred by the resolver rather than written down, and also for the
   * non-specific tag `!`, which says nothing about the type. Scalars are always carried as raw strings — a tag never
-  * converts a value, it only records what the author asked for, and acting on it is the decoder's business.
+  * converts a value, it only records what the author asked for, and acting on it is up to the consumer.
   *
   * ==Duplicate keys==
   * A mapping that repeats a key keeps the last occurrence, matching the last-wins rule used for merging.
