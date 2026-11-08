@@ -1,7 +1,7 @@
 # AGENTS.md
 
-Guidance for coding agents working in this repository. Claude Code reads it through `CLAUDE.md`, which imports it;
-anything specific to one agent goes in that agent's own file, everything shared goes here.
+Guidance for coding agents working in this repository. Claude Code and Gemini read it through `CLAUDE.md` and
+`GEMINI.md`, which import it; anything specific to one agent goes in that agent's own file, everything shared goes here.
 
 ## Commands
 
