@@ -257,16 +257,19 @@ code is the lexer alone and nothing is published.
   public values; a marker handler maps the lines of a block to lines, at the layout stage. Until
   this step the lexer keeps the built-in markers hard-coded, as 2c wrote them.
 
-- The public extension API (§6): a handler gets the literal arguments, the location and a context
-  (the including source's URL, the URL stack for cycle detection, a way to parse another source) and
-  returns a map (statement position) or a node (value position), or errors.
+- The public extension API (§6, settled in session 11): a handler declares its parameters and gets
+  its arguments as a `Node.IMap` keyed by them, the location and a context (the including source's
+  URL, the URL stack for cycle detection, a way to parse another source), and returns a fragment —
+  parsed through the context or built from a `Node` — that is a map (statement position) or any node
+  (value position), or errors.
 - Unknown directive, wrong position (a statement directive returning a non-map), bad arguments —
   local errors, the directive contributes nothing, expansion continues (§11).
 - Statement-position results merge positionally into the enclosing block, so fields below override
   them (§6, §7).
-- **Spec gaps:** the API shape itself — it is public and hard to change later, so it is reviewed with
-  the user before coding: what a marker handler gets and returns, what a directive handler gets. The
-  builder settles how the loader takes its handlers.
+- **Spec gaps:** the rest of the API shape — it is public and hard to change later, so it is reviewed
+  with the user before coding: what a marker handler gets and returns, and the fragment type's own
+  surface. What a directive handler gets and returns is settled (§6). The builder settles how the
+  loader takes its handlers.
 
 ### 11. `#include`
 
