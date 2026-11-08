@@ -43,11 +43,12 @@ object YAML {
     * @return
     *   the root map node of the overlaid config tree
     * @note
-    *   a `YamlEngineException` is thrown if a stream cannot be parsed, holds more than one document, or is rooted at
-    *   something other than a mapping
+    *   a `YamlEngineException` is thrown if a stream cannot be parsed, holds more than one document, is rooted at
+    *   something other than a mapping, has a key that is not a scalar, or has a node that an alias makes contain
+    *   itself; every URL is checked on its own, before any overlaying
     */
   def apply(urls: URL*): Node.IMap[Id.Root] =
-    wrap(Id.Root, urls.iterator.map(read).reduceOption(merge).fold(emptyMapping)(rootOf))
+    wrap(Id.Root, urls.iterator.map(url => rootOf(read(url))).reduceOption(mergeMappings).getOrElse(emptyMapping))
 
   private def read(url: URL): YamlNode = {
     val stream = url.openStream()
