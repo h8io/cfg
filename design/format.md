@@ -418,6 +418,21 @@ Directives are an open set. The loader is built with a set of handlers; the form
 the call syntax. An unknown directive is an error, never a silently ignored field — otherwise a typo
 in a directive name becomes a config silently missing half its content.
 
+**A handler's contract** (session 11). A handler declares the names of its parameters and gets the
+arguments as a `Node.IMap` keyed by them, positional arguments already laid out over the parameters
+in order, as markers' are (§5); so the map never mixes the two. Every value is a scalar string, as
+everywhere in `cfg`: `true` and `"true"`, `2` and `"2"` arrive the same, and reading one, and
+reporting an argument it cannot read, is the handler's job. What a handler gives back is not a
+`Node` but a *fragment*, Psi's own unexpanded tree, opaque to the handler, and it gets one in one of
+two ways:
+
+- from its context, by parsing another source — what `#include` does. A `${…}` in that source stays
+  unresolved until phase 4, so an included file may still refer to the file that included it (§8);
+- from a `Node` it built — such a fragment holds no substitution. Its ids are dropped: where the
+  fragment lands is the directive's position.
+
+In statement position the fragment must be a map, in value position any node (above).
+
 `#include` is the only built-in:
 
 ```
@@ -1273,3 +1288,18 @@ Settled for step 2d, the rename, later in session 10:
   skipped before the first token of a line is reported if a token follows. Rejected: physical
   lines, which would make `x` in `a /* c⏎*/ x` start a line, against the rule that a newline inside
   a comment is none.
+
+- **A directive handler takes its arguments as a `Node` and gives back a fragment, not a `Node`**
+  (§6). The user's idea was a function from `Node` to `Node`; the input half is taken as proposed,
+  the arguments as a `Node.IMap` keyed by parameter name, positional ones laid out by declared order
+  as markers' are, every value a string — so `true` and `"true"` arrive the same and parsing them
+  is the handler's job. The output half cannot be a `Node`: directives expand in phase 2 (§8), and
+  what `#include` returns must keep its `${…}` unresolved until phase 4, which a `cfg` scalar,
+  always a finished string, cannot hold. So a handler returns an opaque fragment of Psi's own tree,
+  made either by parsing a source through its context or from a `Node`, which then holds no
+  substitution and whose ids are dropped. Agreed with the user. Rejected: a `Node` out — it would
+  take a substitution node into the `cfg` protocol that every loader and consumer would see, or
+  directives expanded after substitution, so that an included file could not take part in it, or
+  substitutions banned from what a directive returns, which rules out `#include` itself; and a
+  `Node` in that is the value the directive applies to, which is the value stage rejected for
+  markers in session 10.
