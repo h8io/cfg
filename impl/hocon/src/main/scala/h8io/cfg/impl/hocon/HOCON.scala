@@ -8,7 +8,7 @@ import java.net.URL
 
 /** HOCON/YAML backend for the `cfg` protocol.
   *
-  * Load one or more HOCON or YAML files and receive a `Node.IMap[Id.Root]` ready for decoding.
+  * Load one or more HOCON or YAML files and receive a `Node.IMap[Id.Root]`.
   *
   * ==Merging and substitution==
   * When multiple URLs are supplied they are merged in order — later files take precedence over earlier ones
@@ -17,7 +17,7 @@ import java.net.URL
   *
   * ==YAML support==
   * YAML files are parsed via `io.h8:typesafe-config-yaml` with `stringsOnly = true`. This aligns with the protocol
-  * contract: `Node.IScalar` always carries a raw string, and type conversion is the decoder's responsibility.
+  * contract: `Node.IScalar` always carries a raw string, and converting it is up to the consumer.
   *
   * HOCON and JSON files, however, go through Typesafe Config's own parser, which infers types (booleans, numbers,
   * lists, etc.) before this library can see the values. Scalars are then recovered by calling `unwrapped.toString` on

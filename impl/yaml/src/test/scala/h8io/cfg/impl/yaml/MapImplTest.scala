@@ -54,11 +54,11 @@ dup: 2
 """)("dup") should matchPattern { case Node.Scalar(Id.Key("dup", Id.Root), NoTags, "2", _) => }
   }
 
-  "tag" should "return None when the source carries no tag" in {
+  "tags" should "be empty when the source carries no tag" in {
     MapImpl(Id.Root, yaml"a: 1").tags shouldBe Set.empty
   }
 
-  it should "return the tag written in the source" in {
+  it should "hold the tag written in the source" in {
     MapImpl(Id.Root, yaml"!postgres {a: 1}").tags shouldBe Set("postgres")
   }
 
