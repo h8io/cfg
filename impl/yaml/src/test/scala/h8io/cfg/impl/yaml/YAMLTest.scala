@@ -78,4 +78,10 @@ class YAMLTest extends AnyFlatSpec with Matchers with Inside {
     the[YamlEngineException] thrownBy YAML(resource("port.yaml"), url, resource("host.yaml")) should have message
       s"A configuration root must be a mapping, SEQUENCE found at ${url.toString}: 1:1"
   }
+
+  it should "reject a document that an alias makes contain itself, before overlaying it" in {
+    val url = resource("cyclic.yaml")
+    the[YamlEngineException] thrownBy YAML(resource("port.yaml"), url, url) should have message
+      s"An alias makes the MAPPING at ${url.toString}: 1:1 contain itself"
+  }
 }
