@@ -90,7 +90,10 @@ loader path.
   U+200D (Persian, the Indic scripts, emoji sequences), the marks of direction U+200E and U+200F
   (right-to-left text), and the soft hyphen U+00AD.
 - **A tab in indentation is an error**, already in v1, as in YAML. Indentation is the whitespace
-  before the first token of a line; a blank or comment-only line has none. Between tokens a tab is
+  before the first token of a line, comments included, so `/* c */<TAB>x` has a tab in it; a blank
+  or comment-only line has none. A line is what newlines delimit, and a newline inside `/* … */` is
+  none (below), so in `<TAB>/* c⏎*/ x` the tab is in the indentation of `x`, while in `a /* c⏎*/<TAB>x`
+  `x` is not the first token of its line and the tab is between tokens. Between tokens a tab is
   whitespace like a space. Inside `"""…"""` leading whitespace is content (§5), tabs included.
 - **Comments** are `//` to the end of the line and `/* … */`, which nest, as in Scala: commenting out
   a block that already holds a comment is safe. An unterminated `/*` is reported at its opening, a
@@ -1258,3 +1261,15 @@ Settled for step 2d, the rename, later in session 10:
   Windows and macOS by default the two files cannot sit side by side, a search for `.Ψ` finds a
   `.ψ`, and the order between them holds only where case matters, as on Linux. Likewise a `.PSI`
   is found as `.psi` there. Agreed with the user; nothing in the format works around it.
+
+### Session 11 — 2026-11-08
+
+- **Indentation runs to the first token of a line, comments included, and a line is what newline
+  tokens delimit** (§3). The user's pick of two, on a review that found `/*c*/<TAB>x` accepted while
+  `<TAB>x` was an error. The lexer looked for a tab only among the leading spaces, and asked for the
+  tab and the token to share a physical line, so `<TAB>/* c⏎*/ x` passed too, while a token after a
+  comment spanning lines was already taken as continuing the line before it. One reading now
+  throughout: a comment is whitespace, a newline inside one is no newline, and the first tab
+  skipped before the first token of a line is reported if a token follows. Rejected: physical
+  lines, which would make `x` in `a /* c⏎*/ x` start a line, against the rule that a newline inside
+  a comment is none.
