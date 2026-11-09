@@ -261,8 +261,10 @@ code is the lexer alone and nothing is published.
 ### 10. Directive and marker framework
 
 - Markers become handlers too (session 10, `format.md` §14): a builder,
-  `Psi.builder.withMarkers(…).withDirectives(…)`, each replacing the built-in set, whose handlers are
-  public values; a marker handler maps the lines of a block to lines, at the layout stage. Until
+  `Psi.builder.withMarkers(…).withDirectives(…)`. `withDirectives` replaces the built-in set, whose
+  handlers are public values; `withMarkers` adds to the reserved `<`, `>`, `width` and `+`, and
+  registering one of those names is an error when the loader is built (session 12). A marker
+  handler maps the lines of a block to lines, at the layout stage. Until
   this step the lexer keeps the built-in markers hard-coded, as 2c wrote them.
 
 - The public extension API (§6, settled in session 11): a handler declares its parameters and gets
