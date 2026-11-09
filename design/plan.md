@@ -280,12 +280,22 @@ code is the lexer alone and nothing is published.
   with the user before coding: what a marker handler gets and returns, and the fragment type's own
   surface. What a directive handler gets and returns is settled (§6). The builder settles how the
   loader takes its handlers.
+- **Spec gaps — cycles, for every directive, not `#include` alone** (raised in session 12,
+  `format.md` §13 item 5). A fragment built from a `Node` holds no directive, so every cycle runs
+  through the context's way to parse another source, and the framework can keep the stack there for
+  every handler. Open: what makes two sources the same — an opaque key passed with the source, by
+  default the normalized URI and a file's real path (`..`, symbolic links, case-insensitive file
+  systems, `file:` against `jar:`), a handler's own for a source that is no URL; a depth limit as
+  a backstop for a key that changes on every step (`?n=1`, `?n=2`, …), and whether it is
+  configurable; a source included twice but not through itself (a diamond), presumably allowed, parsed again
+  or cached; where the error points — the directive that closes the cycle, with the chain.
 
 ### 11. `#include`
 
 - `file` (relative to the including URL), `resource` (classpath), `url`; exactly one of them;
   `optional: true` tolerates a missing target (§6).
-- Cycle detection on the URL stack; nested includes; includes inside blocks land at the right path.
+- Cycles are caught by step 10's framework; `#include` passes its source's key (step 10's gap).
+  Nested includes; includes inside blocks land at the right path.
 - Errors inside an included source are collected along with everyone else's.
 - **Spec gaps:** whether `file` without an extension gets one appended — `.Ψ`, `.ψ`, `.psi` in
   that order (session 10), first found or every one found merged, as HOCON does;

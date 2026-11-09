@@ -492,8 +492,8 @@ tags before a whole-value `${…}` are added to the grafted node's (§9): `a: @t
 ```
 
 Exactly one of `file` / `resource` / `url` is required. Relative paths resolve against the URL of the
-including file, never the working directory. Include cycles are detected on the URL stack and
-reported as an error rather than looping.
+including file, never the working directory. Include cycles are reported as an error rather than
+looping; how they are caught, for every directive and not `#include` alone, is open (§13 item 5).
 
 ## 7. Merging
 
@@ -796,6 +796,14 @@ mistake is worse than stopping.
      mechanism.
    - **Options inside `${…}`**, the user's idea: `${array; null="-1", separator=", "}`. Not in v1;
      the syntax stays free, `;` being outside `Id.SafeKeyPattern`, so `${a; …}` is an error today.
+
+5. **Cycles, for every directive.** Raised by the user in session 12: a universal way to catch
+   cycles, not one for `#include` alone. Every cycle runs through the context's way to parse
+   another source (§6), so the framework can keep the stack there for every handler. Open: what
+   makes two sources the same (a key passed with the source; by default the normalized URI and a
+   file's real path; a handler's own for a source that is no URL), a depth limit as a backstop, a
+   source included twice not through itself (no cycle, so presumably allowed; parsed again or cached), and where the error
+   points. To be settled in plan step 10.
 
 ## 14. Decision log
 
