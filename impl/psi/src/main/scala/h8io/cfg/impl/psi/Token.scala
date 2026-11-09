@@ -6,8 +6,10 @@ import h8io.cfg.Id
   *
   * @param startsLine
   *   whether no other token stands before it on its line; with its column, what the indentation syntax will need
+  * @param spaced
+  *   whether whitespace or a comment stands right before it, which the dots of a key may not have around them
   */
-private[psi] final case class Token(kind: Token.Kind, location: SourceLocation, startsLine: Boolean)
+private[psi] final case class Token(kind: Token.Kind, location: SourceLocation, startsLine: Boolean, spaced: Boolean)
 
 private[psi] object Token {
   sealed trait Kind
@@ -36,7 +38,7 @@ private[psi] object Token {
   /** A name in key position: a bare key, or any name in backticks, unescaped. */
   final case class Name(value: String, quoted: Boolean) extends Kind
 
-  /** `@name` */
+  /** `@name`, in either mode: a tag before a key is an error the parser explains */
   final case class Tag(name: String) extends Kind
 
   /** `#name`, before its arguments */

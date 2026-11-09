@@ -66,7 +66,7 @@ at the phase gate.
 | 2b | Source and lexer | done |
 | 2c | Lexer: triple-quoted and raw strings | done |
 | 2d | Rename DEF to Ψ (Psi) | done |
-| 3 | Ast and parser: core syntax | todo |
+| 3 | Ast and parser: core syntax | done |
 | 4 | Parser: substitutions and directives | todo |
 | 5 | Parser: error recovery | todo |
 | 6 | Merge | todo |
