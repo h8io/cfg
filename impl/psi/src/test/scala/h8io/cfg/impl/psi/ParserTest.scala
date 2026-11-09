@@ -373,18 +373,18 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   }
 
   "A directive" should "be read in statement position, with or without arguments" in {
-    statements("#include(file = \"x.psi\", optional = true)\n#reload\n#`odd`(1, -2, 'r', `p q` = n)\n#e()") shouldBe
+    statements("#include(file: \"x.psi\", optional: true)\n#reload\n#`odd`(1, -2, 'r', `p q`: n)\n#e()") shouldBe
       Vector(
         directive(
           Call(
             "include",
-            Vector(named("file", "x.psi", (1, 10), (1, 17)), named("optional", "true", (1, 26), (1, 37))),
+            Vector(named("file", "x.psi", (1, 10), (1, 16)), named("optional", "true", (1, 25), (1, 35))),
             loc(1, 1))),
         directive(Call("reload", Vector.empty, loc(2, 1))),
         directive(
           Call(
             "odd",
-            Vector(arg("1", 3, 8), arg("-2", 3, 11), arg("r", 3, 15), named("p q", "n", (3, 20), (3, 28))),
+            Vector(arg("1", 3, 8), arg("-2", 3, 11), arg("r", 3, 15), named("p q", "n", (3, 20), (3, 27))),
             loc(3, 1))),
         directive(Call("e", Vector.empty, loc(4, 1)))
       )
@@ -396,8 +396,8 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   }
 
   it should "separate its arguments as a block separates fields" in {
-    statements("#x(\n  a = 1\n  , b = 2,\n)") shouldBe
-      Vector(directive(Call("x", Vector(named("a", "1", (2, 3), (2, 7)), named("b", "2", (3, 5), (3, 9))), loc(1, 1))))
+    statements("#x(\n  a: 1\n  , b: 2,\n)") shouldBe
+      Vector(directive(Call("x", Vector(named("a", "1", (2, 3), (2, 6)), named("b", "2", (3, 5), (3, 8))), loc(1, 1))))
   }
 
   it should "be read in value position, with its tags" in {
@@ -447,8 +447,15 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     parse("#x(${a})") shouldBe
       Result(Document(Vector(directive(Call("x", Vector(arg("${a}", 1, 4)), loc(1, 1))))),
         List(SubstitutionInArgument(loc(1, 4))))
+    parse("#x(a:1)") shouldBe
+      Result(Document(Vector(directive(Call("x", Vector(named("a", "1", (1, 4), (1, 6))), loc(1, 1))))),
+        List(ColonWithoutSpace(loc(1, 5))))
     parse("#") shouldBe
       Result(Document(Vector(directive(Call("", Vector.empty, loc(1, 1))))), List(MissingDirectiveName(loc(1, 1))))
+  }
+
+  "A named argument" should "be reported with `=`, a field's `:` being what it takes" in {
+    errors("#x(a = 1)") shouldBe List(EqualsInArgument(loc(1, 6)))
   }
 
   "The arguments of a directive" should "be reported apart from its name" in {
@@ -459,8 +466,8 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   }
 
   it should "be reported with a name given twice, or a positional one after a named one" in {
-    errors("#x(a = 1, a = 2)") shouldBe List(DuplicateArgument(loc(1, 11), "a"))
-    errors("#x(a = 1, 2)") shouldBe List(PositionalAfterNamed(loc(1, 11)))
+    errors("#x(a: 1, a: 2)") shouldBe List(DuplicateArgument(loc(1, 10), "a"))
+    errors("#x(a: 1, 2)") shouldBe List(PositionalAfterNamed(loc(1, 10)))
   }
 
   it should "be reported empty, unclosed or closed by the wrong bracket" in {
@@ -472,17 +479,17 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
 
   it should "be reported where something else stands" in {
     errors("#x(= 1)") shouldBe List(ExpectedArgument(loc(1, 4)))
+    errors("#x(: 1)") shouldBe List(ExpectedArgument(loc(1, 4)))
     errors("#x(@t)") shouldBe List(ExpectedArgument(loc(1, 4)))
     errors("#x(a b)") shouldBe List(MissingSeparator(loc(1, 6)))
-    errors("#x(a: 1)") shouldBe List(MissingSeparator(loc(1, 5)))
     errors("#x(/** d */ a)") shouldBe List(MisplacedDocComment(loc(1, 4)))
   }
 
   it should "be reported with a value missing, in backticks or with a substitution" in {
-    errors("#x(a = )") shouldBe List(MissingValue(loc(1, 8)))
-    errors("#x(a =\n1)") shouldBe List(MissingValue(loc(1, 7)))
+    errors("#x(a: )") shouldBe List(MissingValue(loc(1, 7)))
+    errors("#x(a:\n1)") shouldBe List(MissingValue(loc(1, 6)))
     errors("#x(`a`)") shouldBe List(BacktickedValue(loc(1, 4)))
-    errors("#x(a = `b`)") shouldBe List(BacktickedValue(loc(1, 8)))
+    errors("#x(a: `b`)") shouldBe List(BacktickedValue(loc(1, 7)))
     errors("#x(\"${a}\")") shouldBe List(SubstitutionInArgument(loc(1, 5)))
   }
 

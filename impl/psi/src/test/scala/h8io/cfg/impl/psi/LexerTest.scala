@@ -435,14 +435,14 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   }
 
   it should "strip the opening line's indent and an explicit width" in {
-    value("  ```width(n = 2)\n      abc\n\n    ```", "  abc\n")
-    value("```width(n=1)\n  a\n   b\n```", " a\n  b")
+    value("  ```width(n: 2)\n      abc\n\n    ```", "  abc\n")
+    value("```width(n: 1)\n  a\n   b\n```", " a\n  b")
     value("  ```width(2)\n      abc\n\n    ```", "  abc\n")
-    value("  ```width( n = 2 ) +\n    a\n    b\n      c\n  ```", "a b\n  c")
+    value("  ```width( n: 2 ) +\n    a\n    b\n      c\n  ```", "a b\n  c")
   }
 
   it should "report a line short of an explicit width" in
-    value("  ```width(n = 2)\n    a\n   b\n\tc\n  ```", "a\nb\nc", InsufficientIndent(loc(3, 4)),
+    value("  ```width(n: 2)\n    a\n   b\n\tc\n  ```", "a\nb\nc", InsufficientIndent(loc(3, 4)),
       InsufficientIndent(loc(4, 1)))
 
   it should "report every line short of a width that the opening line's indent would take past Int.MaxValue" in {
@@ -450,7 +450,7 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
     List("2147483647", "2147483646").foreach { width =>
       withClue(width) {
         value(s"  ```width($width)\n    abc\n  ```", "abc", InsufficientIndent(loc(2, 5)))
-        value(s"    ```width(n = $width)\n      abc\n      def\n    ```", "abc\ndef", InsufficientIndent(loc(2, 7)),
+        value(s"    ```width(n: $width)\n      abc\n      def\n    ```", "abc\ndef", InsufficientIndent(loc(2, 7)),
           InsufficientIndent(loc(3, 7)))
       }
     }
@@ -468,7 +468,7 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
 
   it should "report a second marker that sets the indent, and read the block as with no marker" in {
     value("```< >\n    a\n  ```", "  a", ConflictingIndent(loc(1, 6)))
-    value("```width(n = 2) <\n    a\n  ```", "  a", ConflictingIndent(loc(1, 17)))
+    value("```width(n: 2) <\n    a\n  ```", "  a", ConflictingIndent(loc(1, 16)))
   }
 
   it should "report an unknown marker, and read the block as with none" in
@@ -487,16 +487,16 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
       "<x" -> 5,
       "//" -> 4,
       "a\"b" -> 5,
-      "< (x = 1)" -> 6,
+      "< (x: 1)" -> 6,
       "<(" -> 6,
-      "<(x =)" -> 9,
-      "<(x = 1" -> 11,
-      "<(x = 1 2)" -> 12,
-      "<(x = 1,)" -> 12,
-      "<(x = 01)" -> 11,
-      "<(x = -)" -> 11,
-      "<(x = \"a)" -> 10,
-      "<(x = 'a)" -> 10
+      "<(x: )" -> 9,
+      "<(x: 1" -> 10,
+      "<(x: 1 2)" -> 11,
+      "<(x: 1,)" -> 11,
+      "<(x: 01)" -> 10,
+      "<(x: -)" -> 10,
+      "<(x: \"a)" -> 9,
+      "<(x: 'a)" -> 9
     ).foreach { case (marker, column) =>
       withClue(marker) {
         value(s"```$marker\n    a\n  ```", "  a", InvalidMarker(loc(1, column)))
@@ -504,31 +504,36 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
     }
 
   it should "report the arguments a marker does not take, and read the block as with no marker" in {
-    value("```<(x = 1)\n    a\n  ```", "  a", UnknownArgument(loc(1, 6), "x"))
-    value("```<(x = abc, y = -5, z = 0)\n    a\n  ```", "  a", UnknownArgument(loc(1, 6), "x"),
-      UnknownArgument(loc(1, 15), "y"), UnknownArgument(loc(1, 23), "z"))
+    value("```<(x: 1)\n    a\n  ```", "  a", UnknownArgument(loc(1, 6), "x"))
+    value("```<(x: abc, y: -5, z: 0)\n    a\n  ```", "  a", UnknownArgument(loc(1, 6), "x"),
+      UnknownArgument(loc(1, 14), "y"), UnknownArgument(loc(1, 21), "z"))
     value("```width\n    a\n  ```", "  a", MissingArgument(loc(1, 4), "n"))
-    value("```width(n = 1, n = 2)\n    a\n  ```", "  a", DuplicateArgument(loc(1, 17), "n"))
-    value("```width(2, n = 3)\n    a\n  ```", "  a", DuplicateArgument(loc(1, 13), "n"))
+    value("```width(n: 1, n: 2)\n    a\n  ```", "  a", DuplicateArgument(loc(1, 16), "n"))
+    value("```width(2, n: 3)\n    a\n  ```", "  a", DuplicateArgument(loc(1, 13), "n"))
     value("```<(x)\n    a\n  ```", "  a", ExtraArgument(loc(1, 6)))
     value("```width(2, 3)\n    a\n  ```", "  a", ExtraArgument(loc(1, 13)))
-    value("```width(n = 2, 3)\n    a\n  ```", "  a", PositionalAfterNamed(loc(1, 17)))
+    value("```width(n: 2, 3)\n    a\n  ```", "  a", PositionalAfterNamed(loc(1, 16)))
     value("```width(two)\n    a\n  ```", "  a", InvalidArgument(loc(1, 10), "n"))
     List("0", "-1", "\"2\"", "'2'", "two", "2147483648").foreach { width =>
       withClue(width) {
-        value(s"```width(n = $width)\n    a\n  ```", "  a", InvalidArgument(loc(1, 14), "n"))
+        value(s"```width(n: $width)\n    a\n  ```", "  a", InvalidArgument(loc(1, 13), "n"))
       }
     }
   }
 
+  it should "report `=` after an argument's name, and a `:` with no space after it" in {
+    value("```width(n = 2)\n      a\n    ```", "  a", EqualsInArgument(loc(1, 12)))
+    value("```width(n:2)\n      a\n    ```", "  a", ColonWithoutSpace(loc(1, 11)))
+  }
+
   it should "read strings in arguments with the escapes of their quotes, and no substitutions" in {
-    value("```<(x = \"\\t\")\n    a\n  ```", "  a", UnknownArgument(loc(1, 6), "x"))
-    value("```<(x = 'a\\'b\\\\c\\d')\n    a\n  ```", "  a", UnknownArgument(loc(1, 6), "x"))
-    value("```<(x = \"a\\qb\")\n    a\n  ```", "  a", InvalidEscape(loc(1, 12), "\\q"),
+    value("```<(x: \"\\t\")\n    a\n  ```", "  a", UnknownArgument(loc(1, 6), "x"))
+    value("```<(x: 'a\\'b\\\\c\\d')\n    a\n  ```", "  a", UnknownArgument(loc(1, 6), "x"))
+    value("```<(x: \"a\\qb\")\n    a\n  ```", "  a", InvalidEscape(loc(1, 11), "\\q"),
       UnknownArgument(loc(1, 6), "x"))
-    value("```<(x = \"$" + "{y}\")\n    a\n  ```", "  a", SubstitutionInArgument(loc(1, 11)),
+    value("```<(x: \"$" + "{y}\")\n    a\n  ```", "  a", SubstitutionInArgument(loc(1, 10)),
       UnknownArgument(loc(1, 6), "x"))
-    value("```<(x = \"a\\\n    a\n  ```", "  a", InvalidEscape(loc(1, 12), "\\"), InvalidMarker(loc(1, 10)))
+    value("```<(x: \"a\\\n    a\n  ```", "  a", InvalidEscape(loc(1, 11), "\\"), InvalidMarker(loc(1, 9)))
   }
 
   it should "report whitespace after the delimiter or the markers, and apply the markers" in {

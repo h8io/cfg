@@ -67,6 +67,8 @@ private[psi] object Token {
   case object KeyMode extends Mode
   case object ValueMode extends Mode
 
-  /** Inside a directive's parentheses: names, integers, quoted strings, `=`, `,` and `)` (`format.md` §6). */
+  /** Inside a directive's parentheses: names, integers, quoted strings, `:`, `,` and `)` (`format.md` §6); `=` too,
+    * which the parser explains.
+    */
   case object ArgumentMode extends Mode
 }
