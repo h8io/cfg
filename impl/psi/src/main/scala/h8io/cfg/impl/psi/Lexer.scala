@@ -22,13 +22,20 @@ private[psi] final class Lexer(source: Source) {
   /** The errors found so far, in order. */
   def errors: List[PsiError] = reported.toList
 
+  /** How many errors have been found so far. */
+  def errorCount: Int = reported.length
+
+  /** Whether a fatal error has ended the source, so that its [[Token.End]] is no real end. */
+  def halted: Boolean = ended
+
   def next(mode: Mode): Token = {
+    val before = offset
     skipBlanks()
     val start = offset
     val startsLine = atLineStart
     val kind = if (ended || offset >= text.length) End else read(mode)
     atLineStart = kind == Newline
-    Token(kind, source.location(start), startsLine)
+    Token(kind, source.location(start), startsLine, spaced = start > before)
   }
 
   private def report(error: SourceLocation => PsiError, at: Int): Unit = {
@@ -186,10 +193,11 @@ private[psi] final class Lexer(source: Source) {
       case '#' =>
         offset += 1
         name(MissingDirectiveName.apply, start).fold[Kind](End)(Directive.apply)
+      case '@' => tag(start)
       case c =>
         mode match {
           case KeyMode => keyMode(c, start)
-          case ValueMode => valueMode(c, start)
+          case ValueMode => unquoted()
         }
     }
   }
@@ -223,17 +231,17 @@ private[psi] final class Lexer(source: Source) {
         case _ => startsWith("//", i) || startsWith("/*", i)
       })
 
-  private def valueMode(c: Char, start: Int): Kind =
-    if (c == '@') {
+  /** `@name` from its `@`. */
+  private def tag(start: Int): Kind = {
+    offset += 1
+    if (at(offset, '-')) {
+      report(ReservedTagRemoval.apply, start)
       offset += 1
-      if (at(offset, '-')) {
-        report(ReservedTagRemoval.apply, start)
-        offset += 1
-      }
-      val tag = name(MissingTagName.apply, start)
-      if (at(offset, '(')) report(TagArguments.apply, start)
-      tag.fold[Kind](End)(Tag.apply)
-    } else unquoted()
+    }
+    val tag = name(MissingTagName.apply, start)
+    if (at(offset, '(')) report(TagArguments.apply, start)
+    tag.fold[Kind](End)(Tag.apply)
+  }
 
   /** A tag or directive name after its prefix: bare, or in backticks. */
   private def name(missing: SourceLocation => PsiError, prefix: Int): Option[String] =

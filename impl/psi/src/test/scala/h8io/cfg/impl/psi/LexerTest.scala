@@ -68,20 +68,20 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   it should "give the end of the source again once it is reached" in {
     val lexer = new Lexer(Source("s", "a"))
     lexer.next(ValueMode).kind shouldBe plain("a")
-    lexer.next(ValueMode) shouldBe Token(End, loc(1, 2), startsLine = false)
-    lexer.next(KeyMode) shouldBe Token(End, loc(1, 2), startsLine = false)
+    lexer.next(ValueMode) shouldBe Token(End, loc(1, 2), startsLine = false, spaced = false)
+    lexer.next(KeyMode) shouldBe Token(End, loc(1, 2), startsLine = false, spaced = false)
   }
 
   it should "read LF and CRLF as newlines, and record where each token stands" in {
     tokens("a b\n  c\r\nd", KeyMode) shouldBe
       Lexed(
         List(
-          Token(bare("a"), loc(1, 1), startsLine = true),
-          Token(bare("b"), loc(1, 3), startsLine = false),
-          Token(Newline, loc(1, 4), startsLine = false),
-          Token(bare("c"), loc(2, 3), startsLine = true),
-          Token(Newline, loc(2, 4), startsLine = false),
-          Token(bare("d"), loc(3, 1), startsLine = true)
+          Token(bare("a"), loc(1, 1), startsLine = true, spaced = false),
+          Token(bare("b"), loc(1, 3), startsLine = false, spaced = true),
+          Token(Newline, loc(1, 4), startsLine = false, spaced = false),
+          Token(bare("c"), loc(2, 3), startsLine = true, spaced = true),
+          Token(Newline, loc(2, 4), startsLine = false, spaced = false),
+          Token(bare("d"), loc(3, 1), startsLine = true, spaced = false)
         ),
         Nil
       )
@@ -132,7 +132,11 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
 
   "A token after a comment that spans lines" should "continue the line before the comment" in {
     tokens("a /* c\n*/ b", KeyMode) shouldBe
-      Lexed(List(Token(bare("a"), loc(1, 1), startsLine = true), Token(bare("b"), loc(2, 4), startsLine = false)), Nil)
+      Lexed(
+        List(
+          Token(bare("a"), loc(1, 1), startsLine = true, spaced = false),
+          Token(bare("b"), loc(2, 4), startsLine = false, spaced = true)),
+        Nil)
   }
 
   "Whitespace other than space and tab" should "be reported and read as whitespace" in {
@@ -658,9 +662,17 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
     lex("\"${a.`b\"") shouldBe Lexed(Nil, List(UnterminatedName(loc(1, 6))))
   }
 
+  "spaced" should "say whether whitespace or a comment stands right before a token" in {
+    tokens("a.b . c/**/.d", KeyMode).read.map(_.spaced) shouldBe List(false, false, false, true, true, true, false)
+  }
+
   "A tag" should "be read bare or in backticks" in {
     lex("@duration 5s @`tag:yaml.org,2002:int` 1") shouldBe
       Lexed(List(Tag("duration"), plain("5s"), Tag("tag:yaml.org,2002:int"), plain("1")), Nil)
+  }
+
+  it should "be read in key mode too, at the start of a key only" in {
+    key("@t a a@b") shouldBe Lexed(List(Tag("t"), bare("a"), bare("a@b")), List(InvalidKey(loc(1, 6), "a@b")))
   }
 
   it should "be reported without a name" in {

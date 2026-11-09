@@ -138,5 +138,66 @@ final case class WhitespaceInSubstitution(location: SourceLocation) extends PsiE
 /** A `\${…}` whose path cannot be read; the error points at the `\${`. */
 final case class InvalidSubstitution(location: SourceLocation) extends PsiError
 
+/** Where a key is expected, at the start of a field or after a dot, something that cannot be one, such as a `:` or a
+  * bracket.
+  */
+final case class ExpectedKey(location: SourceLocation) extends PsiError
+
+/** A key in `"…"` or `'…'`: a quoted key is written in backticks. */
+final case class QuotedKey(location: SourceLocation) extends PsiError
+
+/** A value in backticks, which are for names: a quoted value is written in `"…"`. */
+final case class BacktickedValue(location: SourceLocation) extends PsiError
+
+/** A tag before a key: it goes after the `:`, before the value, as in `key: @tag value`. */
+final case class TagBeforeKey(location: SourceLocation) extends PsiError
+
+/** Whitespace or a comment before or after a dot of a key, which has none, as `Id.path` writes it; the error points at
+  * the dot.
+  */
+final case class SpaceAroundDot(location: SourceLocation) extends PsiError
+
+/** After a key, neither a dot, `:`, `:=` nor `{`, such as HOCON's `=` or nothing at all. */
+final case class ExpectedColon(location: SourceLocation) extends PsiError
+
+/** The `{` of `key { … }` on a line after the key's: it goes on the key's line. */
+final case class BraceOnNextLine(location: SourceLocation) extends PsiError
+
+/** A tag between a key and its value, as in `key @tag { … }`: it goes after a `:`, `key: @tag { … }`. */
+final case class TagAfterKey(location: SourceLocation) extends PsiError
+
+/** No value after a `:`, `:=` or tag, such as a `,` or a closing bracket where one should be. */
+final case class MissingValue(location: SourceLocation) extends PsiError
+
+/** A value on a line after its `:`, `:=` or tag: it goes on the same line (`format.md` §4). */
+final case class ValueOnNextLine(location: SourceLocation) extends PsiError
+
+/** After a value, something other than a separator or a closing bracket, such as a second field on the line; whitespace
+  * never separates. The error points at what follows the value.
+  */
+final case class MissingSeparator(location: SourceLocation) extends PsiError
+
+/** A second word after an unquoted scalar, as in `a: foo bar`: a value with whitespace in it is quoted. The error
+  * points at the second word.
+  */
+final case class SpaceInValue(location: SourceLocation) extends PsiError
+
+/** An empty element or field: two `,` with no value between them, or a `,` before the first one; the error points at
+  * the `,` that has nothing before it.
+  */
+final case class EmptyElement(location: SourceLocation) extends PsiError
+
+/** A doc comment that does not stand before a field, a sequence element or a directive. */
+final case class MisplacedDocComment(location: SourceLocation) extends PsiError
+
+/** A `}` or `]` that closes nothing, or not the bracket opened last. */
+final case class UnmatchedBracket(location: SourceLocation) extends PsiError
+
+/** A `{` or `[` that the source ends without closing; the error points at the opening. */
+final case class UnclosedBracket(location: SourceLocation) extends PsiError
+
+/** Syntax that the format has and this version of the loader cannot read yet; `feature` names it. */
+final case class NotSupportedYet(location: SourceLocation, feature: String) extends PsiError
+
 /** Every error a load reported, in the order found. The loader reports as many as it can without inventing any. */
 final case class PsiErrors(errors: ::[PsiError]) extends CfgError
