@@ -132,20 +132,26 @@ private[psi] final class Parser(lexer: Lexer) {
   /** Something other than a separator after an item, `token`, read from `mark`.
     *
     * In a block that is a second field on the line, or a second word of a value, told apart by whether a field starts
-    * there. A word of a value is read again from `mark` in value mode, which is what the lexer reports on then: in key
-    * mode it may have found an invalid key in what is a word of a value. Whatever reading ahead in key mode found is
-    * left out but a fatal error.
+    * there, read ahead in key mode. The word is then read again from `mark` in value mode, last, so that what the lexer
+    * reports is a value's — in key mode it may find an invalid key in a word of a value — and stays as found. A fatal
+    * error that only reading ahead reached is found again by reading on past the word.
     */
   private def afterValue(token: Token, mode: Mode, mark: Lexer.Mark): Nothing =
     mode match {
       case KeyMode =>
         lexer.reset(mark)
+        val field = startsField(lexer.next(KeyMode))
+        val fatalAhead = lexer.halted
+        lexer.reset(mark)
         val word = next(ValueMode)
         val reported = reportedAfter
-        lexer.reset(mark)
+        if (fatalAhead && !lexer.halted) {
+          val _ = lexer.next(ValueMode)
+        }
         // a word with a substitution in it starts no field, keys being never computed
-        val field = !substitutes(word) && startsField(lexer.next(KeyMode))
-        fail(word, if (field) MissingSeparator(word.location) else wordError(word, inBlock = true), reported)
+        val error =
+          if (field && !substitutes(word)) MissingSeparator(word.location) else wordError(word, inBlock = true)
+        fail(word, error, reported)
       case ValueMode => fail(token, wordError(token, inBlock = false))
       case ArgumentMode => fail(token, MissingSeparator(token.location))
     }
