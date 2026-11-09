@@ -154,9 +154,12 @@ loader path.
 - **Separators** are `,` and newline, nothing else — whitespace never separates, so `[foo bar]` and
   `a: 1 b: 2` are errors, not two elements or two fields. After any value, scalar or container,
   only a separator, a comment or the closing bracket may follow: `a { x: 1 } b: 2` needs a `,`.
-  A `,` followed by a newline is one separator, and blank lines separate nothing extra. An empty
-  element (`[a,,b]`, `[, a]`) is an error — there is no empty value, `null` is written out. A
-  trailing separator is allowed in sequences and blocks alike.
+  A run of newlines with at most one `,` among them is one separator, wherever the `,` stands:
+  `a: 1,⏎b: 2` and `a: 1⏎, b: 2` alike, blank lines separating nothing extra. An empty element
+  (`[a,,b]`, `[, a]`) is two `,` with no value between them, and an error — there is no empty
+  value, `null` is written out. Newlines after an opening bracket or before a closing one are no
+  element either: `[⏎a⏎]` is `[a]`, as `{⏎a: 1⏎}` is `{a: 1}`. A trailing separator is allowed in
+  sequences and blocks alike.
 
   The rule also frees `- ` (dash, space) at the start of an indented line for the sequence element
   marker (§13): `- 5` can never be a scalar, `-5` and `"- 5"` always are.
@@ -182,9 +185,19 @@ scalar     = null | bare-scalar | quoted-scalar | triple-quoted
 
 Fields are separated by a newline or a `,` (§3). `key { … }` needs no `:`, and the `{` must be on the
 same line as the key: `key` followed by `{` on the next line is an error. That keeps a key at the end
-of a line free for the indentation syntax (§13). A dotted key
-(`server.tls.enabled: true`) is sugar for nested blocks. The block form `key { … }` means `key: { … }`,
-so it merges; replacing a block is written `key := { … }`.
+of a line free for the indentation syntax (§13). For the same reason a value starts on the line of
+its `:` or `:=`, and the value a tag precedes on the line of the tag: `a:⏎5` and `a: @t⏎{ … }` are
+errors in v1, whatever the indentation of the next line. Lifting this later breaks no v1 file
+(§14, session 12).
+
+A dotted key (`server.tls.enabled: true`) is sugar for nested blocks. Its keys and dots touch, with
+no whitespace or comment between them, as `Id.path` writes them: `a . b` and `a. b` are errors. The
+block form `key { … }` means `key: { … }`, so it merges; replacing a block is written
+`key := { … }`. It has no place for a tag: a tagged block is written `key: @t { … }`, and
+`key @t { … }` is an error that says so.
+
+Every syntax error names the fix where there is one, as these do: the error for `key @t { … }`
+shows `key: @t { … }`, the one for `a:⏎5` says to move the value up.
 
 ## 5. Values
 
@@ -1303,3 +1316,33 @@ Settled for step 2d, the rename, later in session 10:
   substitutions banned from what a directive returns, which rules out `#include` itself; and a
   `Node` in that is the value the directive applies to, which is the value stage rejected for
   markers in session 10.
+
+### Session 12 — 2026-11-09
+
+Spec gaps of plan step 3, the parser of the core syntax, settled with the user before coding it.
+
+- **A value starts on the line of its `:` or `:=`, and the value of a tag on the tag's line** (§4):
+  `a:⏎5` and `a: @t⏎{ … }` are errors in v1. The lexer allowed `:` at the end of a line, and nothing
+  said whether the value could follow on the next one. Scala 3 allows it — after `=` at the end of a
+  line a deeper-indented line opens a region holding one expression, which means the same as the
+  expression written with or without braces — and the same reading would work for Psi: after `key:`
+  a region holding one value, which is a map when it holds fields. But v1 promises that leading
+  whitespace means nothing (§13), so `a:⏎5` would have to be legal at any indentation, and under
+  the indentation syntax the same text at the key's column is an empty region. The user's pick of
+  three: forbid it now, which a later version can lift without breaking a v1 file. Rejected:
+  allowing it only on a deeper-indented line, Scala's rule, consistent but taking a decision that
+  belongs to the parked indentation question (§13) and giving indentation a say in v1's validity;
+  allowing it at any indentation, which breaks the promise of §13.
+- **`key @t { … }` is an error with a hint, `key: @t { … }`** (§4). The block form is sugar with no
+  place for a tag; a second spelling of a tagged block buys nothing.
+- **Every syntax error says how to fix it, where there is a fix** (§4). The user's general rule,
+  restated here; plan step 12 tests the texts.
+- **Dotted keys have no whitespace or comment around their dots** (§4): `a . b` and `a. b` are
+  errors, `Id.path` writing none.
+- **A run of newlines with at most one `,` is one separator, wherever the `,` stands** (§3), so a
+  leading comma, `a: 1⏎, b: 2`, separates as a trailing one does; an empty element is two `,` with no
+  value between them. Rejected: making the leading comma an error, which would forbid a common style
+  of lists for no gain.
+- **Newlines after `[` or before `]` are no element** (§3), as after `{` and before `}`.
+- **Until step 4, `${…}` and a directive are reported as not supported yet** by the parser (plan step
+  3), as `"""` was by the lexer until step 2c.

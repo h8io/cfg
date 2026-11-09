@@ -176,8 +176,12 @@ code is the lexer alone and nothing is published.
   empty element an error, whitespace never separates), tags on every value, `null` in value position
   only, `a: foo bar` an error. Doc comments only before a field, an element or a directive,
   kept on that node in the Ast (§3).
+- A value on the line of its `:`/`:=` and of its tag; `key @t { … }` an error with a hint; no
+  whitespace around the dots of a key; a leading `,` separates as a trailing one does (§3, §4).
+- `${…}` and directives are reported as not supported yet, until step 4.
 - In this step the parser stops at the first error; recovery is step 5.
 - The Ast keeps operators and source order — merging is step 6.
+- **Spec gaps:** none left — settled in session 12 (`format.md` §3, §4, §14).
 
 ### 4. Parser: substitutions and directives
 
