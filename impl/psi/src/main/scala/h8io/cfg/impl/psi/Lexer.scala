@@ -244,7 +244,10 @@ private[psi] final class Lexer(source: Source) {
       case '(' => advance(1, LeftParen)
       case ')' => advance(1, RightParen)
       case '=' => advance(1, Equals)
-      case ':' => advance(1, Colon)
+      case ':' =>
+        offset += 1
+        if (has(offset) && !isBreak(offset)) report(ColonWithoutSpace.apply, start)
+        Colon
       case '$' if startsWith("${") =>
         // an argument is literal (§6): reported, and read as the text written
         report(SubstitutionInArgument.apply, start)

@@ -95,7 +95,7 @@ private[psi] final class MarkerParser(
     if (has(i) && isNameStart(line.codePointAt(i)))
       while (has(i) && isNamePart(line.codePointAt(i))) i += Character.charCount(line.codePointAt(i))
 
-  /** `(name = literal, …)` from its `(`. */
+  /** `(name: literal, …)` from its `(`. */
   private def arguments(): Option[Vector[Argument]] = {
     i += 1
     skipSpaces()
@@ -127,13 +127,15 @@ private[psi] final class MarkerParser(
     }
   }
 
-  /** `name = literal`, or a literal alone, positional. */
+  /** `name: literal`, or a literal alone, positional; `name = literal` is reported and read as the former. */
   private def argument(): Option[Argument] = {
     val start = i
     identifier()
     val name = line.substring(start, i)
     skipSpaces()
-    if (i > start && at(i, '=')) {
+    if (i > start && (at(i, ':') || at(i, '='))) {
+      if (at(i, '=')) error(EqualsInArgument.apply, i)
+      else if (has(i + 1) && !isSpace(line.charAt(i + 1))) error(ColonWithoutSpace.apply, i)
       i += 1
       skipSpaces()
       val valueStart = i

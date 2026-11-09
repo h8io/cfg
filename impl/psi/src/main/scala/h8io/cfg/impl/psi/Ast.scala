@@ -32,7 +32,7 @@ private[psi] object Ast {
   /** `#name(arguments)`, or `#name` alone with none, at `location`, the `#`. */
   final case class Call(name: String, arguments: Vector[Argument], location: SourceLocation)
 
-  /** An argument, `name = value` or positional with no name; every value is a string, as the handler gets it (§6).
+  /** An argument, `name: value` or positional with no name; every value is a string, as the handler gets it (§6).
     *
     * @param location
     *   where the argument starts, its name or its value

@@ -144,7 +144,7 @@ rules (`format.md` §5), are a part of their own.
   marker is an error, not fatal; first and last newline dropped; trailing whitespace stripped; CRLF
   to LF; markers written as directive calls and applied left to right (session 10) — none (Java's
   rule, the closing delimiter's column counting), `<`, `>` (kept), `+` (folding), and
-  `width(n = N)` relative to the opening line; mismatched indents are errors.
+  `width(n: N)` relative to the opening line; mismatched indents are errors.
 - An unterminated `"""` ends the source (§11).
 - Raw strings (§5): `'…'` on one line and `'''…'''` with the layout of `"""`; no
   substitutions, `\'` and `\\` the only escapes. `ApostropheAtStart` goes; an unterminated raw
@@ -187,13 +187,14 @@ code is the lexer alone and nothing is published.
 
 - `${path}`, `${?path}`, and concatenations — a scalar with `${…}` inside (`jdbc:${host}/db`,
   `"jdbc:${host}/db"`); two values side by side, `"jdbc:"${host}`, are an error with a hint (§9).
-- Directives in statement and value position, arguments `name = literal` separated by `,`/newline,
+- Directives in statement and value position, arguments `name: literal` separated by `,`/newline,
   literals: strings, bare identifiers, `true`/`false`, integers; `${…}` in an argument is an error
   (§6). The Ast only — nothing is expanded yet.
 - Paths inside `${…}` are `Id.path` syntax, indices included (`${x.y[7].z}`, settled in session 7,
   `format.md` §9). Property test: `Id.path` of any `Id` below the root parses back to the same `Id`.
 - `#name` without parentheses is a call with no arguments; the `(` touches the name; arguments
-  separated by a block's rules; parameter names bare or in backticks; strings in `"…"` or `'…'`
+  separated by a block's rules; a named one `name: literal`, `=` an error with a hint (session 12);
+  parameter names bare or in backticks; strings in `"…"` or `'…'`
   only; integers as markers' (§6). A duplicate named argument and a positional one after a named
   one are parser errors; tags before a value-position directive are kept in the Ast.
 - **Spec gaps:** none left — settled in session 12 (`format.md` §4, §6, §14).
@@ -281,7 +282,7 @@ code is the lexer alone and nothing is published.
 ### 11. `#include`
 
 - `file` (relative to the including URL), `resource` (classpath), `url`; exactly one of them;
-  `optional = true` tolerates a missing target (§6).
+  `optional: true` tolerates a missing target (§6).
 - Cycle detection on the URL stack; nested includes; includes inside blocks land at the right path.
 - Errors inside an included source are collected along with everyone else's.
 - **Spec gaps:** whether `file` without an extension gets one appended — `.Ψ`, `.ψ`, `.psi` in

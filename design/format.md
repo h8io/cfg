@@ -185,7 +185,7 @@ seq        = "[" [ value { sep value } [ sep ] ] "]"
 sep        = "," | newline
 tag        = "@" name
 directive  = "#" name [ "(" [ arg { sep arg } [ sep ] ] ")" ]
-arg        = [ name "=" ] literal
+arg        = [ name ":" ] literal
 scalar     = null | bare-scalar | quoted-scalar | triple-quoted
 ```
 
@@ -263,10 +263,10 @@ key: """
 The layout of a block is picked by **markers** between the opening delimiter and the end of its
 line. A marker is a name — a run of the symbols `! # $ % & * + - . : ; < = > ? @ ^ | ~`, or a name
 by the key rule (§3) — followed, if it takes any, by its arguments in parentheses, written as a
-directive's are (§6): `name = literal` or a literal alone, separated by `,`, a literal being a
+directive's are (§6): `name: literal` or a literal alone, separated by `,`, a literal being a
 string in `"…"` (with its escapes, `${` an error) or `'…'`, an integer, or a bare name. As in
 Scala, positional arguments go to the parameters in order and come before the named ones:
-`width(2)` and `width(n = 2)` are one. Markers are separated by whitespace; none may stand before
+`width(2)` and `width(n: 2)` are one. Markers are separated by whitespace; none may stand before
 the first or after the last.
 `/` is not a symbol, being kept for a comment after the markers, which v1 does not allow.
 
@@ -275,7 +275,7 @@ the first or after the last.
 | none | the common indent is stripped, Java's rule (below) |
 | `<` | all of the indent is stripped |
 | `>` | the indent is kept as written |
-| `width(n = N)` | the opening line's indent and N more are stripped (below) |
+| `width(n: N)` | the opening line's indent and N more are stripped (below) |
 | `+` | lines are folded (below) |
 
 **Markers are applied left to right**, each to the lines the one before it left, once trailing
@@ -301,14 +301,14 @@ space, an empty line becomes a newline,
 and a line indented deeper is not folded — neither it nor the newlines around it — so a list or a
 code sample inside prose survives.
 
-**An explicit width** is `width(n = N)`, N a positive integer. As in YAML it counts from the indent
+**An explicit width** is `width(n: N)`, N a positive integer. As in YAML it counts from the indent
 of the line holding the opening delimiter: that indent and then N whitespace characters are
 stripped from every non-blank line, and a line that does not start with them is an error. The closing delimiter's column does not count then. Counting from that line
 keeps the value when a formatter shifts the whole block:
 
 ```
 server {
-  banner: """width(n = 2)
+  banner: """width(n: 2)
       abc
     """
 }
@@ -403,7 +403,7 @@ ordinary tag.
 The extension point, and the reason `include` is not a keyword. A directive is
 
 ```
-#name(arg = literal, arg = literal)
+#name(arg: literal, arg: literal)
 ```
 
 The `#` is the C preprocessor's, and for the same reason: directives are expanded while parsing,
@@ -428,13 +428,19 @@ and `#name` with `(` on the next line are errors that say to move it.
 Arguments are separated like everything else, by `,` or a newline, so a long directive can be split
 across lines. The rules are a block's (§3): a run of newlines with at most one `,` is one
 separator, a trailing one is allowed, an empty argument is an error, and newlines after `(` or
-before `)` are no argument. They keep `name = literal`, not `name: literal`: a directive is a call with named
-arguments, as in Scala, not a block of fields. As in Scala, an argument may also be positional — a
-literal alone, going to the handler's parameters in order — and positional arguments come before
-the named ones; markers take arguments the same way (§5).
+before `)` are no argument.
+
+**A named argument is written as a field is, `name: literal`**, and follows the rules of `:` (§3):
+whitespace or the end of the line after it, so `#x(a:1)` is an error with a hint, as `a:1` is in a
+block. The handler gets its arguments as a map (below), and they are written as one: Psi has one
+way to pair a name with a value. `=` is no part of the syntax; `#x(a = 1)` is an error that says
+to write `:`. An argument may also be positional — a literal alone, going to the handler's
+parameters in order — and positional arguments come before the named ones, as in Scala; markers
+take arguments the same way (§5). An argument's value is a literal in v1; a block or a sequence
+there could be allowed later, the arguments being a map anyway, but never a substitution (below).
 
 A parameter name follows the rule of every other name: bare if it matches `Id.SafeKeyPattern`, in
-backticks otherwise, ``#x(`odd name` = 1)``. An argument given twice by name, or a positional one
+backticks otherwise, ``#x(`odd name`: 1)``. An argument given twice by name, or a positional one
 after a named one, is an error the parser reports; one given by position and again by name is
 reported where the handler's parameters are known (plan step 10), as for markers (§5).
 
@@ -473,10 +479,10 @@ tags before a whole-value `${…}` are added to the grafted node's (§9): `a: @t
 `#include` is the only built-in:
 
 ```
-#include(file = "conf.d/extra")             // relative to the including file's URL
-#include(file = "local", optional = true)   // missing file is not an error
-#include(resource = "reference")            // classpath, JVM only
-#include(url = "https://…")
+#include(file: "conf.d/extra")              // relative to the including file's URL
+#include(file: "local", optional: true)     // missing file is not an error
+#include(resource: "reference")             // classpath, JVM only
+#include(url: "https://…")
 ```
 
 Exactly one of `file` / `resource` / `url` is required. Relative paths resolve against the URL of the
@@ -1396,3 +1402,14 @@ Settled for plan step 4, the parser of substitutions and directives, later in se
   named, in the parser; by position and by name where the parameters are known, in step 10.
 - **Tags before a value-position directive are added to the produced node's** (§6), the union of
   a graft (§9).
+
+- **A named argument is `name: literal`, not `name = literal`** (§4, §5, §6), for directives and
+  markers alike: `#include(file: "x")`, `width(n: 2)`. The user's call, raised by the hint planned
+  for `#x(a: 1)`: since session 11 a handler gets its arguments as a `Node.IMap`, so they are a map
+  and are written as one, and Psi keeps one way to pair a name with a value. The `:` follows the
+  rules of a field's (§3), whitespace after it; `=` is an error with a hint to write `:`.
+  Supersedes session 2's "directive arguments keep `name = literal`, distinct from fields", whose
+  reason — a call, as in Scala, not a block — the map of session 11 took away, and the `=` of
+  session 10's marker syntax. Noted against it: a positional argument then looks like a field with
+  no key, which a block does not allow; `#include("x")` and `width(2)` still read well. Not taken
+  now: values other than literals, which `:` makes natural to add later, substitutions excepted.

@@ -314,17 +314,20 @@ private[psi] final class Parser(lexer: Lexer) {
       case Nil => ()
     }
 
-  /** `name = literal`, or a literal alone. */
+  /** `name: literal`, or a literal alone; `name = literal` is an error that says to write `:` (§6). */
   private def argument(first: Token): Ast.Argument =
     first.kind match {
       case Name(name, _) =>
         val mark = lexer.mark()
-        if (next(ArgumentMode).kind == Equals) {
-          val value = next(ArgumentMode)
-          Ast.Argument(Some(name), literal(value), first.location, value.location)
-        } else {
-          rewind(mark)
-          Ast.Argument(None, literal(first), first.location, first.location)
+        val token = next(ArgumentMode)
+        token.kind match {
+          case Colon =>
+            val value = next(ArgumentMode)
+            Ast.Argument(Some(name), literal(value), first.location, value.location)
+          case Equals => fail(token, EqualsInArgument(token.location))
+          case _ =>
+            rewind(mark)
+            Ast.Argument(None, literal(first), first.location, first.location)
         }
       case Integer(_) | Scalar(_, _) => Ast.Argument(None, literal(first), first.location, first.location)
       case _ => fail(first, ExpectedArgument(first.location))

@@ -114,7 +114,9 @@ final case class InvalidEscape(location: SourceLocation, escape: String) extends
 /** A key written bare that does not match `Id.SafeKeyPattern` and has to be quoted in backticks. */
 final case class InvalidKey(location: SourceLocation, key: String) extends PsiError
 
-/** A `:` or `:=` after a key that is not followed by whitespace or the end of the line. */
+/** A `:` or `:=` after a key, or a `:` after the name of an argument, that is not followed by whitespace or the end of
+  * the line.
+  */
 final case class ColonWithoutSpace(location: SourceLocation) extends PsiError
 
 /** A `"` or backtick inside an unquoted scalar; the value has to be quoted as a whole. */
@@ -158,6 +160,11 @@ final case class InvalidLiteral(location: SourceLocation, literal: String) exten
   * name, `#name(…)`. The error points at the `(`.
   */
 final case class DetachedArguments(location: SourceLocation) extends PsiError
+
+/** `name = value` in the arguments of a directive or a marker: a named argument is written as a field is,
+  * `name: value`. The error points at the `=`.
+  */
+final case class EqualsInArgument(location: SourceLocation) extends PsiError
 
 /** In a directive's arguments, something that cannot start one, such as `=` or a tag. */
 final case class ExpectedArgument(location: SourceLocation) extends PsiError
