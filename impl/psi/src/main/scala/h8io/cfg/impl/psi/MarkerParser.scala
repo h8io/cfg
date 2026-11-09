@@ -95,18 +95,24 @@ private[psi] final class MarkerParser(
     if (has(i) && isNameStart(line.codePointAt(i)))
       while (has(i) && isNamePart(line.codePointAt(i))) i += Character.charCount(line.codePointAt(i))
 
-  /** `(name: literal, …)` from its `(`. */
+  /** `(name: literal, …)` from its `(`, separated as a directive's arguments are (§6): a trailing `,` is allowed, and a
+    * `,` with no argument before it is an empty one.
+    */
   private def arguments(): Option[Vector[Argument]] = {
     i += 1
     skipSpaces()
-    if (at(i, ')')) {
-      i += 1
-      Some(Vector.empty)
-    } else {
-      val read = Vector.newBuilder[Argument]
-      var result: Option[Vector[Argument]] = None
-      var more = true
-      while (more)
+    val read = Vector.newBuilder[Argument]
+    var result: Option[Vector[Argument]] = None
+    var more = true
+    while (more)
+      if (at(i, ')')) {
+        i += 1
+        result = Some(read.result())
+        more = false
+      } else if (at(i, ',')) {
+        error(EmptyElement.apply, i)
+        more = false
+      } else
         argument() match {
           case Some(argument) =>
             read += argument
@@ -114,35 +120,73 @@ private[psi] final class MarkerParser(
             if (at(i, ',')) {
               i += 1
               skipSpaces()
-            } else {
+            } else if (!at(i, ')')) {
+              syntaxError()
               more = false
-              if (at(i, ')')) {
-                i += 1
-                result = Some(read.result())
-              } else syntaxError()
             }
           case None => more = false
         }
-      result
+    result
+  }
+
+  /** `name: literal`, or a literal alone, positional; `name = literal` is reported and read as the former. A name is
+    * bare or in backticks, as every name is (§6); a value in backticks is an error.
+    */
+  private def argument(): Option[Argument] = {
+    val start = i
+    val written =
+      if (at(i, '`')) backticked()
+      else {
+        identifier()
+        if (i > start) Some(line.substring(start, i)) else None
+      }
+    skipSpaces()
+    written.flatMap(name => if (at(i, ':') || at(i, '=')) Some(name) else None) match {
+      case Some(name) => named(name, start)
+      case None if at(start, '`') =>
+        if (written.nonEmpty) error(BacktickedValue.apply, start)
+        None
+      case None =>
+        i = start
+        literal().map(Argument(None, start, _, start))
     }
   }
 
-  /** `name: literal`, or a literal alone, positional; `name = literal` is reported and read as the former. */
-  private def argument(): Option[Argument] = {
-    val start = i
-    identifier()
-    val name = line.substring(start, i)
+  /** The rest of `name: literal` from its `:`, or the `=` written in its place. */
+  private def named(name: String, start: Int): Option[Argument] = {
+    if (at(i, '=')) error(EqualsInArgument.apply, i)
+    else if (has(i + 1) && !isSpace(line.charAt(i + 1))) error(ColonWithoutSpace.apply, i)
+    i += 1
     skipSpaces()
-    if (i > start && (at(i, ':') || at(i, '='))) {
-      if (at(i, '=')) error(EqualsInArgument.apply, i)
-      else if (has(i + 1) && !isSpace(line.charAt(i + 1))) error(ColonWithoutSpace.apply, i)
+    val valueStart = i
+    literal().map(Argument(Some(name), start, _, valueStart))
+  }
+
+  /** A name in backticks with the escapes of `"…"`, from its opening backtick; with no closing one, a syntax error
+    * there.
+    */
+  private def backticked(): Option[String] = {
+    val start = i
+    i += 1
+    val value = new StringBuilder
+    while (has(i) && !at(i, '`'))
+      if (at(i, '\\')) {
+        val (read, end) = readEscape(line, i, has(i + 1))
+        read match {
+          case Some(escaped) => value ++= escaped
+          case None => error(InvalidEscape(_, line.substring(i, end)), i)
+        }
+        i = end
+      } else {
+        value += line.charAt(i)
+        i += 1
+      }
+    if (has(i)) {
       i += 1
-      skipSpaces()
-      val valueStart = i
-      literal().map(Argument(Some(name), start, _, valueStart))
+      Some(value.result())
     } else {
       i = start
-      literal().map(Argument(None, start, _, start))
+      invalid
     }
   }
 

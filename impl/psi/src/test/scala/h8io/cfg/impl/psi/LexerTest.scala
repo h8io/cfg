@@ -492,7 +492,6 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
       "<(x: )" -> 9,
       "<(x: 1" -> 10,
       "<(x: 1 2)" -> 11,
-      "<(x: 1,)" -> 11,
       "<(x: 01)" -> 10,
       "<(x: -)" -> 10,
       "<(x: \"a)" -> 9,
@@ -520,6 +519,22 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
       }
     }
   }
+
+  it should "take arguments as a directive does: names in backticks, a trailing `,`" in {
+    value("```width(`n`: 2)\n    a\n```", "  a")
+    value("```width(n: 2,)\n    a\n```", "  a")
+    value("```width(2 , )\n    a\n```", "  a")
+    value("```<(`a\\`b`: 1)\n    a\n  ```", "  a", UnknownArgument(loc(1, 6), "a`b"))
+  }
+
+  it should
+    "report an empty argument, a value in backticks and a bad name in backticks, and read the block as with no marker" in {
+      value("```width(n: 2,,)\n    a\n  ```", "  a", EmptyElement(loc(1, 15)))
+      value("```<(,)\n    a\n  ```", "  a", EmptyElement(loc(1, 6)))
+      value("```width(`n`)\n    a\n  ```", "  a", BacktickedValue(loc(1, 10)))
+      value("```<(`a\\qb`: 1)\n    a\n  ```", "  a", InvalidEscape(loc(1, 8), "\\q"), UnknownArgument(loc(1, 6), "ab"))
+      value("```<(`a\n    a\n  ```", "  a", InvalidMarker(loc(1, 6)))
+    }
 
   it should "report `=` after an argument's name, and a `:` with no space after it" in {
     value("```width(n = 2)\n      a\n    ```", "  a", EqualsInArgument(loc(1, 12)))
