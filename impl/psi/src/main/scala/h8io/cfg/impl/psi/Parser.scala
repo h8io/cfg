@@ -13,8 +13,9 @@ import scala.util.control.ControlThrowable
   */
 private[psi] final class Parser(lexer: Lexer) {
 
-  /** How many errors the lexer had reported before and after reading the last token taken through [[next]]. */
-  private var reportedBefore = 0
+  /** How many errors the lexer had reported when the last token taken through [[next]] started, and once it was read.
+    */
+  private var reportedBeforeToken = 0
   private var reportedAfter = 0
 
   /** Whether the last value read was an unquoted scalar, which a second word after it makes `a: foo bar`. */
@@ -33,8 +34,8 @@ private[psi] final class Parser(lexer: Lexer) {
     }
 
   private def next(mode: Mode): Token = {
-    reportedBefore = lexer.errorCount
     val token = lexer.next(mode)
+    reportedBeforeToken = lexer.errorCountBeforeToken
     reportedAfter = lexer.errorCount
     token
   }
@@ -116,8 +117,12 @@ private[psi] final class Parser(lexer: Lexer) {
   }
 
   /** Something other than a separator after a value: in a block, a second field on the line, or a second word of an
-    * unquoted scalar, told apart by whether a field starts there. The lexer's errors on that token are left out — it
-    * was read as the key it may not be.
+    * unquoted scalar, told apart by whether a field starts there.
+    *
+    * In a block the token was read in key mode, a guess. Where the guess shaped what the lexer said about it — a bare
+    * key it found invalid, a `:` with no space after it — the token's own errors are left out, since it may be a word
+    * of a value. Everything else is kept: errors in the whitespace and comments before it, and in a token that reads
+    * the same in either mode, such as a quoted one.
     */
   private def afterValue(token: Token, mode: Mode): Nothing = {
     val error = token.kind match {
@@ -125,7 +130,12 @@ private[psi] final class Parser(lexer: Lexer) {
       case Name(_, _) | Scalar(_, _) if mode == KeyMode && unquoted => SpaceInValue(token.location)
       case _ => MissingSeparator(token.location)
     }
-    fail(token, error, reportedBefore)
+    val guessed = mode == KeyMode &&
+      (token.kind match {
+        case Name(_, false) | Colon | Replace => true
+        case _ => false
+      })
+    fail(token, error, if (guessed) reportedBeforeToken else reportedAfter)
   }
 
   private def startsField: Boolean =

@@ -279,8 +279,20 @@ class ParserTest extends AnyFlatSpec with Matchers {
     errors("a: foo \"bar\"") shouldBe List(SpaceInValue(loc(1, 8)))
   }
 
-  it should "not be reported as a key the lexer cannot read" in {
+  it should "not be reported as a key the lexer cannot read, nor as a `:` with no space after it" in {
     errors("a: foo bar!") shouldBe List(SpaceInValue(loc(1, 8)))
+    errors("a: foo :x") shouldBe List(MissingSeparator(loc(1, 8)))
+  }
+
+  it should "keep the lexer's errors before it, and in it when it reads the same in either mode" in {
+    errors("a: foo\u200Bbar") shouldBe List(InvisibleCharacter(loc(1, 7), '\u200B'), SpaceInValue(loc(1, 8)))
+    errors("a: foo */ bar") shouldBe List(StrayCommentEnd(loc(1, 8)), SpaceInValue(loc(1, 11)))
+    errors("a: foo \"b\u200Bc\"") shouldBe List(InvisibleCharacter(loc(1, 10), '\u200B'), SpaceInValue(loc(1, 8)))
+  }
+
+  "A second element on a line" should "keep the lexer's errors before it and in it" in {
+    errors("a: [foo\u200Bbar]") shouldBe List(InvisibleCharacter(loc(1, 8), '\u200B'), MissingSeparator(loc(1, 9)))
+    errors("a: [x b\"c]") shouldBe List(QuoteInUnquotedScalar(loc(1, 8)), MissingSeparator(loc(1, 7)))
   }
 
   "Substitutions and directives" should "be reported as not supported yet" in {
