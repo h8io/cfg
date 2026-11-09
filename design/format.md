@@ -285,8 +285,14 @@ are — and then strips it. `<`, `>` and `width` set the indent, and a block tak
 them; with none, Java's rule comes first, so `"""+` folds what that rule left.
 
 **The set of markers is open**, as the set of directives is (§6): the loader is built with the
-marker handlers it knows, the ones above being the built-in set, and a handler maps the lines of a
-block to lines (§14, session 10). Each of these is reported, none of them fatal, and the block is
+marker handlers it knows, and a handler maps the lines of a block to lines (§14, session 10). **The
+four above — `<`, `>`, `width` and `+` — are reserved**: every loader has them, and none can
+replace or remove them, so `"""<` means the same whatever loader reads the file. A loader's own
+markers are added to them, and registering one of the four names is an error when the loader is
+built. The layout rules depend on it as well: a block takes one marker that sets the indent, and
+Java's rule comes first when none does, which only holds if the markers that set it are known.
+Directives are not reserved, `#include` included (§6): a loader for input it does not trust can
+leave it out. Each of these is reported, none of them fatal, and the block is
 then read as with no marker: a marker the loader does not know; a named argument it does not take,
 a positional one past its last parameter, a positional one after a named one, an argument given
 twice — by name, or by position and then by name; a value it cannot take, an argument it requires
@@ -1413,3 +1419,12 @@ Settled for plan step 4, the parser of substitutions and directives, later in se
   session 10's marker syntax. Noted against it: a positional argument then looks like a field with
   no key, which a block does not allow; `#include("x")` and `width(2)` still read well. Not taken
   now: values other than literals, which `:` makes natural to add later, substitutions excepted.
+
+- **The built-in markers `<`, `>`, `width` and `+` are reserved** (§5): always present, never
+  replaced or removed, and `withMarkers` adds to them; registering one of their names is an error
+  when the loader is built. The user's call: what a file's `"""<` means cannot depend on the loader
+  reading it, and the layout rules — one marker that sets the indent, Java's rule first when none
+  does — rely on knowing which markers set it. All four, `+` included, being layout the spec
+  defines. Supersedes, for markers, session 10's "`withMarkers` and `withDirectives` replace the
+  built-in set". Directives keep that rule: a loader for untrusted input has reason to leave out
+  `#include`.
