@@ -263,7 +263,8 @@ key: """
 The layout of a block is picked by **markers** between the opening delimiter and the end of its
 line. A marker is a name — a run of the symbols `! # $ % & * + - . : ; < = > ? @ ^ | ~`, or a name
 by the key rule (§3) — followed, if it takes any, by its arguments in parentheses, written as a
-directive's are (§6): `name: literal` or a literal alone, separated by `,`, a literal being a
+directive's are (§6): `name: literal` or a literal alone, the name bare or in backticks, separated
+by `,` with a trailing one allowed and an empty one an error, a literal being a
 string in `"…"` (with its escapes, `${` an error) or `'…'`, an integer, or a bare name. As in
 Scala, positional arguments go to the parameters in order and come before the named ones:
 `width(2)` and `width(n: 2)` are one. Markers are separated by whitespace; none may stand before
