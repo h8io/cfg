@@ -105,8 +105,10 @@ loader path.
   newline, and `a: 1 /*⏎*/ b: 2` needs a `,`. A `//` comment ends before its newline, which stays.
 - **Doc comments** — `/** … */` is reserved for documentation that DSLs built on Psi may one day
   want in the source. v1 ignores it, but accepts it only before a field, a sequence element or a
-  directive; anywhere else (between a tag and its value, after a value on the same line) it is an
-  error. Doc comments carry no meaning for values, so giving them one later breaks no v1 file. That
+  directive, on its line or a line above it; anywhere else (between a tag and its value, after a
+  value on the same line, before another doc comment, at the end of a block) it is an error, so of
+  two doc comments in a row the first is the error. Doc comments carry no meaning for values, so
+  giving them one later breaks no v1 file. That
   will take a field such as `doc: Option[String]` on `ISome` — a change to `cfg`, for a higher level
   to read (generated reference docs, error messages) — so the lexer emits a doc comment as a token
   and the Ast keeps it on the node it precedes from the start.
@@ -152,7 +154,10 @@ loader path.
   error with a hint rather than a field. Inside a value `:` is ordinary: `url: http://host:8080`.
   `:=` is the replacing form of `:` (§7) and follows the same rule: `a:=b` is an error.
 - **Separators** are `,` and newline, nothing else — whitespace never separates, so `[foo bar]` and
-  `a: 1 b: 2` are errors, not two elements or two fields. After any value, scalar or container,
+  `a: 1 b: 2` are errors, not two elements or two fields: in a block the second word of
+  `a: foo bar` is a value to quote unless a field starts there, as `b:` does, which needs a
+  separator; in a sequence a second word needs a separator, `[foo bar]` most likely being two
+  elements. After any value, scalar or container,
   only a separator, a comment or the closing bracket may follow: `a { x: 1 } b: 2` needs a `,`.
   A run of newlines with at most one `,` among them is one separator, wherever the `,` stands:
   `a: 1,⏎b: 2` and `a: 1⏎, b: 2` alike, blank lines separating nothing extra. An empty element
@@ -1346,3 +1351,11 @@ Spec gaps of plan step 3, the parser of the core syntax, settled with the user b
 - **Newlines after `[` or before `]` are no element** (§3), as after `{` and before `}`.
 - **Until step 4, `${…}` and a directive are reported as not supported yet** by the parser (plan step
   3), as `"""` was by the lexer until step 2c.
+
+Settled with the user after step 3 was coded (#150):
+
+- **In a sequence a second word needs a separator** (§3): `[foo bar]` is a missing `,`, while
+  `a: foo bar` in a block is a value to quote. Two elements are the likelier intent in a sequence;
+  in a block a second word that does not start a field can only be part of the value.
+- **Of two doc comments in a row the first is the error** (§3): it stands before a doc comment, not
+  before a field, an element or a directive — what the rule already said, now spelled out.
