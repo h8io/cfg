@@ -184,7 +184,8 @@ value      = [ tag ] ( scalar | block | seq | directive | substitution-expr )
 seq        = "[" [ value { sep value } [ sep ] ] "]"
 sep        = "," | newline
 tag        = "@" name
-directive  = "#" name "(" [ arg { sep arg } [ sep ] ] ")"
+directive  = "#" name [ "(" [ arg { sep arg } [ sep ] ] ")" ]
+arg        = [ name "=" ] literal
 scalar     = null | bare-scalar | quoted-scalar | triple-quoted
 ```
 
@@ -420,13 +421,28 @@ A directive name follows the key rule, as a tag name does (§5): bare if it matc
 `Id.SafeKeyPattern`, in backticks otherwise — ``#`my.directive`(…)``. One rule covers every name
 in the language: keys, path segments, tags and directives.
 
+**`#name` alone is a call with no arguments**, the same as `#name()`, as a marker with none is
+written without parentheses (§5). When there are parentheses, the `(` touches the name: `#name (…)`
+and `#name` with `(` on the next line are errors that say to move it.
+
 Arguments are separated like everything else, by `,` or a newline, so a long directive can be split
-across lines. They keep `name = literal`, not `name: literal`: a directive is a call with named
+across lines. The rules are a block's (§3): a run of newlines with at most one `,` is one
+separator, a trailing one is allowed, an empty argument is an error, and newlines after `(` or
+before `)` are no argument. They keep `name = literal`, not `name: literal`: a directive is a call with named
 arguments, as in Scala, not a block of fields. As in Scala, an argument may also be positional — a
 literal alone, going to the handler's parameters in order — and positional arguments come before
 the named ones; markers take arguments the same way (§5).
 
-Argument literals are strings, bare identifiers, `true`/`false` and integers. Arguments are
+A parameter name follows the rule of every other name: bare if it matches `Id.SafeKeyPattern`, in
+backticks otherwise, ``#x(`odd name` = 1)``. An argument given twice by name, or a positional one
+after a named one, is an error the parser reports; one given by position and again by name is
+reported where the handler's parameters are known (plan step 10), as for markers (§5).
+
+Argument literals are strings in `"…"` or `'…'` — not `"""…"""` or `'''…'''` in v1, an argument
+being a short literal — bare identifiers, `true`/`false`, which are bare identifiers like any
+other, and integers: an optional `-` and decimal digits with no leading zeros, as a marker's (§5).
+Every one reaches the handler as a string (below), which these rules keep to one spelling per
+number. Arguments are
 **literal only — no substitutions**. This is not a simplification, it is forced by the phase order in
 §8: directives are expanded during parsing, while `${…}` is resolved after every source has been
 merged, so a directive argument written as `${base}"/x"` would have to be resolved before the value
@@ -450,6 +466,9 @@ two ways:
   fragment lands is the directive's position.
 
 In statement position the fragment must be a map, in value position any node (above).
+
+**Tags before a directive in value position** are added to the tags of the node it produces, as
+tags before a whole-value `${…}` are added to the grafted node's (§9): `a: @t #include(…)`.
 
 `#include` is the only built-in:
 
@@ -1359,3 +1378,21 @@ Settled with the user after step 3 was coded (#150):
   in a block a second word that does not start a field can only be part of the value.
 - **Of two doc comments in a row the first is the error** (§3): it stands before a doc comment, not
   before a field, an element or a directive — what the rule already said, now spelled out.
+
+Settled for plan step 4, the parser of substitutions and directives, later in session 12:
+
+- **`#name` alone is a call with no arguments** (§4, §6). The user's call, against the proposal to
+  require `#name()`: markers already drop empty parentheses (§5), and a pasted YAML or HOCON
+  comment still fails loudly — `# text` has no name, and `#text` is an unknown directive.
+- **The `(` touches the directive's name** (§6), as a marker's does; `#name (…)` and a `(` on the
+  next line are errors with a hint.
+- **Arguments are separated by a block's rules** (§3, §6), across lines included.
+- **A parameter name may be written in backticks** (§6), the rule for every other name; markers
+  took bare names only.
+- **Triple-quoted strings are no argument literal in v1** (§6). Lifting it later breaks no file.
+- **Integer arguments keep the markers' syntax for now** (§6): an optional `-`, no leading zeros,
+  `-0` left as it is.
+- **A duplicate argument is an error** (§6), as for markers: by name twice, and positional after
+  named, in the parser; by position and by name where the parameters are known, in step 10.
+- **Tags before a value-position directive are added to the produced node's** (§6), the union of
+  a graft (§9).
