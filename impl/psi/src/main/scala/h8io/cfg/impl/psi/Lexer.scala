@@ -17,6 +17,7 @@ private[psi] final class Lexer(source: Source) {
   private var offset = 0
   private var atLineStart = true
   private var ended = false
+  private var reportedBeforeToken = 0
   private val reported = mutable.ListBuffer.empty[PsiError]
 
   /** The errors found so far, in order. */
@@ -25,12 +26,18 @@ private[psi] final class Lexer(source: Source) {
   /** How many errors have been found so far. */
   def errorCount: Int = reported.length
 
+  /** How many errors had been found when the last token started: those of the token itself come after, those of the
+    * whitespace and comments before it are counted.
+    */
+  def errorCountBeforeToken: Int = reportedBeforeToken
+
   /** Whether a fatal error has ended the source, so that its [[Token.End]] is no real end. */
   def halted: Boolean = ended
 
   def next(mode: Mode): Token = {
     val before = offset
     skipBlanks()
+    reportedBeforeToken = reported.length
     val start = offset
     val startsLine = atLineStart
     val kind = if (ended || offset >= text.length) End else read(mode)
