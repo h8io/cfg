@@ -41,6 +41,9 @@ private[psi] object Token {
   /** `@name`, in either mode: a tag before a key is an error the parser explains */
   final case class Tag(name: String) extends Kind
 
+  /** An integer in a directive's arguments: an optional `-` and decimal digits with no leading zeros, as written. */
+  final case class Integer(value: String) extends Kind
+
   /** `#name`, before its arguments */
   final case class Directive(name: String) extends Kind
 
@@ -57,8 +60,13 @@ private[psi] object Token {
   /** `${path}`, or `${?path}` when `optional`, found at `location`. */
   final case class Reference(path: Id.Branch, optional: Boolean, location: SourceLocation) extends Part
 
-  /** What the parser asks the lexer for: the same characters mean different things on either side of `:`. */
+  /** What the parser asks the lexer for: the same characters mean different things on either side of `:`, and in a
+    * directive's arguments.
+    */
   sealed trait Mode
   case object KeyMode extends Mode
   case object ValueMode extends Mode
+
+  /** Inside a directive's parentheses: names, integers, quoted strings, `=`, `,` and `)` (`format.md` §6). */
+  case object ArgumentMode extends Mode
 }
