@@ -192,8 +192,11 @@ code is the lexer alone and nothing is published.
   (§6). The Ast only — nothing is expanded yet.
 - Paths inside `${…}` are `Id.path` syntax, indices included (`${x.y[7].z}`, settled in session 7,
   `format.md` §9). Property test: `Id.path` of any `Id` below the root parses back to the same `Id`.
-- **Spec gaps:** integer literal syntax of directive arguments (sign, leading zeros). Duplicate
-  argument names.
+- `#name` without parentheses is a call with no arguments; the `(` touches the name; arguments
+  separated by a block's rules; parameter names bare or in backticks; strings in `"…"` or `'…'`
+  only; integers as markers' (§6). A duplicate named argument and a positional one after a named
+  one are parser errors; tags before a value-position directive are kept in the Ast.
+- **Spec gaps:** none left — settled in session 12 (`format.md` §4, §6, §14).
 
 ### 5. Parser: error recovery
 
