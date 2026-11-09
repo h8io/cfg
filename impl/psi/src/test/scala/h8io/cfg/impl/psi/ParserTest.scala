@@ -295,6 +295,13 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     errors("a: foo \"b\u200Bc\"") shouldBe List(InvisibleCharacter(loc(1, 10), '\u200B'), SpaceInValue(loc(1, 8)))
   }
 
+  it should "keep the errors of reading it as a value, a fatal one included" in {
+    errors("a: x\u200B${b}") shouldBe List(InvisibleCharacter(loc(1, 5), '\u200B'), JoinedValues(loc(1, 6)))
+    errors("a: foo bar!\"baz\"") shouldBe
+      List(QuoteInUnquotedScalar(loc(1, 12)), QuoteInUnquotedScalar(loc(1, 16)), SpaceInValue(loc(1, 8)))
+    errors("a: x ${foo.`bar}") shouldBe List(UnterminatedName(loc(1, 12)))
+  }
+
   "A second element on a line" should "keep the lexer's errors before it and in it" in {
     errors("a: [foo\u200Bbar]") shouldBe List(InvisibleCharacter(loc(1, 8), '\u200B'), MissingSeparator(loc(1, 9)))
     errors("a: [x b\"c]") shouldBe List(QuoteInUnquotedScalar(loc(1, 8)), MissingSeparator(loc(1, 7)))
