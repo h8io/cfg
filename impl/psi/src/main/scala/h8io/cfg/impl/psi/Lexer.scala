@@ -17,7 +17,6 @@ private[psi] final class Lexer(source: Source) {
   private var offset = 0
   private var atLineStart = true
   private var ended = false
-  private var reportedBeforeToken = 0
   private val reported = mutable.ListBuffer.empty[PsiError]
 
   /** The errors found so far, in order. */
@@ -26,10 +25,16 @@ private[psi] final class Lexer(source: Source) {
   /** How many errors have been found so far. */
   def errorCount: Int = reported.length
 
-  /** How many errors had been found when the last token started: those of the token itself come after, those of the
-    * whitespace and comments before it are counted.
-    */
-  def errorCountBeforeToken: Int = reportedBeforeToken
+  /** Where the lexer stands, to come back to with [[reset]] after reading ahead. */
+  def mark(): Mark = new Mark(offset, atLineStart, ended, reported.length)
+
+  /** Comes back to `mark`, forgetting the tokens read and the errors found since. */
+  def reset(mark: Mark): Unit = {
+    offset = mark.offset
+    atLineStart = mark.atLineStart
+    ended = mark.ended
+    reported.remove(mark.reported, reported.length - mark.reported)
+  }
 
   /** Whether a fatal error has ended the source, so that its [[Token.End]] is no real end. */
   def halted: Boolean = ended
@@ -37,7 +42,6 @@ private[psi] final class Lexer(source: Source) {
   def next(mode: Mode): Token = {
     val before = offset
     skipBlanks()
-    reportedBeforeToken = reported.length
     val start = offset
     val startsLine = atLineStart
     val kind = if (ended || offset >= text.length) End else read(mode)
@@ -192,6 +196,9 @@ private[psi] final class Lexer(source: Source) {
       case ']' => advance(1, RightBracket)
       case ',' => advance(1, Comma)
       case '/' if isDocComment => skipBlockComment().fold[Kind](End)(comment => DocComment(comment.substring(1)))
+      case '"' | '\'' if mode == ArgumentMode && (startsWith("\"\"\"") || startsWith("\'\'\'")) =>
+        report(TripleQuotedArgument.apply, start)
+        triple(start, text.charAt(start))
       case '"' if startsWith("\"\"\"") => triple(start, '"')
       case '"' => quoted()
       case '\'' if startsWith("'''") => triple(start, '\'')
@@ -205,6 +212,7 @@ private[psi] final class Lexer(source: Source) {
         mode match {
           case KeyMode => keyMode(c, start)
           case ValueMode => unquoted()
+          case ArgumentMode => argumentMode(c, start)
         }
     }
   }
@@ -230,6 +238,32 @@ private[psi] final class Lexer(source: Source) {
         if (!Id.SafeKeyPattern.matcher(key).matches()) report(InvalidKey(_, key), start)
         Name(key, quoted = false)
     }
+
+  private def argumentMode(c: Char, start: Int): Kind =
+    c match {
+      case '(' => advance(1, LeftParen)
+      case ')' => advance(1, RightParen)
+      case '=' => advance(1, Equals)
+      case ':' => advance(1, Colon)
+      case '$' if startsWith("${") =>
+        // an argument is literal (§6): reported, and read as the text written
+        report(SubstitutionInArgument.apply, start)
+        reference(quoted = false).foreach(_ => ())
+        Name(text.substring(start, offset), quoted = false)
+      case _ =>
+        while (has(offset) && !endsArgument(offset)) offset += 1
+        val word = text.substring(start, offset)
+        if (IntegerPattern.matcher(word).matches()) Integer(word)
+        else {
+          if (!Id.SafeKeyPattern.matcher(word).matches()) report(InvalidLiteral(_, word), start)
+          Name(word, quoted = false)
+        }
+    }
+
+  /** A word in a directive's arguments ends where a key does, but runs on past a dot, which neither a name nor an
+    * integer has: `1.5` and `a.b` are one invalid literal each.
+    */
+  private def endsArgument(i: Int): Boolean = text.charAt(i) != '.' && endsKey(i)
 
   private def endsKey(i: Int): Boolean =
     isBreak(i) ||
@@ -653,7 +687,17 @@ private[psi] final class Lexer(source: Source) {
   }
 }
 
-private object Lexer {
+private[psi] object Lexer {
+
+  /** A position of the lexer and what it had found by then. */
+  final class Mark private[Lexer] (
+      val offset: Int,
+      val atLineStart: Boolean,
+      val ended: Boolean,
+      val reported: Int)
+
+  /** An integer argument: an optional `-` and decimal digits with no leading zeros (`format.md` §6). */
+  private val IntegerPattern = java.util.regex.Pattern.compile("^-?(0|[1-9][0-9]*)$")
 
   /** Whitespace inside a line: space and tab, nothing else (`format.md` §3). */
   def isSpace(c: Char): Boolean = c == ' ' || c == '\t'
@@ -695,7 +739,7 @@ private object Lexer {
         case 'r' => (Some("\r"), i + 2)
         case 't' => (Some("\t"), i + 2)
         case 'u' if i + 5 < s.length && s.substring(i + 2, i + 6).forall(isHexDigit) =>
-          (Some(Integer.parseInt(s.substring(i + 2, i + 6), 16).toChar.toString), i + 6)
+          (Some(java.lang.Integer.parseInt(s.substring(i + 2, i + 6), 16).toChar.toString), i + 6)
         case _ => (None, i + 2)
       }
 

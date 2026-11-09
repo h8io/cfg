@@ -666,6 +666,68 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
     tokens("a.b . c/**/.d", KeyMode).read.map(_.spaced) shouldBe List(false, false, false, true, true, true, false)
   }
 
+  "Argument mode" should "read names, integers, quoted strings and punctuation" in {
+    lex("( ) = : , a `b` 1 -2 0 -0 \"s\" 'r'", ArgumentMode) shouldBe
+      Lexed(
+        List(
+          LeftParen,
+          RightParen,
+          Equals,
+          Colon,
+          Comma,
+          bare("a"),
+          Name("b", quoted = true),
+          Integer("1"),
+          Integer("-2"),
+          Integer("0"),
+          Integer("-0"),
+          quoted(Text("s")),
+          quoted(Text("r"))
+        ),
+        Nil
+      )
+  }
+
+  it should "report a word that is neither a name nor an integer, and read it as a name" in {
+    lex("1.5 007 a.b +1 -", ArgumentMode) shouldBe
+      Lexed(
+        List(bare("1.5"), bare("007"), bare("a.b"), bare("+1"), bare("-")),
+        List(
+          InvalidLiteral(loc(1, 1), "1.5"),
+          InvalidLiteral(loc(1, 5), "007"),
+          InvalidLiteral(loc(1, 9), "a.b"),
+          InvalidLiteral(loc(1, 13), "+1"),
+          InvalidLiteral(loc(1, 16), "-")
+        )
+      )
+  }
+
+  it should "report a substitution, and read it as the text written" in {
+    lex("${a.b} x", ArgumentMode) shouldBe
+      Lexed(List(bare("${a.b}"), bare("x")), List(SubstitutionInArgument(loc(1, 1))))
+  }
+
+  it should "report a triple-quoted string, and read it all the same" in {
+    lex("\"\"\"\n  x\n  \"\"\" '''\n  y\n  '''", ArgumentMode) shouldBe
+      Lexed(List(quoted(Text("x")), quoted(Text("y"))),
+        List(TripleQuotedArgument(loc(1, 1)), TripleQuotedArgument(loc(3, 7))))
+  }
+
+  "reset" should "come back to a mark, forgetting the tokens read and the errors found since" in {
+    val lexer = new Lexer(Source("s", "a 1b\n\"x"))
+    val mark = lexer.mark()
+    lexer.next(KeyMode).kind shouldBe bare("a")
+    lexer.next(KeyMode).kind shouldBe bare("1b")
+    lexer.next(KeyMode).kind shouldBe Newline
+    lexer.next(KeyMode).kind shouldBe End
+    lexer.halted shouldBe true
+    lexer.errors shouldBe List(InvalidKey(loc(1, 3), "1b"), UnterminatedString(loc(2, 1)))
+    lexer.reset(mark)
+    lexer.halted shouldBe false
+    lexer.errors shouldBe Nil
+    lexer.next(ValueMode) shouldBe Token(plain("a"), loc(1, 1), startsLine = true, spaced = false)
+  }
+
   "A tag" should "be read bare or in backticks" in {
     lex("@duration 5s @`tag:yaml.org,2002:int` 1") shouldBe
       Lexed(List(Tag("duration"), plain("5s"), Tag("tag:yaml.org,2002:int"), plain("1")), Nil)

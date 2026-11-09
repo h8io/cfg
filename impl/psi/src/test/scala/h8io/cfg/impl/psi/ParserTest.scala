@@ -1,10 +1,15 @@
 package h8io.cfg.impl.psi
 
+import h8io.cfg.Id
 import h8io.cfg.impl.psi.Ast.*
+import h8io.cfg.impl.psi.Token.{Reference, Text}
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-class ParserTest extends AnyFlatSpec with Matchers {
+class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks {
   private def parse(text: String): Result[Document] = Parser.parse(Source("s", text))
 
   /** The statements of a source that parses with no error. */
@@ -281,7 +286,7 @@ class ParserTest extends AnyFlatSpec with Matchers {
 
   it should "not be reported as a key the lexer cannot read, nor as a `:` with no space after it" in {
     errors("a: foo bar!") shouldBe List(SpaceInValue(loc(1, 8)))
-    errors("a: foo :x") shouldBe List(MissingSeparator(loc(1, 8)))
+    errors("a: foo :x") shouldBe List(SpaceInValue(loc(1, 8)))
   }
 
   it should "keep the lexer's errors before it, and in it when it reads the same in either mode" in {
@@ -295,11 +300,190 @@ class ParserTest extends AnyFlatSpec with Matchers {
     errors("a: [x b\"c]") shouldBe List(QuoteInUnquotedScalar(loc(1, 8)), MissingSeparator(loc(1, 7)))
   }
 
-  "Substitutions and directives" should "be reported as not supported yet" in {
-    errors("a: ${b}") shouldBe List(NotSupportedYet(loc(1, 4), "substitutions"))
-    errors("a: \"x ${b}\"") shouldBe List(NotSupportedYet(loc(1, 7), "substitutions"))
-    errors("#include(file = x)") shouldBe List(NotSupportedYet(loc(1, 1), "directives"))
-    errors("a: #x()") shouldBe List(NotSupportedYet(loc(1, 4), "directives"))
+  private def at(key: String): Id.Key = Id.Key(key, Id.Root)
+
+  private def ref(path: Id.Branch, line: Int, column: Int): Reference =
+    Reference(path, optional = false, loc(line, column))
+
+  private def arg(value: String, line: Int, column: Int): Argument =
+    Argument(None, value, loc(line, column), loc(line, column))
+
+  private def named(name: String, value: String, at: (Int, Int), valueAt: (Int, Int)): Argument =
+    Argument(Some(name), value, loc(at._1, at._2), loc(valueAt._1, valueAt._2))
+
+  private def directive(call: Call): DirectiveStatement = DirectiveStatement(call, None)
+
+  private val branches: Gen[Id.Branch] = {
+    val step = Gen.oneOf(arbitrary[String].map(Left(_)), Gen.choose(0, Int.MaxValue).map(Right(_)))
+    for {
+      first <- arbitrary[String]
+      n <- Gen.choose(0, 4)
+      steps <- Gen.listOfN(n, step)
+    } yield steps.foldLeft[Id.Branch](at(first)) {
+      case (parent, Left(key)) => Id.Key(key, parent)
+      case (parent, Right(index)) => Id.Index(index, parent)
+    }
+  }
+
+  "A substitution" should "be read alone and unquoted as a graft, with its tags" in {
+    statements("a: ${b.c[0]}\nd: @t ${?e}") shouldBe
+      Vector(
+        field(k("a", 1, 1), Substitution(Id.Index(0, Id.Key("c", at("b"))), optional = false, Set.empty, loc(1, 4))),
+        field(k("d", 2, 1), Substitution(at("e"), optional = true, Set("t"), loc(2, 7)))
+      )
+  }
+
+  it should "parse back from the path of any Id below the root" in
+    forAll(branches) { (path: Id.Branch) =>
+      statements("a: ${" + path.path + "}") shouldBe
+        Vector(field(k("a", 1, 1), Substitution(path, optional = false, Set.empty, loc(1, 4))))
+    }
+
+  "A concatenation" should "be a scalar with a substitution inside it, or quoted around one alone" in {
+    statements("a: jdbc:${h}/db\nb: @t \"${h}\"\nc: \"\"\"\n  x${h}\n  \"\"\"\nd: [${e}, x${e}]") shouldBe
+      Vector(
+        field(
+          k("a", 1, 1), Concatenation(Vector(Text("jdbc:"), ref(at("h"), 1, 9), Text("/db")), Set.empty, loc(1, 4))),
+        field(k("b", 2, 1), Concatenation(Vector(ref(at("h"), 2, 8)), Set("t"), loc(2, 7))),
+        field(k("c", 3, 1), Concatenation(Vector(Text("x"), ref(at("h"), 4, 4)), Set.empty, loc(3, 4))),
+        field(
+          k("d", 6, 1),
+          Sequence(
+            Vector(
+              Element(Substitution(at("e"), optional = false, Set.empty, loc(6, 5)), None),
+              Element(Concatenation(Vector(Text("x"), ref(at("e"), 6, 12)), Set.empty, loc(6, 11)), None)
+            ),
+            Set.empty,
+            loc(6, 4)
+          )
+        )
+      )
+  }
+
+  "Two values joined" should "be reported when either holds a substitution" in {
+    errors("a: \"jdbc:\"${host}") shouldBe List(JoinedValues(loc(1, 11)))
+    errors("a: \"a\" ${b}") shouldBe List(JoinedValues(loc(1, 8)))
+    errors("a: ${a} \"b\"") shouldBe List(JoinedValues(loc(1, 9)))
+    errors("a: x ${b}") shouldBe List(JoinedValues(loc(1, 6)))
+    errors("a: [a ${b}]") shouldBe List(JoinedValues(loc(1, 7)))
+  }
+
+  it should "not be reported for a field after a substitution" in {
+    errors("a: ${x} b: 2") shouldBe List(MissingSeparator(loc(1, 9)))
+  }
+
+  "A directive" should "be read in statement position, with or without arguments" in {
+    statements("#include(file = \"x.psi\", optional = true)\n#reload\n#`odd`(1, -2, 'r', `p q` = n)\n#e()") shouldBe
+      Vector(
+        directive(
+          Call(
+            "include",
+            Vector(named("file", "x.psi", (1, 10), (1, 17)), named("optional", "true", (1, 26), (1, 37))),
+            loc(1, 1))),
+        directive(Call("reload", Vector.empty, loc(2, 1))),
+        directive(
+          Call(
+            "odd",
+            Vector(arg("1", 3, 8), arg("-2", 3, 11), arg("r", 3, 15), named("p q", "n", (3, 20), (3, 28))),
+            loc(3, 1))),
+        directive(Call("e", Vector.empty, loc(4, 1)))
+      )
+  }
+
+  it should "take a bare name as a positional argument, and quoted strings without substitutions" in {
+    statements("#x(on, '${a}', \"\\${b}\")") shouldBe
+      Vector(directive(Call("x", Vector(arg("on", 1, 4), arg("${a}", 1, 8), arg("${b}", 1, 16)), loc(1, 1))))
+  }
+
+  it should "separate its arguments as a block separates fields" in {
+    statements("#x(\n  a = 1\n  , b = 2,\n)") shouldBe
+      Vector(directive(Call("x", Vector(named("a", "1", (2, 3), (2, 7)), named("b", "2", (3, 5), (3, 9))), loc(1, 1))))
+  }
+
+  it should "be read in value position, with its tags" in {
+    statements("a: @t #x(1)\nb: [#y, #z(2)]") shouldBe
+      Vector(
+        field(k("a", 1, 1), DirectiveValue(Call("x", Vector(arg("1", 1, 10)), loc(1, 7)), Set("t"))),
+        field(
+          k("b", 2, 1),
+          Sequence(
+            Vector(
+              Element(DirectiveValue(Call("y", Vector.empty, loc(2, 5)), Set.empty), None),
+              Element(DirectiveValue(Call("z", Vector(arg("2", 2, 12)), loc(2, 9)), Set.empty), None)
+            ),
+            Set.empty,
+            loc(2, 4)
+          )
+        )
+      )
+  }
+
+  it should "stand where its `#` does, in value position" in {
+    DirectiveValue(Call("x", Vector.empty, loc(2, 3)), Set("t")).location shouldBe loc(2, 3)
+  }
+
+  it should "keep the doc comment before it" in {
+    statements("/** d */\n#x") shouldBe Vector(DirectiveStatement(Call("x", Vector.empty, loc(2, 1)), Some(" d ")))
+  }
+
+  it should "end without arguments where no `(` follows, the next token read as it would be otherwise" in {
+    statements("#x\na: 1\n#y, b: 2") shouldBe
+      Vector(
+        directive(Call("x", Vector.empty, loc(1, 1))),
+        field(k("a", 2, 1), str("1", 2, 4)),
+        directive(Call("y", Vector.empty, loc(3, 1))),
+        field(k("b", 3, 5), str("2", 3, 8))
+      )
+    errors("#x a: 1") shouldBe List(MissingSeparator(loc(1, 4)))
+  }
+
+  it should "go on past the lexer's errors in its arguments" in {
+    parse("#x(1.5)") shouldBe
+      Result(Document(Vector(directive(Call("x", Vector(arg("1.5", 1, 4)), loc(1, 1))))),
+        List(InvalidLiteral(loc(1, 4), "1.5")))
+    parse("#x(\"\"\"\n  a\n  \"\"\")") shouldBe
+      Result(Document(Vector(directive(Call("x", Vector(arg("a", 1, 4)), loc(1, 1))))),
+        List(TripleQuotedArgument(loc(1, 4))))
+    parse("#x(${a})") shouldBe
+      Result(Document(Vector(directive(Call("x", Vector(arg("${a}", 1, 4)), loc(1, 1))))),
+        List(SubstitutionInArgument(loc(1, 4))))
+    parse("#") shouldBe
+      Result(Document(Vector(directive(Call("", Vector.empty, loc(1, 1))))), List(MissingDirectiveName(loc(1, 1))))
+  }
+
+  "The arguments of a directive" should "be reported apart from its name" in {
+    errors("#x (a)") shouldBe List(DetachedArguments(loc(1, 4)))
+    errors("#x/**/(a)") shouldBe List(DetachedArguments(loc(1, 7)))
+    errors("#x\n\n(a)") shouldBe List(DetachedArguments(loc(3, 1)))
+    errors("a: #x (1)") shouldBe List(DetachedArguments(loc(1, 7)))
+  }
+
+  it should "be reported with a name given twice, or a positional one after a named one" in {
+    errors("#x(a = 1, a = 2)") shouldBe List(DuplicateArgument(loc(1, 11), "a"))
+    errors("#x(a = 1, 2)") shouldBe List(PositionalAfterNamed(loc(1, 11)))
+  }
+
+  it should "be reported empty, unclosed or closed by the wrong bracket" in {
+    errors("#x(1,,2)") shouldBe List(EmptyElement(loc(1, 6)))
+    errors("#x(1") shouldBe List(UnclosedBracket(loc(1, 3)))
+    errors("#x(1]") shouldBe List(UnmatchedBracket(loc(1, 5)))
+    errors("a: 1\n)") shouldBe List(UnmatchedBracket(loc(2, 1)))
+  }
+
+  it should "be reported where something else stands" in {
+    errors("#x(= 1)") shouldBe List(ExpectedArgument(loc(1, 4)))
+    errors("#x(@t)") shouldBe List(ExpectedArgument(loc(1, 4)))
+    errors("#x(a b)") shouldBe List(MissingSeparator(loc(1, 6)))
+    errors("#x(a: 1)") shouldBe List(MissingSeparator(loc(1, 5)))
+    errors("#x(/** d */ a)") shouldBe List(MisplacedDocComment(loc(1, 4)))
+  }
+
+  it should "be reported with a value missing, in backticks or with a substitution" in {
+    errors("#x(a = )") shouldBe List(MissingValue(loc(1, 8)))
+    errors("#x(a =\n1)") shouldBe List(MissingValue(loc(1, 7)))
+    errors("#x(`a`)") shouldBe List(BacktickedValue(loc(1, 4)))
+    errors("#x(a = `b`)") shouldBe List(BacktickedValue(loc(1, 8)))
+    errors("#x(\"${a}\")") shouldBe List(SubstitutionInArgument(loc(1, 5)))
   }
 
   "A fatal error of the lexer" should "be the only error at the end it causes" in {

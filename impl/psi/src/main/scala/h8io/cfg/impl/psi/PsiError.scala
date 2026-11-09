@@ -146,6 +146,27 @@ final case class ExpectedKey(location: SourceLocation) extends PsiError
 /** A key in `"…"` or `'…'`: a quoted key is written in backticks. */
 final case class QuotedKey(location: SourceLocation) extends PsiError
 
+/** A `"""` or `\'\'\'` string in a directive's arguments, which take `"…"` and `'…'` only; read all the same. */
+final case class TripleQuotedArgument(location: SourceLocation) extends PsiError
+
+/** An unquoted word in a directive's arguments that is neither a name by the key rule nor an integer, such as `1.5`,
+  * `007` or `a.b`; `literal` is the word. A value of any other shape is quoted.
+  */
+final case class InvalidLiteral(location: SourceLocation, literal: String) extends PsiError
+
+/** The `(` of a directive's arguments apart from its name, after whitespace, a comment or a newline: it touches the
+  * name, `#name(…)`. The error points at the `(`.
+  */
+final case class DetachedArguments(location: SourceLocation) extends PsiError
+
+/** In a directive's arguments, something that cannot start one, such as `=` or a tag. */
+final case class ExpectedArgument(location: SourceLocation) extends PsiError
+
+/** A value right after another, as in HOCON's `"jdbc:"\${host}` or `"a" \${b}`: values never join, and a concatenation
+  * is one scalar with `\${…}` inside it, `"jdbc:\${host}"`. The error points at the second value.
+  */
+final case class JoinedValues(location: SourceLocation) extends PsiError
+
 /** A value in backticks, which are for names: a quoted value is written in `"…"`. */
 final case class BacktickedValue(location: SourceLocation) extends PsiError
 
@@ -182,22 +203,19 @@ final case class MissingSeparator(location: SourceLocation) extends PsiError
   */
 final case class SpaceInValue(location: SourceLocation) extends PsiError
 
-/** An empty element or field: two `,` with no value between them, or a `,` before the first one; the error points at
-  * the `,` that has nothing before it.
+/** An empty element, field or argument: two `,` with nothing between them, or a `,` before the first one; the error
+  * points at the `,` that has nothing before it.
   */
 final case class EmptyElement(location: SourceLocation) extends PsiError
 
 /** A doc comment that does not stand before a field, a sequence element or a directive. */
 final case class MisplacedDocComment(location: SourceLocation) extends PsiError
 
-/** A `}` or `]` that closes nothing, or not the bracket opened last. */
+/** A `}`, `]` or `)` that closes nothing, or not the bracket opened last. */
 final case class UnmatchedBracket(location: SourceLocation) extends PsiError
 
-/** A `{` or `[` that the source ends without closing; the error points at the opening. */
+/** A `{`, `[` or `(` that the source ends without closing; the error points at the opening. */
 final case class UnclosedBracket(location: SourceLocation) extends PsiError
-
-/** Syntax that the format has and this version of the loader cannot read yet; `feature` names it. */
-final case class NotSupportedYet(location: SourceLocation, feature: String) extends PsiError
 
 /** Every error a load reported, in the order found. The loader reports as many as it can without inventing any. */
 final case class PsiErrors(errors: ::[PsiError]) extends CfgError
