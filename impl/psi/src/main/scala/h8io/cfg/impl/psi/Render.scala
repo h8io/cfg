@@ -100,9 +100,11 @@ private[psi] object Render {
     val _ = out ++= (if (optional) "${?" else "${") ++= path.path += '}'
   }
 
-  /** Whether `text` reads back alone, unquoted, as itself: the lexer's own answer, `null` being no string. */
+  /** Whether `text` reads back alone, unquoted, as itself: the lexer's own answer, `null` being no string. Half a
+    * surrogate pair the lexer takes, but no encoding writes it, so only an escape in quotes keeps it.
+    */
   private def bare(text: String): Boolean =
-    text != "null" && {
+    text != "null" && !text.indices.exists(unpaired(text, _)) && {
       val lexer = new Lexer(Source("", text))
       lexer.next(ValueMode).kind == Token.Scalar(Vector(Text(text)), quoted = false) &&
       lexer.next(ValueMode).kind == Token.End && lexer.errorCount == 0
@@ -141,9 +143,13 @@ private[psi] object Render {
   private def forbidden(text: String, i: Int): Boolean = {
     val c = text.charAt(i)
     Lexer.isControl(c) || Lexer.isInvisible(c) || c == '\u0085' || c == '\u2028' || c == '\u2029' ||
-    Character.isHighSurrogate(c) &&
-    !(i + 1 < text.length && Character.isLowSurrogate(text.charAt(i + 1))) ||
-    Character.isLowSurrogate(c) &&
-    !(i > 0 && Character.isHighSurrogate(text.charAt(i - 1)))
+    unpaired(text, i)
+  }
+
+  /** Half a surrogate pair at `i` of `text` with no other half. */
+  private def unpaired(text: String, i: Int): Boolean = {
+    val c = text.charAt(i)
+    Character.isHighSurrogate(c) && !(i + 1 < text.length && Character.isLowSurrogate(text.charAt(i + 1))) ||
+    Character.isLowSurrogate(c) && !(i > 0 && Character.isHighSurrogate(text.charAt(i - 1)))
   }
 }
