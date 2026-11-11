@@ -8,6 +8,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
+import java.nio.CharBuffer
+import java.nio.charset.{CodingErrorAction, StandardCharsets}
 import scala.collection.immutable
 
 class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks {
@@ -80,6 +82,12 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     Render.value(Tree.Scalar("\uD83D\uDE00 \u00A0", Set.empty, nowhere)) shouldBe "\"\uD83D\uDE00 \u00A0\""
   }
 
+  it should "quote a scalar with half a surrogate pair, which no encoding writes, escaping that half" in {
+    Render.value(Tree.Scalar("\uD800", Set.empty, nowhere)) shouldBe "\"\\uD800\""
+    Render.value(Tree.Scalar("a\uDC00", Set.empty, nowhere)) shouldBe "\"a\\uDC00\""
+    Render.value(Tree.Scalar("a\uD83D\uDE00", Set.empty, nowhere)) shouldBe "a\uD83D\uDE00"
+  }
+
   it should "write substitutions, and concatenations in quotes" in {
     Render.document(tree("a: ${b.c[0]}\nd: @t ${?e}\nf: x${g}y\nh: \"${i}\\\"\"")) shouldBe
       "a: ${b.c[0]}\nd: @t ${?e}\nf: \"x${g}y\"\nh: \"${i}\\\"\"\n"
@@ -90,7 +98,14 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     roundTrip("`a b`: @`t:x` \"q\\\"b\\\\d$x\\${y}\"\nf: x${g}y\nh: \"${i}\"\ns: \"\"")
   }
 
-  private val strings: Gen[String] = Gen.oneOf(arbitrary[String], Gen.alphaNumStr, Gen.oneOf("null", "", "a b", "${x}"))
+  private val strings: Gen[String] =
+    Gen.oneOf(
+      arbitrary[String],
+      Gen.alphaNumStr,
+      // ScalaCheck's own strings have no surrogates: whole range, and words with half a pair or both
+      Gen.stringOf(Gen.choose(Char.MinValue, Char.MaxValue)),
+      Gen.oneOf("null", "", "a b", "${x}", "\uD800", "a\uDC00", "\uDC00\uD800", "\uD83D\uDE00")
+    )
 
   private val tagSets: Gen[Set[String]] =
     Gen.frequency(3 -> Gen.const(Set.empty[String]), 1 -> Gen.listOf(strings).map(_.toSet))
@@ -167,7 +182,14 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   it should "write any tree so that it parses and merges back to the same tree" in
     forAll(maps(3).map(_.copy(tags = Set.empty)), minSuccessful(1000)) { (root: Tree.Map) =>
       val written = Render.document(root)
-      val parsed = Parser.parse(Source("s", written))
+      // through bytes, as a file is: what no encoding writes fails here, not in a user's file
+      val bytes = StandardCharsets.UTF_8
+        .newEncoder()
+        .onMalformedInput(CodingErrorAction.REPORT)
+        .onUnmappableCharacter(CodingErrorAction.REPORT)
+        .encode(CharBuffer.wrap(written))
+      val source = Source.decode("s", java.util.Arrays.copyOfRange(bytes.array, 0, bytes.limit))
+      val parsed = Parser.parse(source.fold(e => fail(e.toString), identity))
       withClue(written) {
         parsed.errors shouldBe Nil
         val merged = Merge(::((parsed.value, nowhere), Nil))
