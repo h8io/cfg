@@ -261,10 +261,12 @@ code is the lexer alone and nothing is published.
 ### 10. Directive and marker framework
 
 - Markers become handlers too (session 10, `format.md` §14): a builder,
-  `Psi.builder.withMarkers(…).withDirectives(…)`. `withDirectives` replaces the built-in set, whose
-  handlers are public values; `withMarkers` adds to the reserved `<`, `>`, `width` and `+`, and
-  registering one of those names is an error when the loader is built (session 12). A marker
-  handler maps the lines of a block to lines, at the layout stage. Until
+  `Psi.builder.withMarkers(…).withDirectives(…)`. `withMarkers` adds to the reserved `<`, `>`,
+  `width` and `+`, `withDirectives` to the reserved `include`; registering a reserved name, or any
+  name twice, is an error when the loader is built (sessions 12, 13). `disableDirective(name)`
+  turns a directive off for good: a call is a `DisabledDirective`, and registering a disabled name
+  is an error when the loader is built (session 13). A marker handler maps the lines of a block to
+  lines, at the layout stage. Until
   this step the lexer keeps the built-in markers hard-coded, as 2c wrote them.
 
 - The public extension API (§6, settled in session 11): a handler declares its parameters and gets
@@ -272,8 +274,8 @@ code is the lexer alone and nothing is published.
   URL, the URL stack for cycle detection, a way to parse another source), and returns a fragment —
   parsed through the context or built from a `Node` — that is a map (statement position) or any node
   (value position), or errors.
-- Unknown directive, wrong position (a statement directive returning a non-map), bad arguments —
-  local errors, the directive contributes nothing, expansion continues (§11).
+- Unknown or disabled directive, wrong position (a statement directive returning a non-map), bad
+  arguments — local errors, the directive contributes nothing, expansion continues (§11).
 - Statement-position results merge positionally into the enclosing block, so fields below override
   them (§6, §7).
 - **Spec gaps:** the rest of the API shape — it is public and hard to change later, so it is reviewed

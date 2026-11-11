@@ -290,10 +290,10 @@ marker handlers it knows, and a handler maps the lines of a block to lines (§14
 four above — `<`, `>`, `width` and `+` — are reserved**: every loader has them, and none can
 replace or remove them, so `"""<` means the same whatever loader reads the file. A loader's own
 markers are added to them, and registering one of the four names is an error when the loader is
-built. The layout rules depend on it as well: a block takes one marker that sets the indent, and
-Java's rule comes first when none does, which only holds if the markers that set it are known.
-Directives are not reserved, `#include` included (§6): a loader for input it does not trust can
-leave it out. Each of these is reported, none of them fatal, and the block is
+built, as is registering any name twice. The layout rules depend on it as well: a block takes one
+marker that sets the indent, and Java's rule comes first when none does, which only holds if the
+markers that set it are known. `#include` is reserved the same way, except that a loader can
+disable it (§6). Each of these is reported, none of them fatal, and the block is
 then read as with no marker: a marker the loader does not know; a named argument it does not take,
 a positional one past its last parameter, a positional one after a named one, an argument given
 twice — by name, or by position and then by name; a value it cannot take, an argument it requires
@@ -465,6 +465,16 @@ Directives are an open set. The loader is built with a set of handlers; the form
 the call syntax. An unknown directive is an error, never a silently ignored field — otherwise a typo
 in a directive name becomes a config silently missing half its content.
 
+**A name means one thing, or nothing** (session 13). A loader's directives are added to the
+built-in `#include`, and registering a name twice is an error when the loader is built, `include`
+included: no handler can silently shadow another, and `#include` means what this section says under
+every loader that has it. A loader can instead *disable* a name, whether a handler for it exists or
+not: a call of it is then a `DisabledDirective`, not an `UnknownDirective`, so a reader learns that
+the directive was turned off rather than misspelled. Disabling is final. Registering a disabled
+name, before or after disabling it, is an error when the loader is built, so a handler cannot bring
+a directive back; disabling a name twice counts once. This is how a loader for input it does not
+trust leaves out `#include`. Both restrictions can be lifted later without breaking a v1 file.
+
 **A handler's contract** (session 11). A handler declares the names of its parameters and gets the
 arguments as a `Node.IMap` keyed by them, positional arguments already laid out over the parameters
 in order, as markers' are (§5); so the map never mixes the two. Every value is a scalar string, as
@@ -483,7 +493,7 @@ In statement position the fragment must be a map, in value position any node (ab
 **Tags before a directive in value position** are added to the tags of the node it produces, as
 tags before a whole-value `${…}` are added to the grafted node's (§9): `a: @t #include(…)`.
 
-`#include` is the only built-in:
+`#include` is the only built-in, reserved and possibly disabled (above):
 
 ```
 #include(file: "conf.d/extra")              // relative to the including file's URL
@@ -703,8 +713,9 @@ mistake is worse than stopping.
 - **Some errors end the source.** An unterminated `"…"` or `"""…"""`, or an unbalanced bracket at
   end of input, leaves nothing trustworthy to resynchronise on; the parser reports it and stops
   *that source*.
-- **Directive failures are local.** A missing include, a cycle, an unknown directive or a bad
-  argument is reported, the directive contributes nothing, and expansion continues.
+- **Directive failures are local.** A missing include, a cycle, an unknown or disabled
+  directive or a bad argument is reported, the directive contributes nothing, and expansion
+  continues.
 - **Phases are gated.** If phases 1–2 (§8) produced any error, phases 3–5 do not run: substitutions
   over a tree with holes cut by recovery would report references to fields that exist but were lost
   in the skip. Syntax and directive errors come as one batch; substitution errors, if the first
@@ -1285,6 +1296,8 @@ hold; to be settled before #134 (step 2c) merges:
 - **`withMarkers` and `withDirectives` replace the built-in set**, not add to it: the user's call. A
   loader that wants `<` or `#include` alongside its own handlers registers them again, so the
   built-in handlers have to be public values.
+  **Superseded in session 12** for markers and **in session 13** for directives: both are added to
+  the built-in ones, and nothing is replaced.
 
 - **Markers are written as directives are called** (§5): a name — a run of symbols or a name by
   the key rule — and named arguments in parentheses, `name = literal`, markers separated by
@@ -1436,4 +1449,21 @@ Settled for plan step 4, the parser of substitutions and directives, later in se
   does — rely on knowing which markers set it. All four, `+` included, being layout the spec
   defines. Supersedes, for markers, session 10's "`withMarkers` and `withDirectives` replace the
   built-in set". Directives keep that rule: a loader for untrusted input has reason to leave out
-  `#include`.
+  `#include`. **Superseded for directives in session 13**: `#include` is reserved too, and is left
+  out by disabling it.
+
+### Session 13 — 2026-11-11
+
+- **A directive or marker name is registered once** (§5, §6): a second registration of a name is
+  an error when the loader is built, for markers and directives alike, whether the two come in one
+  call or in several. The user's call, for safety: a handler that silently shadows another, a
+  sandboxed `#include` replaced by one that is not, is found by nobody.
+- **`#include` is reserved, as the built-in markers are** (§6): `withDirectives` adds to it, and
+  registering `include` is the second registration above. What `#include(file: "x")` means then
+  does not depend on the loader reading the file.
+- **`disableDirective(name)` turns a directive off for good** (§6, §11): a call of it is a
+  `DisabledDirective`, not an `UnknownDirective`; registering a disabled name, before or after
+  disabling it, is an error when the loader is built, so a handler cannot bring it back. A name
+  with no handler can be disabled too. The user's call; it replaces session 10's way of leaving
+  `#include` out, a `withDirectives` that replaced the built-in set. Both restrictions are for now:
+  lifting either breaks no v1 file.
