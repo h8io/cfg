@@ -748,6 +748,27 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
     lexer.next(ValueMode) shouldBe Token(plain("a"), loc(1, 1), startsLine = true, spaced = false)
   }
 
+  "settle" should "keep the first errors and add one after them, going on from where the lexer stands" in {
+    val lexer = new Lexer(Source("s", "1a 2b 3c d"))
+    (1 to 3).foreach(_ => lexer.next(KeyMode))
+    lexer.settle(1, Some(ExpectedColon(loc(1, 1))))
+    lexer.errors shouldBe List(InvalidKey(loc(1, 1), "1a"), ExpectedColon(loc(1, 1)))
+    lexer.settle(5, None)
+    lexer.errors shouldBe List(InvalidKey(loc(1, 1), "1a"), ExpectedColon(loc(1, 1)))
+    lexer.next(KeyMode).kind shouldBe bare("d")
+  }
+
+  it should "keep a fatal error, and keep it last" in {
+    val lexer = new Lexer(Source("s", "1a 2b \"x"))
+    (1 to 3).foreach(_ => lexer.next(KeyMode))
+    lexer.halted shouldBe true
+    lexer.settle(1, Some(ExpectedColon(loc(1, 4))))
+    lexer.errors shouldBe List(InvalidKey(loc(1, 1), "1a"), ExpectedColon(loc(1, 4)), UnterminatedString(loc(1, 7)))
+    lexer.settle(0, None)
+    lexer.errors shouldBe List(UnterminatedString(loc(1, 7)))
+    lexer.halted shouldBe true
+  }
+
   "A tag" should "be read bare or in backticks" in {
     lex("@duration 5s @`tag:yaml.org,2002:int` 1") shouldBe
       Lexed(List(Tag("duration"), plain("5s"), Tag("tag:yaml.org,2002:int"), plain("1")), Nil)

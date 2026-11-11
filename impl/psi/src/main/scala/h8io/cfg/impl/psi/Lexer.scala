@@ -36,6 +36,19 @@ private[psi] final class Lexer(source: Source) {
     reported.remove(mark.reported, reported.length - mark.reported)
   }
 
+  /** Keeps the first `count` errors and forgets the rest, then adds `error`; a fatal error stays, and stays last.
+    *
+    * What the parser found goes in among the lexer's errors, in the order found, and what it skipped is forgotten.
+    */
+  def settle(count: Int, error: Option[PsiError]): Unit = {
+    // a fatal error is always the last one: nothing is read after it, and this puts it back last
+    val fatal = if (ended) Some(reported.remove(reported.length - 1)) else None
+    val kept = math.min(count, reported.length)
+    reported.remove(kept, reported.length - kept)
+    error.foreach(reported += _)
+    fatal.foreach(reported += _)
+  }
+
   /** Whether a fatal error has ended the source, so that its [[Token.End]] is no real end. */
   def halted: Boolean = ended
 

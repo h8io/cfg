@@ -19,12 +19,8 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     parsed.value.statements
   }
 
-  /** The errors of a source the parser stops on, which leaves an empty document. */
-  private def errors(text: String): List[PsiError] = {
-    val parsed = parse(text)
-    parsed.value shouldBe Document(Vector.empty)
-    parsed.errors
-  }
+  /** The errors of a source, whatever the parser made of the rest. */
+  private def errors(text: String): List[PsiError] = parse(text).errors
 
   private def loc(line: Int, column: Int): SourceLocation = SourceLocation("s", line, column)
 
@@ -144,8 +140,9 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
         List(ColonWithoutSpace(loc(1, 2)), InvalidKey(loc(2, 1), "1a")))
   }
 
-  it should "stop at its first error, keeping the lexer's errors before it" in {
-    errors("1a: x\nb = 2\nc d") shouldBe List(InvalidKey(loc(1, 1), "1a"), ExpectedColon(loc(2, 3)))
+  it should "report an error of its own among the lexer's, in the order found" in {
+    errors("1a: x\nb = 2\nc d") shouldBe
+      List(InvalidKey(loc(1, 1), "1a"), ExpectedColon(loc(2, 3)), ExpectedColon(loc(3, 3)))
   }
 
   "An empty element" should "be reported at the `,` with nothing before it" in {
@@ -173,7 +170,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     errors("a: 1 /** d */\nb: 2") shouldBe List(MisplacedDocComment(loc(1, 6)))
     errors("a: 1\n/** d */") shouldBe List(MisplacedDocComment(loc(2, 1)))
     errors("/** d */ /** e */ a: 1") shouldBe List(MisplacedDocComment(loc(1, 1)))
-    errors("/** d */, a: 1") shouldBe List(MisplacedDocComment(loc(1, 1)))
+    errors("/** d */, a: 1") shouldBe List(MisplacedDocComment(loc(1, 1)), EmptyElement(loc(1, 9)))
     errors("a { /** d */ }") shouldBe List(MisplacedDocComment(loc(1, 5)))
     errors("a: [1, /** d */\n]") shouldBe List(MisplacedDocComment(loc(1, 8)))
     errors("a /** d */: 1") shouldBe List(MisplacedDocComment(loc(1, 3)))
@@ -231,7 +228,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     errors("a:") shouldBe List(MissingValue(loc(1, 3)))
     errors("a: , b: 1") shouldBe List(MissingValue(loc(1, 4)))
     errors("a { b: }") shouldBe List(MissingValue(loc(1, 8)))
-    errors("a: ]") shouldBe List(MissingValue(loc(1, 4)))
+    errors("a: ]") shouldBe List(MissingValue(loc(1, 4)), UnmatchedBracket(loc(1, 4)))
     errors("a: @t") shouldBe List(MissingValue(loc(1, 6)))
     errors("a: [@t]") shouldBe List(MissingValue(loc(1, 7)))
   }
@@ -269,7 +266,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     errors("a: \"x\" y") shouldBe List(MissingSeparator(loc(1, 8)))
     errors("a: \"x\" \"y\"") shouldBe List(MissingSeparator(loc(1, 8)))
     errors("a: {} y") shouldBe List(MissingSeparator(loc(1, 7)))
-    errors("a: [] [") shouldBe List(MissingSeparator(loc(1, 7)))
+    errors("a: [] [") shouldBe List(MissingSeparator(loc(1, 7)), UnclosedBracket(loc(1, 7)))
   }
 
   it should "be reported missing between two elements, whitespace never separating" in {
@@ -444,21 +441,18 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     errors("#x a: 1") shouldBe List(MissingSeparator(loc(1, 4)))
   }
 
-  it should "go on past the lexer's errors in its arguments" in {
-    parse("#x(1.5)") shouldBe
-      Result(Document(Vector(directive(Call("x", Vector(arg("1.5", 1, 4)), loc(1, 1))))),
-        List(InvalidLiteral(loc(1, 4), "1.5")))
-    parse("#x(\"\"\"\n  a\n  \"\"\")") shouldBe
-      Result(Document(Vector(directive(Call("x", Vector(arg("a", 1, 4)), loc(1, 1))))),
-        List(TripleQuotedArgument(loc(1, 4))))
-    parse("#x(${a})") shouldBe
-      Result(Document(Vector(directive(Call("x", Vector(arg("${a}", 1, 4)), loc(1, 1))))),
-        List(SubstitutionInArgument(loc(1, 4))))
-    parse("#x(a:1)") shouldBe
-      Result(Document(Vector(directive(Call("x", Vector(named("a", "1", (1, 4), (1, 6))), loc(1, 1))))),
-        List(ColonWithoutSpace(loc(1, 5))))
-    parse("#") shouldBe
-      Result(Document(Vector(directive(Call("", Vector.empty, loc(1, 1))))), List(MissingDirectiveName(loc(1, 1))))
+  it should "be left out with the lexer's errors in it, its name's or its arguments'" in {
+    val empty = Document(Vector.empty)
+    parse("#x(1.5)") shouldBe Result(empty, List(InvalidLiteral(loc(1, 4), "1.5")))
+    parse("#x(\"\"\"\n  a\n  \"\"\")") shouldBe Result(empty, List(TripleQuotedArgument(loc(1, 4))))
+    parse("#x(${a})") shouldBe Result(empty, List(SubstitutionInArgument(loc(1, 4))))
+    parse("#x(a:1)") shouldBe Result(empty, List(ColonWithoutSpace(loc(1, 5))))
+    parse("#") shouldBe Result(empty, List(MissingDirectiveName(loc(1, 1))))
+    parse("a: #\nb: [#x(1.5), 2]") shouldBe
+      Result(
+        Document(Vector(field(k("b", 2, 1), Sequence(Vector(Element(str("2", 2, 14), None)), Set.empty, loc(2, 4))))),
+        List(MissingDirectiveName(loc(1, 4)), InvalidLiteral(loc(2, 8), "1.5"))
+      )
   }
 
   "A named argument" should "be reported with `=`, a field's `:` being what it takes" in {
@@ -498,6 +492,125 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     errors("#x(`a`)") shouldBe List(BacktickedValue(loc(1, 4)))
     errors("#x(a: `b`)") shouldBe List(BacktickedValue(loc(1, 7)))
     errors("#x(\"${a}\")") shouldBe List(SubstitutionInArgument(loc(1, 5)))
+  }
+
+  "Recovery" should "report every independent error, the fields around the broken ones read" in {
+    // the second word of a value is what breaks, after a field read whole
+    parse("a = 1\nb: 2\nc: foo bar\nd: 3 /** x */\ne: 4") shouldBe
+      Result(
+        Document(
+          Vector(
+            field(k("b", 2, 1), str("2", 2, 4)),
+            field(k("c", 3, 1), str("foo", 3, 4)),
+            field(k("d", 4, 1), str("3", 4, 4)),
+            field(k("e", 5, 1), str("4", 5, 4)))),
+        List(ExpectedColon(loc(1, 3)), SpaceInValue(loc(3, 8)), MisplacedDocComment(loc(4, 6)))
+      )
+  }
+
+  it should "skip a broken field to the next separator on its line, or to the bracket closing its block" in {
+    parse("a: , b: 1\nx { c = 1, d: 2 }\ny { e = 3 }") shouldBe
+      Result(
+        Document(
+          Vector(
+            field(k("b", 1, 6), str("1", 1, 9)),
+            field(k("x", 2, 1), Block(Vector(field(k("d", 2, 12), str("2", 2, 15))), Set.empty, loc(2, 3))),
+            field(k("y", 3, 1), Block(Vector.empty, Set.empty, loc(3, 3)))
+          )),
+        List(MissingValue(loc(1, 4)), ExpectedColon(loc(2, 7)), ExpectedColon(loc(3, 7)))
+      )
+  }
+
+  it should "skip the containers and the arguments inside a broken field whole, separators in them included" in {
+    parse("a = [1, {b: 2}, #x(c: 3)]\nd = {\n  e: 4\n}\nf = #y(\n  5)\ng: 6") shouldBe
+      Result(
+        Document(Vector(field(k("g", 7, 1), str("6", 7, 4)))),
+        List(ExpectedColon(loc(1, 3)), ExpectedColon(loc(2, 3)), ExpectedColon(loc(5, 3))))
+    parse("a = #x\nb = #y (1, 2)\nc: 3") shouldBe
+      Result(
+        Document(Vector(field(k("c", 3, 1), str("3", 3, 4)))), List(ExpectedColon(loc(1, 3)), ExpectedColon(loc(2, 3))))
+  }
+
+  it should "skip a broken element of a sequence, the elements around it read" in {
+    parse("a: [1, @t, 3, x y]") shouldBe
+      Result(
+        Document(
+          Vector(
+            field(
+              k("a", 1, 1),
+              Sequence(
+                Vector(Element(str("1", 1, 5), None), Element(str("3", 1, 12), None), Element(str("x", 1, 15), None)),
+                Set.empty,
+                loc(1, 4))))),
+        List(MissingValue(loc(1, 10)), MissingSeparator(loc(1, 17)))
+      )
+  }
+
+  it should "read on past an empty element" in {
+    parse("a: [x,,y]") shouldBe
+      Result(
+        Document(
+          Vector(
+            field(
+              k("a", 1, 1),
+              Sequence(Vector(Element(str("x", 1, 5), None), Element(str("y", 1, 8), None)), Set.empty, loc(1, 4))))),
+        List(EmptyElement(loc(1, 7)))
+      )
+  }
+
+  it should "read the line after a key with nothing after it, and skip a block on a line of its own" in {
+    parse("a\nb: 1\nc\n{ d: 2 }\ne: 3\nf: @t\n, g: 4") shouldBe
+      Result(
+        Document(
+          Vector(
+            field(k("b", 2, 1), str("1", 2, 4)),
+            field(k("e", 5, 1), str("3", 5, 4)),
+            field(k("g", 7, 3), str("4", 7, 6)))),
+        List(ExpectedColon(loc(1, 2)), BraceOnNextLine(loc(4, 1)), MissingValue(loc(6, 6)))
+      )
+  }
+
+  it should "skip a tag before a key with the field it stands before" in {
+    parse("@t a { b: 1 }\nc: 2") shouldBe
+      Result(Document(Vector(field(k("c", 2, 1), str("2", 2, 4)))), List(TagBeforeKey(loc(1, 1))))
+  }
+
+  it should "forget the lexer's errors in what it skips, but a fatal one" in {
+    parse("a = 1 */ 1b\nc: 1") shouldBe
+      Result(Document(Vector(field(k("c", 2, 1), str("1", 2, 4)))), List(ExpectedColon(loc(1, 3))))
+    errors("a = [ \"x") shouldBe List(ExpectedColon(loc(1, 3)), UnterminatedString(loc(1, 7)))
+  }
+
+  it should "report and skip a bracket that closes nothing at the top level" in {
+    parse("a: 1\n}\nb: 2") shouldBe
+      Result(
+        Document(Vector(field(k("a", 1, 1), str("1", 1, 4)), field(k("b", 3, 1), str("2", 3, 4)))),
+        List(UnmatchedBracket(loc(2, 1))))
+    errors("a = ] , b: 1") shouldBe List(ExpectedColon(loc(1, 3)), UnmatchedBracket(loc(1, 5)))
+    errors("a: 1 } b: 2") shouldBe List(UnmatchedBracket(loc(1, 6)), MissingSeparator(loc(1, 8)))
+  }
+
+  it should "end the source at a bracket that closes one further out, as unclosed, keeping what it read before" in {
+    parse("y: 0\nx { a: [1, 2 } b: 3 }\nc: 4") shouldBe
+      Result(Document(Vector(field(k("y", 1, 1), str("0", 1, 4)))), List(UnclosedBracket(loc(2, 8))))
+    errors("a = [ { ] }\nb: 1") shouldBe List(ExpectedColon(loc(1, 3)), UnclosedBracket(loc(1, 7)))
+  }
+
+  it should "end the source at a bracket that closes none open, inside a container or skipping" in {
+    errors("a { ] }\nb: 1") shouldBe List(UnmatchedBracket(loc(1, 5)))
+    errors("a = #x( ] )\nb: 1") shouldBe List(ExpectedColon(loc(1, 3)), UnmatchedBracket(loc(1, 9)))
+  }
+
+  it should "end the source unclosed when it ends skipping" in {
+    errors("a = [1,") shouldBe List(ExpectedColon(loc(1, 3)), UnclosedBracket(loc(1, 5)))
+  }
+
+  "The arguments of a broken directive" should "all be reported, the call left out and what follows it read" in {
+    parse("#x(a = 1, b: 2, 3, a: 4, b: 5)\nc: 1") shouldBe
+      Result(
+        Document(Vector(field(k("c", 2, 1), str("1", 2, 4)))),
+        List(EqualsInArgument(loc(1, 6)), PositionalAfterNamed(loc(1, 17)), DuplicateArgument(loc(1, 26), "b")))
+    errors("#x(1.5) a: 1") shouldBe List(InvalidLiteral(loc(1, 4), "1.5"), MissingSeparator(loc(1, 9)))
   }
 
   "A fatal error of the lexer" should "be the only error at the end it causes" in {
