@@ -8,12 +8,18 @@ import scala.util.control.ControlThrowable
 
 /** Reads the syntax tree of one source by recursive descent over its tokens (`format.md` §3, §4, §6, §9).
   *
-  * The lexer's errors are collected as it reports them, and it goes on past them. The parser itself stops at its first
-  * error for now; recovery at the synchronisation points of §11 is step 5 of the plan.
+  * The lexer's errors are collected as it reports them, and it goes on past them. So does the parser, at the
+  * synchronisation points of §11: a broken field, element or argument is reported, skipped to the next separator at its
+  * bracket depth or to the bracket closing its container, and left out of the tree. A directive call with any error in
+  * it is left out whole. An unbalanced bracket ends the source, as a fatal error of the lexer does; one that closes
+  * nothing at the top level is skipped.
   */
 private[psi] final class Parser(lexer: Lexer) {
 
-  /** How many errors the lexer had reported once the last token taken through [[next]] was read. */
+  /** How many errors had been reported before the last token taken through [[next]] was read. */
+  private var reportedBefore = 0
+
+  /** How many errors had been reported once the last token taken through [[next]] was read. */
   private var reportedAfter = 0
 
   /** Whether the last value read was an unquoted scalar, which a second word after it makes `a: foo bar`. */
@@ -22,19 +28,16 @@ private[psi] final class Parser(lexer: Lexer) {
   /** Whether the last value read held a substitution, which a value after it makes HOCON's `${a}"b"`. */
   private var substituted = false
 
-  def document(): Result[Ast.Document] =
-    try {
-      val statements = items(KeyMode, None, documented = true)(statement)
-      Result(Ast.Document(statements), lexer.errors)
-    } catch {
-      case Stop(error, reported) =>
-        val all = lexer.errors
-        // a fatal error is the last the lexer reports, and is kept even when found reading ahead
-        val fatal = if (lexer.halted && reported < all.length) List(all.last) else Nil
-        Result(Ast.Document(Vector.empty), all.take(reported) ++ error ++ fatal)
-    }
+  /** The brackets open around the token being read, innermost first. */
+  private var open: List[Closing] = Nil
+
+  def document(): Result[Ast.Document] = {
+    val statements = items(KeyMode, None, documented = true)(statement)
+    Result(Ast.Document(statements), lexer.errors)
+  }
 
   private def next(mode: Mode): Token = {
+    reportedBefore = lexer.errorCount
     val token = lexer.next(mode)
     reportedAfter = lexer.errorCount
     token
@@ -54,17 +57,31 @@ private[psi] final class Parser(lexer: Lexer) {
     if (token.kind == Newline) skipNewlines(mode) else token
   }
 
-  /** Stops at `error`, found at `token`, keeping the lexer's errors up to `reported`, and a fatal one wherever it was
-    * found. An error at the end of a source that a fatal error has ended is left out, and every error of the lexer
-    * kept: the fatal one is its cause (§11).
+  /** Breaks the item being read at `error`, found at `token`, keeping the lexer's errors up to `reported`; the item is
+    * skipped from `token` on. At the end of a source that a fatal error has ended nothing is reported but the fatal
+    * error, which is the cause (§11), and the source ends.
     */
   private def fail(token: Token, error: PsiError, reported: Int = reportedAfter): Nothing =
-    if (token.kind == End && lexer.halted) throw Stop(None, lexer.errorCount)
-    else throw Stop(Some(error), reported)
+    if (token.kind == End && lexer.halted) throw Halt(None, lexer.errorCount)
+    else throw Broken(error, reported, token)
+
+  /** Ends the source at `error`, found at `token`, keeping the lexer's errors up to `reported`. */
+  private def halt(token: Token, error: PsiError, reported: Int): Nothing =
+    if (token.kind == End && lexer.halted) throw Halt(None, lexer.errorCount)
+    else throw Halt(Some(error), reported)
+
+  /** Reports `error`, keeping the lexer's errors up to `reported`, and goes on. */
+  private def record(error: PsiError, reported: Int = reportedAfter): Unit = {
+    lexer.settle(reported, Some(error))
+    reportedAfter = lexer.errorCount
+  }
 
   /** The fields of a block, the elements of a sequence or the arguments of a directive, separated by `,` and newlines
     * (§3): a run of newlines with at most one `,` is one separator, and a `,` with no item before it in its container
     * is an empty element.
+    *
+    * A broken item is skipped (§11). A bracket that closes another container than this one ends the source when any is
+    * open, and is skipped when none is.
     *
     * @param closing
     *   the bracket that ends the container, with the location of the one that opened it; none for a document, which the
@@ -80,52 +97,139 @@ private[psi] final class Parser(lexer: Lexer) {
     var mark = lexer.mark()
     var token = next(mode)
     var done = false
-    while (!done)
-      token.kind match {
-        case Newline =>
-          separated = true
-          mark = lexer.mark()
-          token = next(mode)
-        case Comma =>
-          if (!afterItem) fail(token, EmptyElement(token.location))
-          afterItem = false
-          separated = true
-          mark = lexer.mark()
-          token = next(mode)
-        case End =>
-          closing match {
-            case Some(Closing(_, opening)) => fail(token, UnclosedBracket(opening))
-            case None => done = true
-          }
-        case RightBrace | RightBracket | RightParen =>
-          if (closing.exists(_.kind == token.kind)) done = true
-          else fail(token, UnmatchedBracket(token.location))
-        case kind =>
-          val (first, doc) = kind match {
-            case DocComment(text) if documented && separated => (documentedItem(token, mode), Some(text))
-            case DocComment(_) => fail(token, MisplacedDocComment(token.location))
-            case _ =>
-              if (!separated) afterValue(token, mode, mark)
-              (token, None)
-          }
-          read += item(first, doc)
-          afterItem = true
-          separated = false
-          mark = lexer.mark()
-          token = next(mode)
+    def advance(): Unit = {
+      mark = lexer.mark()
+      token = next(mode)
+    }
+    def itemAt(first: Token, doc: Option[String]): Unit = {
+      try {
+        if (!separated) afterValue(first, mode, mark)
+        read += item(first, doc)
+        advance()
+      } catch {
+        case Broken(error, reported, at) =>
+          record(error, reported)
+          token = skip(at, if (mode == ArgumentMode) ArgumentMode else ValueMode)
+        case Dropped => advance()
       }
+      afterItem = true
+      separated = false
+    }
+    open = closing.toList ++ open
+    try
+      while (!done)
+        token.kind match {
+          case Newline =>
+            separated = true
+            advance()
+          case Comma =>
+            if (!afterItem) record(EmptyElement(token.location))
+            afterItem = false
+            separated = true
+            advance()
+          case End =>
+            closing match {
+              case Some(Closing(_, opening)) => halt(token, UnclosedBracket(opening), reportedAfter)
+              case None => done = true
+            }
+          case RightBrace | RightBracket | RightParen =>
+            if (closing.exists(_.kind == token.kind)) done = true
+            else if (open.isEmpty) {
+              record(UnmatchedBracket(token.location))
+              advance()
+            } else closedElsewhere(token, reportedAfter)
+          case DocComment(text) if documented && separated =>
+            documentedItem(token, mode) match {
+              case Right(first) => itemAt(first, Some(text))
+              case Left(after) =>
+                // at the end a fatal error made, the doc comment may have stood before what it cut off
+                if (after.kind != End || !lexer.halted) record(MisplacedDocComment(token.location))
+                mark = lexer.mark()
+                token = after
+            }
+          case DocComment(_) =>
+            record(MisplacedDocComment(token.location))
+            advance()
+          case _ => itemAt(token, None)
+        }
+    catch {
+      case Halt(error, reported) if closing.isEmpty => lexer.settle(reported, error)
+    }
+    open = open.drop(closing.size)
     read.result()
   }
 
-  /** The first token of the item `doc` stands before, on its line or a later one; anything else after it makes it a
-    * misplaced doc comment.
+  /** A bracket, `token`, that closes none of the brackets open: an unclosed bracket when it closes one further out, a
+    * bracket closing nothing otherwise, either ending the source.
     */
-  @tailrec private def documentedItem(doc: Token, mode: Mode): Token = {
+  private def closedElsewhere(token: Token, reported: Int): Nothing =
+    if (open.exists(_.kind == token.kind)) halt(token, UnclosedBracket(open.head.opening), reported)
+    else halt(token, UnmatchedBracket(token.location), reported)
+
+  /** Skips a broken item from `token`, which is part of it, to the separator, closing bracket or end after it at the
+    * same bracket depth, and answers that. What the lexer finds on the way is forgotten, a fatal error but excepted:
+    * the tokens are read in a guessed mode, and the parser cannot tell what they were meant to be (§11).
+    */
+  private def skip(token: Token, mode: Mode): Token = {
+    val reported = lexer.errorCount
+    @tailrec def loop(token: Token): Token =
+      token.kind match {
+        case Newline | Comma | End | RightBrace | RightBracket | RightParen => token
+        case _ =>
+          skipOver(token, reported)
+          loop(lexer.next(mode))
+      }
+    val found = loop(token)
+    lexer.settle(reported, None)
+    reportedAfter = lexer.errorCount
+    found
+  }
+
+  /** Skips past `token`: a container it opens with everything in it, the arguments of a directive it names, `(` on the
+    * directive's line.
+    */
+  private def skipOver(token: Token, reported: Int): Unit =
+    token.kind match {
+      case LeftBrace => skipNested(Closing(RightBrace, token.location), ValueMode, reported)
+      case LeftBracket => skipNested(Closing(RightBracket, token.location), ValueMode, reported)
+      case LeftParen => skipNested(Closing(RightParen, token.location), ArgumentMode, reported)
+      case Directive(_) =>
+        // arguments apart from the name on its line are its still, or their separators would end the skipping
+        val mark = lexer.mark()
+        val paren = lexer.next(KeyMode)
+        if (paren.kind == LeftParen) skipOver(paren, reported) else lexer.reset(mark)
+      case _ => ()
+    }
+
+  /** Skips to the bracket that closes `closing`'s, reading in `mode`; the end of the source or a wrong bracket first
+    * ends it.
+    */
+  private def skipNested(closing: Closing, mode: Mode, reported: Int): Unit = {
+    open = closing :: open
+    @tailrec def loop(): Unit = {
+      val token = lexer.next(mode)
+      token.kind match {
+        case kind if kind == closing.kind => ()
+        case End => halt(token, UnclosedBracket(closing.opening), reported)
+        case RightBrace | RightBracket | RightParen => closedElsewhere(token, reported)
+        case _ =>
+          skipOver(token, reported)
+          loop()
+      }
+    }
+    loop()
+    open = open.tail
+  }
+
+  /** The first token of the item `doc` stands before, on its line or a later one; or, when something else follows,
+    * which makes it a misplaced doc comment, that.
+    */
+  @tailrec private def documentedItem(doc: Token, mode: Mode): Either[Token, Token] = {
     val token = next(mode)
     token.kind match {
       case Newline => documentedItem(doc, mode)
-      case Comma | RightBrace | RightBracket | End | DocComment(_) => fail(token, MisplacedDocComment(doc.location))
-      case _ => token
+      case Comma | RightBrace | RightBracket | End | DocComment(_) => Left(token)
+      case _ => Right(token)
     }
   }
 
@@ -133,25 +237,19 @@ private[psi] final class Parser(lexer: Lexer) {
     *
     * In a block that is a second field on the line, or a second word of a value, told apart by whether a field starts
     * there, read ahead in key mode. The word is then read again from `mark` in value mode, last, so that what the lexer
-    * reports is a value's — in key mode it may find an invalid key in a word of a value — and stays as found. A fatal
-    * error that only reading ahead reached is found again by reading on past the word.
+    * reports is a value's — in key mode it may find an invalid key in a word of a value — and stays as found.
     */
   private def afterValue(token: Token, mode: Mode, mark: Lexer.Mark): Nothing =
     mode match {
       case KeyMode =>
         lexer.reset(mark)
         val field = startsField(lexer.next(KeyMode))
-        val fatalAhead = lexer.halted
         lexer.reset(mark)
         val word = next(ValueMode)
-        val reported = reportedAfter
-        if (fatalAhead && !lexer.halted) {
-          val _ = lexer.next(ValueMode)
-        }
         // a word with a substitution in it starts no field, keys being never computed
         val error =
           if (field && !substitutes(word)) MissingSeparator(word.location) else wordError(word, inBlock = true)
-        fail(word, error, reported)
+        fail(word, error)
       case ValueMode => fail(token, wordError(token, inBlock = false))
       case ArgumentMode => fail(token, MissingSeparator(token.location))
     }
@@ -185,10 +283,7 @@ private[psi] final class Parser(lexer: Lexer) {
   private def statement(first: Token, doc: Option[String]): Ast.Statement =
     first.kind match {
       case Name(name, _) => keys(Ast.Key(name, first.location), Nil, doc)
-      case Directive(name) =>
-        val directive = call(first, name)
-        ended()
-        Ast.DirectiveStatement(directive, doc)
+      case Directive(name) => Ast.DirectiveStatement(call(first, name), doc)
       case Tag(_) => fail(first, TagBeforeKey(first.location))
       case Scalar(_, _) => fail(first, QuotedKey(first.location))
       case _ => fail(first, ExpectedKey(first.location))
@@ -197,6 +292,7 @@ private[psi] final class Parser(lexer: Lexer) {
   /** The rest of a field after its first key; `rest` holds the keys after the first, last first. */
   @tailrec private def keys(head: Ast.Key, rest: List[Ast.Key], doc: Option[String]): Ast.Field = {
     def path = ::(head, rest.reverse)
+    val mark = lexer.mark()
     val token = next(KeyMode)
     token.kind match {
       case Dot => keys(head, dotted(token) :: rest, doc)
@@ -206,7 +302,9 @@ private[psi] final class Parser(lexer: Lexer) {
       case Tag(_) => fail(token, TagAfterKey(token.location))
       case Newline =>
         val after = skipNewlines(KeyMode)
-        fail(token, if (after.kind == LeftBrace) BraceOnNextLine(after.location) else ExpectedColon(token.location))
+        if (after.kind == LeftBrace) fail(after, BraceOnNextLine(after.location))
+        lexer.reset(mark)
+        fail(next(KeyMode), ExpectedColon(token.location))
       case DocComment(_) => fail(token, MisplacedDocComment(token.location))
       case _ => fail(token, ExpectedColon(token.location))
     }
@@ -235,16 +333,14 @@ private[psi] final class Parser(lexer: Lexer) {
         val elements = items(ValueMode, Some(Closing(RightBracket, token.location)), documented = true)(element)
         ended()
         Ast.Sequence(elements, tags, token.location)
-      case Directive(name) =>
-        val directive = call(token, name)
-        ended()
-        Ast.DirectiveValue(directive, tags)
+      case Directive(name) => Ast.DirectiveValue(call(token, name), tags)
       case Name(_, _) => fail(token, BacktickedValue(token.location))
       case Newline =>
         val after = skipNewlines(ValueMode)
         after.kind match {
           case Scalar(_, _) | LeftBrace | LeftBracket | Tag(_) | Directive(_) | Name(_, _) =>
             fail(after, ValueOnNextLine(after.location))
+          // a separator, a closing bracket, the end or a doc comment, where skipping stops or which it drops
           case _ => fail(after, MissingValue(token.location))
         }
       case DocComment(_) => fail(token, MisplacedDocComment(token.location))
@@ -280,43 +376,50 @@ private[psi] final class Parser(lexer: Lexer) {
 
   private def element(first: Token, doc: Option[String]): Ast.Element = Ast.Element(value(first, Set.empty), doc)
 
-  /** A directive from its `#name` token: with its arguments when a `(` touches the name, with none when nothing does —
-    * a `(` apart from the name, on its line or a later one, is an error (§6).
+  /** A directive from its `#name` token, the last one read: with its arguments when a `(` touches the name, with none
+    * when nothing does — a `(` apart from the name, on its line or a later one, is an error (§6).
+    *
+    * A call with any error in it, its name's or its arguments', is read to its end and then left out, its item with it:
+    * a handler must not run on arguments that are not what was meant (§11).
     */
   private def call(directive: Token, name: String): Ast.Call = {
+    val before = reportedBefore
     val mark = lexer.mark()
     val token = next(KeyMode)
-    token.kind match {
-      case LeftParen if !token.spaced => Ast.Call(name, arguments(token), directive.location)
+    val read = token.kind match {
+      case LeftParen if !token.spaced => arguments(token)
       case LeftParen => fail(token, DetachedArguments(token.location))
       case Newline =>
         val after = skipNewlines(KeyMode)
         if (after.kind == LeftParen) fail(after, DetachedArguments(after.location))
         rewind(mark)
-        Ast.Call(name, Vector.empty, directive.location)
+        Vector.empty
       case _ =>
         rewind(mark)
-        Ast.Call(name, Vector.empty, directive.location)
+        Vector.empty
     }
+    ended()
+    if (lexer.errorCount > before) throw Dropped
+    Ast.Call(name, read, directive.location)
   }
 
-  /** The arguments after `open`, positional ones first and no name twice (§6). */
+  /** The arguments after `open`, positional ones first and no name twice (§6), each one out of place reported. */
   private def arguments(open: Token): Vector[Ast.Argument] = {
     val read = items(ArgumentMode, Some(Closing(RightParen, open.location)), documented = false)((first, _) =>
       argument(first))
-    check(open, read.toList, Set.empty)
+    check(read.toList, Set.empty)
     read
   }
 
-  /** Stops at an argument after a named one that is positional, or named as one before it. */
-  @tailrec private def check(open: Token, arguments: List[Ast.Argument], named: Set[String]): Unit =
+  /** Reports each argument after a named one that is positional, or named as one before it. */
+  @tailrec private def check(arguments: List[Ast.Argument], named: Set[String]): Unit =
     arguments match {
       case Ast.Argument(Some(name), _, location, _) :: rest =>
-        if (named(name)) fail(open, DuplicateArgument(location, name))
-        check(open, rest, named + name)
+        if (named(name)) record(DuplicateArgument(location, name), lexer.errorCount)
+        check(rest, named + name)
       case Ast.Argument(None, _, location, _) :: rest =>
-        if (named.nonEmpty) fail(open, PositionalAfterNamed(location))
-        check(open, rest, named)
+        if (named.nonEmpty) record(PositionalAfterNamed(location), lexer.errorCount)
+        check(rest, named)
       case Nil => ()
     }
 
@@ -362,6 +465,16 @@ private[psi] object Parser {
   /** The bracket that closes a container, and where the one that opened it stands. */
   private final case class Closing(kind: Kind, opening: SourceLocation)
 
-  /** The first error, and how many of the lexer's errors stand before it. */
-  private final case class Stop(error: Option[PsiError], reported: Int) extends ControlThrowable
+  /** An item broken at `error`, found at `at`, with how many of the lexer's errors stand before it: the item is skipped
+    * from `at` on.
+    */
+  private final case class Broken(error: PsiError, reported: Int, at: Token) extends ControlThrowable
+
+  /** The end of the source before its end: at `error`, if any but the lexer's fatal one, with how many of the lexer's
+    * errors stand before it.
+    */
+  private final case class Halt(error: Option[PsiError], reported: Int) extends ControlThrowable
+
+  /** An item read to its end that is left out, its errors already reported. */
+  private case object Dropped extends ControlThrowable
 }

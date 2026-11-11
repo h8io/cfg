@@ -68,7 +68,7 @@ at the phase gate.
 | 2d | Rename DEF to Ψ (Psi) | done |
 | 3 | Ast and parser: core syntax | done |
 | 4 | Parser: substitutions and directives | done |
-| 5 | Parser: error recovery | todo |
+| 5 | Parser: error recovery | done |
 | 6 | Merge | todo |
 | 7 | Node views and the loader, end to end | todo |
 | 8 | Renderer and round-trip property tests | todo |
@@ -205,6 +205,9 @@ code is the lexer alone and nothing is published.
   the `}` closing the block; unbalanced brackets at end of input end the source.
 - Tests: several independent errors in one file are all reported, a broken field does not hide the
   next one, no cascade errors after a recovered one.
+- **Spec gaps:** settled in session 14 (`format.md` §11, §14): sequences and arguments recover as
+  blocks do; a call with an error is left out whole; a bracket closing another than the innermost
+  open one ends the source; skipped items leave holes, not nodes.
 
 ### 6. Merge
 

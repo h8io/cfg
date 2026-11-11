@@ -706,13 +706,26 @@ The goal is **as many errors per run as can be reported without inventing any**:
 config should not have to rerun the loader once per mistake, but a cascade of consequences of one
 mistake is worse than stopping.
 
-- **Parsing recovers at synchronisation points.** A broken field is skipped to the next field
-  separator (newline or `,`) at the same bracket depth, or to the `}` closing its block; the parser
-  tracks bracket depth to find them. The braced syntax is what makes this cheap. Each source is
-  parsed independently, so an error in one file never hides errors in another.
-- **Some errors end the source.** An unterminated `"…"` or `"""…"""`, or an unbalanced bracket at
-  end of input, leaves nothing trustworthy to resynchronise on; the parser reports it and stops
-  *that source*.
+- **Parsing recovers at synchronisation points.** A broken item is skipped to the next separator
+  (newline or `,`) at the same bracket depth, or to the bracket closing its container; the parser
+  tracks bracket depth to find them, and skips a container or a directive's arguments inside the
+  broken item whole. The item is a field in a block, an element in `[…]` and an argument in
+  `#x(…)` alike. The braced syntax is what makes this cheap. Each source is parsed independently,
+  so an error in one file never hides errors in another.
+- **What recovery skips leaves a hole.** The broken item is left out of the syntax tree, with no
+  node of its own standing for it; phases 3–5 never see the tree (below), and a directive's
+  arguments are literals, so no hole can make an error of its own. What the lexer finds in skipped
+  text is not reported, a fatal error excepted: the parser cannot tell what the text was meant to be.
+- **A directive call with any error in it is left out whole**, with the field or element it is the
+  value of. Every error in its arguments is reported, a duplicate name and a positional argument
+  after a named one included, but its handler never runs on arguments that are not what was meant.
+- **Some errors end the source.** An unterminated `"…"` or `"""…"""`, or an unbalanced bracket,
+  leaves nothing trustworthy to resynchronise on; the parser reports it and stops *that source*,
+  keeping the fields read before it. A bracket is unbalanced at the end of input, and where it
+  closes another one than the innermost open — `x { a: [1 }`, reported as the `[` unclosed when the
+  bracket closes one further out, as a bracket closing nothing otherwise: where the inner one was
+  meant to close is a guess, and a wrong guess makes errors of its own. A closing bracket with
+  nothing open at all, at the top level, is reported and skipped.
 - **Directive failures are local.** A missing include, a cycle, an unknown or disabled
   directive or a bad argument is reported, the directive contributes nothing, and expansion
   continues.
@@ -1467,3 +1480,31 @@ Settled for plan step 4, the parser of substitutions and directives, later in se
   with no handler can be disabled too. The user's call; it replaces session 10's way of leaving
   `#include` out, a `withDirectives` that replaced the built-in set. Both restrictions are for now:
   lifting either breaks no v1 file.
+
+### Session 14 — 2026-11-11
+
+Spec gaps of plan step 5, error recovery in the parser, settled with the user before coding it
+(§11). §11 named one synchronisation point, a field's; the four questions were where the others
+are, and what the tree holds where an item was skipped.
+
+- **A sequence and a directive's arguments recover as a block does**: a broken element or argument
+  is skipped to the next separator at its depth or to its closing bracket, and the rest are read.
+  Rejected: dropping the whole sequence at its first broken element, which hides the errors in the
+  others.
+- **A directive call with an error in it is left out whole**, after every error in it is reported:
+  a handler run on the arguments that survived would report a missing one that is not missing.
+  The lexer's errors count, `#x(1.5)` and `#` alone included.
+- **A closing bracket that closes another than the innermost open one ends the source**,
+  as unbalanced brackets at the end of input already did. Proposed first: skip a bracket that no
+  open one of its kind waits for, and go on. Implementing it showed that inside a container this
+  makes a cascade — after `a: [1}` the next field is read as elements of the sequence — so only a
+  bracket at the top level with nothing open is skipped. A bracket closing one further out, as in
+  `x { a: [1, 2 } b: 3 }`, is reported as the inner one unclosed, as proposed: guessing where it was
+  meant to close would make errors of its own after a wrong guess.
+- **A skipped item leaves a hole, not a node** (§11). An error node would serve an IDE some day;
+  adding it then breaks no file.
+- **What the lexer finds in skipped text is forgotten, a fatal error excepted.** Not raised with
+  the user: decided while implementing, from §11's rule against invented errors — the parser skips
+  in a mode it guesses, and an error of that guess is no error of the source. Skipping reads in
+  value mode, and a directive's arguments in argument mode, so that a quote opens a string in both
+  and a `"` inside an unquoted word does not end the source.
