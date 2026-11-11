@@ -41,8 +41,10 @@ object Psi {
       root <- (documents.flatten.toList match {
         case (document, name) :: rest =>
           val located = rest.map { case (document, name) => (document, SourceLocation(name, 1, 1)) }
-          Merge(::((document, SourceLocation(name, 1, 1)), located)).flatMap(resolve).map(map =>
-            MapImpl(Id.Root, map, map.location))
+          val merged = Merge(::((document, SourceLocation(name, 1, 1)), located)).flatMap(resolve)
+          // merging and resolving go by key, not by source: the errors are put back in the order of the sources
+          val sources = name :: rest.map(_._2)
+          Result(MapImpl(Id.Root, merged.value, merged.value.location), merged.errors.sortBy(_.location.order(sources)))
         // the tree's site is never shown: the view has a location of its own
         case Nil => Result.pure(MapImpl(Id.Root, Tree.Map.empty(Set.empty, SourceLocation("", 1, 1)), NoSourceLocation))
       }).toEither
