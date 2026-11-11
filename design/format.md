@@ -849,6 +849,25 @@ mistake is worse than stopping.
    source included twice not through itself (no cycle, so presumably allowed; parsed again or cached), and where the error
    points. To be settled in plan step 10.
 
+6. **Meta-fields.** Raised by the user in session 15, **after v1**: a meta-field `id`, the key or
+   index of an object, to start with. The protocol already gives every node its `Id`; what a
+   meta-field adds is the value inside the config text, where it makes templates of substitutions:
+
+   ```
+   defaults { name: ${@id}, host: "${@id}.internal" }   // `${@id}` a placeholder syntax
+   servers {
+     alpha: ${defaults}     // name: alpha, host: alpha.internal
+     beta:  ${defaults}
+   }
+   ```
+
+   Nothing is decided. Open: whose `id` — the object the field stands in, or the field's own, and a
+   way up to a parent's; when it binds — where the node ends up after merging and grafting, which the
+   template needs and which puts it in phase 4 (§8, §9), or where it is written; the syntax, which no
+   key, tag, directive or `Id.path` may clash with; what it gives at the root, and in a directive's
+   arguments, where substitutions are not allowed (§6); which other meta-fields (`path`, `parent`,
+   the source, the tags) and whether their set is fixed or open, with handlers like directives.
+
 ## 14. Decision log
 
 Each entry records what was chosen, and — where it matters — what was rejected and why. A rejected
