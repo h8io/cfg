@@ -71,7 +71,7 @@ at the phase gate.
 | 5 | Parser: error recovery | done |
 | 6 | Merge | done |
 | 7 | Node views and the loader, end to end | done |
-| 8 | Renderer and round-trip property tests | todo |
+| 8 | Renderer and round-trip property tests | done |
 | 9 | Substitutions | todo |
 | 10 | Directive and marker framework | todo |
 | 11 | `#include` | todo |
@@ -243,6 +243,8 @@ code is the lexer alone and nothing is published.
   needed, tags, `null`, nested blocks.
 - ScalaCheck generator for Trees; property: render → parse → merge gives the same tree. This is the
   main defence against parser corner cases, and it guards §3's `Id.path` promise from the other side.
+- **Spec gaps:** settled in session 17 (`format.md` §14): a field per line, maps in the block form,
+  scalars quoted only when they must be, tags sorted, the renderer internal for now.
 
 ### 9. Substitutions
 
