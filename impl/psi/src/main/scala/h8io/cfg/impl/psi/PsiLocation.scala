@@ -36,6 +36,13 @@ final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLo
   def description: String = parts.iterator.map(_.reference).mkString(at.description + " (", ", ", ")")
 }
 
+/** A map defined in more places than one, merged (`format.md` §7, §10): `at` is where it was defined last, `earlier`
+  * the places before, the latest first.
+  */
+final case class MergedLocation(at: SourceLocation, earlier: ::[SourceLocation]) extends PsiLocation {
+  def description: String = earlier.iterator.map(_.description).mkString(at.description + " (also ", ", ", ")")
+}
+
 /** A value read from the system property `name`. */
 final case class SystemPropertyLocation(name: String) extends PsiLocation {
   def description: String = "system property " + name
