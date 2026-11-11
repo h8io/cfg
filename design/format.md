@@ -871,6 +871,17 @@ mistake is worse than stopping.
    arguments, where substitutions are not allowed (§6); which other meta-fields (`path`, `parent`,
    the source, the tags) and whether their set is fixed or open, with handlers like directives.
 
+   **Session 16, the user's addition: meta-fields of any node.** A meta-field is read off whatever
+   node a path leads to, `${path^meta}`; with no path, `${^meta}`, off the object the reference
+   stands in. `^` is the user's placeholder, open to change. Proposed alongside, not decided:
+   `${^^meta}` for the parent's, one `^` per level up, as git's `HEAD^^`. Noted so far:
+   - The syntax is free: `^` is outside `Id.SafeKeyPattern`, so `${a.b^id}` splits into a path and a
+     meta-field with no ambiguity, a key with `^` in it is written in backticks as any other, and
+     `${a^…}` is an error today, so adding it later breaks no v1 file.
+   - With a path, `id` says little — it is the path's last segment — but other meta-fields do:
+     `${workers^size}`, `${db^tags}`, `${db.url^source}`. The user had no use for `${field^id}` yet.
+   - With the options of item 4, presumably node, meta-field, then options: `${a^size; …}`.
+
 ## 14. Decision log
 
 Each entry records what was chosen, and — where it matters — what was rejected and why. A rejected
