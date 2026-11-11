@@ -1505,6 +1505,8 @@ are, and what the tree holds where an item was skipped.
   adding it then breaks no file.
 - **What the lexer finds in skipped text is forgotten, a fatal error excepted.** Not raised with
   the user: decided while implementing, from §11's rule against invented errors — the parser skips
-  in a mode it guesses, and an error of that guess is no error of the source. Skipping reads in
-  value mode, and a directive's arguments in argument mode, so that a quote opens a string in both
-  and a `"` inside an unquoted word does not end the source.
+  in a mode it guesses, and an error of that guess is no error of the source. Skipping switches
+  modes as the parser does: in a block a key at the start of an item and a value after `:`, `:=`
+  or `=`, a value in `[…]`, an argument in `(…)`; the broken item itself goes on in the mode the
+  parser read last. Reading a block in value mode alone, as the first version did, takes `b{c:`
+  for one word and ends the block at the wrong `}` (found in review of #154).

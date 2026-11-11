@@ -531,6 +531,35 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
         Document(Vector(field(k("c", 3, 1), str("3", 3, 4)))), List(ExpectedColon(loc(1, 3)), ExpectedColon(loc(2, 3))))
   }
 
+  it should "read what it skips in the modes the parser would, keys and values in a block told apart" in {
+    // `b{c: 1}` is a key and its block; read as a value, `b{c:` would be one word and the first `}` end the block
+    parse("a = {b{c: 1}, #run()}\nz: 3") shouldBe
+      Result(Document(Vector(field(k("z", 2, 1), str("3", 2, 4)))), List(ExpectedColon(loc(1, 3))))
+    parse("a = {\n  b: x{y\n  c{d: [e{f]}\n}\nz: 3") shouldBe
+      Result(Document(Vector(field(k("z", 5, 1), str("3", 5, 4)))), List(ExpectedColon(loc(1, 3))))
+    parse("a: {b{c: 1}, d: x y, e{f: 2}}\nz: 3") shouldBe
+      Result(
+        Document(
+          Vector(
+            field(
+              k("a", 1, 1),
+              Block(
+                Vector(
+                  field(k("b", 1, 5), Block(Vector(field(k("c", 1, 7), str("1", 1, 10))), Set.empty, loc(1, 6))),
+                  field(k("d", 1, 14), str("x", 1, 17)),
+                  field(k("e", 1, 22), Block(Vector(field(k("f", 1, 24), str("2", 1, 27))), Set.empty, loc(1, 23)))
+                ),
+                Set.empty,
+                loc(1,
+                  4)
+              )
+            ),
+            field(k("z", 2, 1), str("3", 2, 4))
+          )),
+        List(SpaceInValue(loc(1, 19)))
+      )
+  }
+
   it should "skip a broken element of a sequence, the elements around it read" in {
     parse("a: [1, @t, 3, x y]") shouldBe
       Result(
@@ -611,6 +640,13 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
         Document(Vector(field(k("c", 2, 1), str("1", 2, 4)))),
         List(EqualsInArgument(loc(1, 6)), PositionalAfterNamed(loc(1, 17)), DuplicateArgument(loc(1, 26), "b")))
     errors("#x(1.5) a: 1") shouldBe List(InvalidLiteral(loc(1, 4), "1.5"), MissingSeparator(loc(1, 9)))
+  }
+
+  it should "be reported as each argument is read, before an error that ends the source" in {
+    errors("#x(a: 1, a: 2, \"unfinished") shouldBe
+      List(DuplicateArgument(loc(1, 10), "a"), UnterminatedString(loc(1, 16)))
+    errors("#x(a: 1, 2, ]") shouldBe List(PositionalAfterNamed(loc(1, 10)), UnmatchedBracket(loc(1, 13)))
+    errors("#x(a: 1, b = 2, 3)") shouldBe List(EqualsInArgument(loc(1, 12)), PositionalAfterNamed(loc(1, 17)))
   }
 
   "A fatal error of the lexer" should "be the only error at the end it causes" in {

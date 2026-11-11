@@ -28,6 +28,9 @@ private[psi] final class Parser(lexer: Lexer) {
   /** Whether the last value read held a substitution, which a value after it makes HOCON's `${a}"b"`. */
   private var substituted = false
 
+  /** The mode the last token taken through [[next]] was read in, where skipping a broken item goes on in. */
+  private var reading: Mode = KeyMode
+
   /** The brackets open around the token being read, innermost first. */
   private var open: List[Closing] = Nil
 
@@ -38,6 +41,7 @@ private[psi] final class Parser(lexer: Lexer) {
 
   private def next(mode: Mode): Token = {
     reportedBefore = lexer.errorCount
+    reading = mode
     val token = lexer.next(mode)
     reportedAfter = lexer.errorCount
     token
@@ -109,7 +113,7 @@ private[psi] final class Parser(lexer: Lexer) {
       } catch {
         case Broken(error, reported, at) =>
           record(error, reported)
-          token = skip(at, if (mode == ArgumentMode) ArgumentMode else ValueMode)
+          token = skip(at, mode)
         case Dropped => advance()
       }
       afterItem = true
@@ -167,57 +171,69 @@ private[psi] final class Parser(lexer: Lexer) {
     else halt(token, UnmatchedBracket(token.location), reported)
 
   /** Skips a broken item from `token`, which is part of it, to the separator, closing bracket or end after it at the
-    * same bracket depth, and answers that. What the lexer finds on the way is forgotten, a fatal error but excepted:
-    * the tokens are read in a guessed mode, and the parser cannot tell what they were meant to be (§11).
+    * same bracket depth, and answers that. The item is in a container whose items start in `context` and goes on in the
+    * mode the parser read last.
+    *
+    * What the lexer finds on the way is forgotten, a fatal error but excepted: the tokens are read in a guessed mode,
+    * and the parser cannot tell what they were meant to be (§11).
     */
-  private def skip(token: Token, mode: Mode): Token = {
+  private def skip(token: Token, context: Mode): Token = {
     val reported = lexer.errorCount
-    @tailrec def loop(token: Token): Token =
+    @tailrec def loop(token: Token, mode: Mode): Token =
       token.kind match {
         case Newline | Comma | End | RightBrace | RightBracket | RightParen => token
         case _ =>
-          skipOver(token, reported)
-          loop(lexer.next(mode))
+          val after = skipOver(token, context, mode, reported)
+          loop(lexer.next(after), after)
       }
-    val found = loop(token)
+    val found = loop(token, reading)
     lexer.settle(reported, None)
     reportedAfter = lexer.errorCount
     found
   }
 
-  /** Skips past `token`: a container it opens with everything in it, the arguments of a directive it names, `(` on the
-    * directive's line.
+  /** Skips past `token`, read in `mode` in a container whose items start in `context`: a container it opens with
+    * everything in it, the arguments of a directive it names, `(` on the directive's line. Answers the mode to read on
+    * in, as the parser would: in a block, a value after `:`, `:=` or `=`, a key after a separator.
     */
-  private def skipOver(token: Token, reported: Int): Unit =
+  private def skipOver(token: Token, context: Mode, mode: Mode, reported: Int): Mode =
     token.kind match {
-      case LeftBrace => skipNested(Closing(RightBrace, token.location), ValueMode, reported)
-      case LeftBracket => skipNested(Closing(RightBracket, token.location), ValueMode, reported)
-      case LeftParen => skipNested(Closing(RightParen, token.location), ArgumentMode, reported)
+      case LeftBrace =>
+        skipNested(Closing(RightBrace, token.location), KeyMode, reported)
+        mode
+      case LeftBracket =>
+        skipNested(Closing(RightBracket, token.location), ValueMode, reported)
+        mode
+      case LeftParen =>
+        skipNested(Closing(RightParen, token.location), ArgumentMode, reported)
+        mode
       case Directive(_) =>
         // arguments apart from the name on its line are its still, or their separators would end the skipping
         val mark = lexer.mark()
         val paren = lexer.next(KeyMode)
-        if (paren.kind == LeftParen) skipOver(paren, reported) else lexer.reset(mark)
-      case _ => ()
+        if (paren.kind == LeftParen) skipNested(Closing(RightParen, paren.location), ArgumentMode, reported)
+        else lexer.reset(mark)
+        mode
+      case Newline | Comma => context
+      case Colon | Replace | Equals if context == KeyMode => ValueMode
+      case _ => mode
     }
 
-  /** Skips to the bracket that closes `closing`'s, reading in `mode`; the end of the source or a wrong bracket first
-    * ends it.
+  /** Skips to the bracket that closes `closing`'s, its items starting in `context`; the end of the source or a wrong
+    * bracket first ends it.
     */
-  private def skipNested(closing: Closing, mode: Mode, reported: Int): Unit = {
+  private def skipNested(closing: Closing, context: Mode, reported: Int): Unit = {
     open = closing :: open
-    @tailrec def loop(): Unit = {
+    @tailrec def loop(mode: Mode): Unit = {
       val token = lexer.next(mode)
       token.kind match {
         case kind if kind == closing.kind => ()
         case End => halt(token, UnclosedBracket(closing.opening), reported)
         case RightBrace | RightBracket | RightParen => closedElsewhere(token, reported)
-        case _ =>
-          skipOver(token, reported)
-          loop()
+        case _ => loop(skipOver(token, context, mode, reported))
       }
     }
-    loop()
+    loop(context)
     open = open.tail
   }
 
@@ -403,25 +419,22 @@ private[psi] final class Parser(lexer: Lexer) {
     Ast.Call(name, read, directive.location)
   }
 
-  /** The arguments after `open`, positional ones first and no name twice (§6), each one out of place reported. */
+  /** The arguments after `open`, positional ones first and no name twice (§6). Each one out of place is reported as it
+    * is read, so that an error further on that ends the source does not hide it.
+    */
   private def arguments(open: Token): Vector[Ast.Argument] = {
-    val read = items(ArgumentMode, Some(Closing(RightParen, open.location)), documented = false)((first, _) =>
-      argument(first))
-    check(read.toList, Set.empty)
-    read
-  }
-
-  /** Reports each argument after a named one that is positional, or named as one before it. */
-  @tailrec private def check(arguments: List[Ast.Argument], named: Set[String]): Unit =
-    arguments match {
-      case Ast.Argument(Some(name), _, location, _) :: rest =>
-        if (named(name)) record(DuplicateArgument(location, name), lexer.errorCount)
-        check(rest, named + name)
-      case Ast.Argument(None, _, location, _) :: rest =>
-        if (named.nonEmpty) record(PositionalAfterNamed(location), lexer.errorCount)
-        check(rest, named)
-      case Nil => ()
+    var named = Set.empty[String]
+    items(ArgumentMode, Some(Closing(RightParen, open.location)), documented = false) { (first, _) =>
+      val read = argument(first)
+      read.name match {
+        case Some(name) =>
+          if (named(name)) record(DuplicateArgument(read.location, name), lexer.errorCount)
+          named += name
+        case None => if (named.nonEmpty) record(PositionalAfterNamed(read.location), lexer.errorCount)
+      }
+      read
     }
+  }
 
   /** `name: literal`, or a literal alone; `name = literal` is an error that says to write `:` (§6). */
   private def argument(first: Token): Ast.Argument =
