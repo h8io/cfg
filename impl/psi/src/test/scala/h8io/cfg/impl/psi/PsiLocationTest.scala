@@ -55,6 +55,19 @@ class PsiLocationTest extends AnyFlatSpec with Matchers {
     NoSourceLocation.description shouldBe "no source"
   }
 
+  "order" should "put a location by its source among those given, then by line and column, and last elsewhere" in {
+    val sources = List("a.psi", "b.psi")
+    SourceLocation("b.psi", 2, 3).order(sources) shouldBe ((1, 2, 3))
+    SourceLocation("c.psi", 2, 3).order(sources) shouldBe ((2, 2, 3))
+    val a = SourceLocation("a.psi", 4, 5)
+    ReferenceLocation(a, "x", base).order(sources) shouldBe ((0, 4, 5))
+    ConcatenationLocation(a, ::(ReferenceLocation(a, "x", base), Nil)).order(sources) shouldBe ((0, 4, 5))
+    MergedLocation(a, ::(SourceLocation("b.psi", 1, 1), Nil)).order(sources) shouldBe ((0, 4, 5))
+    NoSourceLocation.order(sources) shouldBe ((2, 0, 0))
+    SystemPropertyLocation("p").order(sources) shouldBe ((2, 0, 0))
+    EnvLocation("E").order(sources) shouldBe ((2, 0, 0))
+  }
+
   "SystemPropertyLocation" should "name the property" in {
     SystemPropertyLocation("db.url").description shouldBe "system property db.url"
   }

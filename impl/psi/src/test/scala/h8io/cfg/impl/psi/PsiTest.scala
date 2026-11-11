@@ -128,6 +128,16 @@ class PsiTest extends AnyFlatSpec with Matchers {
       List(MergeWithSubstitution(at(conflict, 2, 4), at(conflict, 1, 3)), NotSupportedYet(at(conflict, 3, 5), "${t}"))
   }
 
+  it should "come in the order of the sources in the second batch too, each source's by position" in {
+    val first = resource("first.psi")
+    val second = resource("second.psi")
+    errors(Psi(first, second)) shouldBe
+      List(
+        NotSupportedYet(at(first, 2, 4), "${x}"),
+        NotSupportedYet(at(second, 1, 4), "${y}"),
+        MergeWithSubstitution(at(second, 2, 3), at(first, 3, 4)))
+  }
+
   "A node" should "not be made of a substitution left unresolved, which is a bug of the loader" in {
     val substitution = Tree.Substitution(Id.Key("a", Id.Root), optional = false, Set.empty, SourceLocation("s", 1, 4))
     the[IllegalStateException] thrownBy wrap(Id.Root, substitution) should have message

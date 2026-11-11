@@ -1591,4 +1591,6 @@ Spec gaps of plan step 7, the node views and the loader, settled with the user b
   15); a substitution, alone or in a concatenation, with the merge errors, as phase 4's would be.
 - Taken as they stood, not raised as questions: the extension of a URL passed to the loader is not
   checked, as in `impl/yaml`; errors come in the order of the sources, each source's in the order
-  found; an unreadable source does not keep the others' errors from being reported.
+  found in the first batch and by line and column in the second, since merging and resolving go by
+  key and would otherwise put a later source's error first (found in review of #157); an
+  unreadable source does not keep the others' errors from being reported.
