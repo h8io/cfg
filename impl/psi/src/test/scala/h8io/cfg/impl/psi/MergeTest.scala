@@ -151,6 +151,19 @@ class MergeTest extends AnyFlatSpec with Matchers {
         List(MergeWithSubstitution(loc(2, 7), loc(1, 8)), MergeWithSubstitution(loc(4, 1), loc(3, 4))))
   }
 
+  it should "not hide the conflicts inside a block that conflicts itself" in {
+    merge("a: ${x}\na {\n  b: ${y}\n  b {}\n}\nc: ${x}\nc { d: ${y}, d.e: 1 }") shouldBe
+      Result(
+        top(),
+        List(
+          MergeWithSubstitution(loc(2, 3), loc(1, 4)),
+          MergeWithSubstitution(loc(4, 5), loc(3, 6)),
+          MergeWithSubstitution(loc(7, 3), loc(6, 4)),
+          MergeWithSubstitution(loc(7, 14), loc(7, 8))
+        )
+      )
+  }
+
   it should "report a merged map where it was defined, every site of it" in {
     merge("a { x: 1 }\na { y: 2 }\na: ${s}").errors shouldBe
       List(MergeWithSubstitution(loc(3, 4), MergedLocation(loc(2, 3), ::(loc(1, 3), Nil))))

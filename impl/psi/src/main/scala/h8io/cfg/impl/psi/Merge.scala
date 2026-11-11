@@ -58,7 +58,11 @@ private[psi] final class Merge {
         Some(block(map.copy(tags = map.tags ++ tags, sites = ::(location, map.sites)), statements))
       case (_: Tree.Map | _: Tree.Substitution, substitution: Ast.Substitution) =>
         conflict(substitution.location, earlier)
-      case (_: Tree.Substitution, block: Ast.Block) => conflict(block.location, earlier)
+      case (_: Tree.Substitution, block: Ast.Block) =>
+        val result = conflict(block.location, earlier)
+        // read on its own, the block has errors of its own to report, independent of the conflict (§11)
+        val _ = tree(block)
+        result
       case _ => Some(tree(value))
     }
 
