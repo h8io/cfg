@@ -38,7 +38,7 @@ URL ──read──▶ Source ──lex/parse──▶ Ast ──expand directi
 | Piece | Package member (all under `h8io.cfg.impl.psi`) | Visibility |
 |---|---|---|
 | Loader | `Psi` | public |
-| Locations | `PsiLocation`, `SourceLocation`, `ReferenceLocation`, `ConcatenationLocation`, `SystemPropertyLocation`, `EnvLocation` (§10) | public |
+| Locations | `PsiLocation`, `SourceLocation`, `ReferenceLocation`, `ConcatenationLocation`, `MergedLocation`, `SystemPropertyLocation`, `EnvLocation` (§10) | public |
 | Errors | `PsiError` (each with a `location`), `PsiErrors` (non-empty, a `CfgError`) (§11) | public |
 | Directive API | handler trait + registry passed to the loader (§6) | public, designed in step 10 |
 | Source | the text of one URL, with offset → line/column | private |
@@ -69,7 +69,7 @@ at the phase gate.
 | 3 | Ast and parser: core syntax | done |
 | 4 | Parser: substitutions and directives | done |
 | 5 | Parser: error recovery | done |
-| 6 | Merge | todo |
+| 6 | Merge | done |
 | 7 | Node views and the loader, end to end | todo |
 | 8 | Renderer and round-trip property tests | todo |
 | 9 | Substitutions | todo |
@@ -218,10 +218,10 @@ code is the lexer alone and nothing is published.
 - No merging over a substitution: a `:` merge with a whole-value `${…}` on one side and a map or
   `${…}` on the other is an error suggesting `:=`, at any depth (§7).
 - Merging N trees in order — the same function.
-- Locations of merged containers: decide (see gaps).
-- **Spec gaps:** which `Location` a merged map gets — the first, the last, or a new kind listing all
-  definition sites? Key order in a merged map (first occurrence, as the YAML backend does, is the
-  natural default).
+- Locations of merged containers: `MergedLocation`, every site, the latest first.
+- **Spec gaps:** settled in session 15 (`format.md` §7, §10, §14): merged maps list their sites,
+  the latest first; a dotted key's maps stand at their segments; keys in order of first appearance,
+  a replaced key keeping its place; `null` merges as a scalar.
 
 ### 7. Node views and the loader, end to end
 
@@ -229,8 +229,9 @@ code is the lexer alone and nothing is published.
   ids assigned while wrapping.
 - `Psi.apply(urls: URL*): Either[PsiErrors, Node.IMap[Id.Root]]`; no URLs gives an empty root map,
   as `YAML` does. The phase gate of §11 is wired here.
-- Until steps 9–11 land, a `${…}` or a directive reaching this phase is reported as a
-  "not supported yet" error, so the loader is total from the first version.
+- Until steps 9–11 land, a `${…}` reaching this phase, or a directive reaching the merge (which
+  takes none, session 15), is reported as a "not supported yet" error, so the loader is total from
+  the first version.
 - Test resources under `impl/psi/src/test/resources/*.psi`.
 
 ### 8. Renderer and round-trip property tests

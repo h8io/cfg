@@ -45,6 +45,12 @@ class PsiLocationTest extends AnyFlatSpec with Matchers {
       "file:/etc/app/app.psi:12:9 (${a} from base.psi:3:7)"
   }
 
+  "MergedLocation" should "list the earlier sites after the last one, the latest first" in {
+    MergedLocation(app, ::(SourceLocation("app.psi", 7, 1), base :: Nil)).description shouldBe
+      "file:/etc/app/app.psi:12:9 (also app.psi:7:1, base.psi:3:7)"
+    MergedLocation(app, ::(base, Nil)).description shouldBe "file:/etc/app/app.psi:12:9 (also base.psi:3:7)"
+  }
+
   "SystemPropertyLocation" should "name the property" in {
     SystemPropertyLocation("db.url").description shouldBe "system property db.url"
   }

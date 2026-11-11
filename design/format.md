@@ -515,7 +515,23 @@ The same rule applies in all three places it is needed, so there is one behaviou
 - a directive's result against the block it lands in,
 - the N URLs passed to the loader.
 
-This follows the call already made for `impl/yaml`.
+This follows the call already made for `impl/yaml`. `null` is a value like any that is not a map:
+`a: null` replaces a map with `:`, and a map after it replaces the `null`.
+
+**The three are one fold.** Every field is merged in turn into the map built so far, a block into
+the map already at its key, and a later source goes on where the one before it ended. A dotted key
+is a nest of blocks — `a.b.c: v` is `a { b { c: v } }`, each block standing where its key segment
+is written — so `a.b.c: 1` and `a.b.d: 2` define `a` and `b` twice each, and merge them.
+
+**Key order** is the order of first appearance, as in `impl/yaml`. A key keeps its place when a
+later value replaces its own, `:=` included; one dropped by an error (below) is gone, and a later
+definition puts it last.
+
+**Location of a merged map.** A map defined in one place carries that place: the `{` of its block,
+or its key segment in a dotted key. A map defined in several, merged, carries every one of them,
+the latest first (§10): an error about the map as a whole points first where it was defined last,
+usually the file closest to the application, and lists the rest. `:=` starts the list anew. The root
+of a load lists the start of each source.
 
 **Tags in a merge.** When two maps merge, the result carries the union of their tags, as classes
 accumulate in CSS. Being untagged is not a reason to drop a tag:
@@ -660,6 +676,8 @@ final case class SourceLocation(source: String, line: Int, column: Int) extends 
 final case class ReferenceLocation(at: SourceLocation, path: String, origin: Location) extends PsiLocation
 // a scalar built by concatenation; one entry per `${…}`, each with its own column
 final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLocation]) extends PsiLocation
+// a map defined in several places, merged (§7); `at` the last, `earlier` the rest, the latest first
+final case class MergedLocation(at: SourceLocation, earlier: ::[SourceLocation]) extends PsiLocation
 // origins that are not a file
 final case class SystemPropertyLocation(name: String) extends PsiLocation
 final case class EnvLocation(name: String) extends PsiLocation
@@ -679,6 +697,7 @@ a location of their own instead of a fake file position.
 | `ReferenceLocation` | `app.psi:12:9 (${db.url} from base.psi:3:7)` |
 | — in a chain | `app.psi:1:4 (${b} from app.psi:2:4 (${c} from app.psi:3:4))` |
 | `ConcatenationLocation` | `app.psi:12:9 (${host} from base.psi:3:7, ${port} from env DB_PORT)` |
+| `MergedLocation` | `app.psi:12:1 (also app.psi:7:1, base.psi:3:1)` |
 | `SystemPropertyLocation` | `system property db.url` |
 | `EnvLocation` | `env DB_PORT` |
 
@@ -1510,3 +1529,25 @@ are, and what the tree holds where an item was skipped.
   or `=`, a value in `[…]`, an argument in `(…)`; the broken item itself goes on in the mode the
   parser read last. Reading a block in value mode alone, as the first version did, takes `b{c:`
   for one word and ends the block at the wrong `}` (found in review of #154).
+
+### Session 15 — 2026-11-11
+
+Spec gaps of plan step 6, merging, settled with the user before coding it (§7, §10).
+
+- **A merged map carries every place it was defined, the latest first**, in a new
+  `MergedLocation(at, earlier)`; a map defined once keeps its `SourceLocation`, and `:=` starts the
+  list anew. Rejected: the first site, which points at `reference.psi` when the application file
+  is what the reader edits; the last alone, as `impl/yaml` gives, which hides the other sites. The
+  order was the user's question: latest first, because `description` leads with where the reader
+  goes first (§10), the head then agrees with `impl/yaml`'s one site, and a merge adds a site at the
+  head. Definition order matched reading order only.
+- **A map made by a dotted key stands at its key segment**: `a.b.c: 1` puts `a` at `a` and `b` at
+  `b`, and a later `a { … }` adds its `{` to `a`'s sites.
+- **Keys keep the order they first appeared in**, as in `impl/yaml`; a key replaced, by `:=` too,
+  keeps its place. Rejected: moving a replaced key last, as removing it and adding it again would.
+- **`null` merges as a scalar does**: it replaces a map with `:`, and a map replaces it. It follows
+  from last-wins; §7 named scalars and sequences only.
+- **Directives are expanded before merging**, as §8 orders; one reaching the merge is a bug of the
+  loader. Not raised with the user: plan step 7 said a directive "reaching this phase", the wrap,
+  is reported as not supported yet; it is reported before merging instead, in step 7, which then
+  needs no place in the merged tree for a directive in statement position.

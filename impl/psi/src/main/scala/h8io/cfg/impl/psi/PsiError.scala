@@ -224,5 +224,13 @@ final case class UnmatchedBracket(location: SourceLocation) extends PsiError
 /** A `{`, `[` or `(` that the source ends without closing; the error points at the opening. */
 final case class UnclosedBracket(location: SourceLocation) extends PsiError
 
+/** A `:` merge of a map or a substitution, written at `location`, with an earlier value of its key where either is a
+  * whole-value substitution, which may turn out a map or not (`format.md` §7); `:=` replaces instead.
+  *
+  * @param earlier
+  *   where the earlier value was defined
+  */
+final case class MergeWithSubstitution(location: SourceLocation, earlier: PsiLocation) extends PsiError
+
 /** Every error a load reported, in the order found. The loader reports as many as it can without inventing any. */
 final case class PsiErrors(errors: ::[PsiError]) extends CfgError
