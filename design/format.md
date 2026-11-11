@@ -678,6 +678,8 @@ final case class ReferenceLocation(at: SourceLocation, path: String, origin: Loc
 final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLocation]) extends PsiLocation
 // a map defined in several places, merged (§7); `at` the last, `earlier` the rest, the latest first
 final case class MergedLocation(at: SourceLocation, earlier: ::[SourceLocation]) extends PsiLocation
+// the root of a load given no source, an empty map written nowhere
+case object NoSourceLocation extends PsiLocation
 // origins that are not a file
 final case class SystemPropertyLocation(name: String) extends PsiLocation
 final case class EnvLocation(name: String) extends PsiLocation
@@ -698,6 +700,7 @@ a location of their own instead of a fake file position.
 | — in a chain | `app.psi:1:4 (${b} from app.psi:2:4 (${c} from app.psi:3:4))` |
 | `ConcatenationLocation` | `app.psi:12:9 (${host} from base.psi:3:7, ${port} from env DB_PORT)` |
 | `MergedLocation` | `app.psi:12:1 (also app.psi:7:1, base.psi:3:1)` |
+| `NoSourceLocation` | `no source` |
 | `SystemPropertyLocation` | `system property db.url` |
 | `EnvLocation` | `env DB_PORT` |
 
@@ -1551,3 +1554,22 @@ Spec gaps of plan step 6, merging, settled with the user before coding it (§7, 
   loader. Not raised with the user: plan step 7 said a directive "reaching this phase", the wrap,
   is reported as not supported yet; it is reported before merging instead, in step 7, which then
   needs no place in the merged tree for a directive in statement position.
+
+### Session 16 — 2026-11-11
+
+Spec gaps of plan step 7, the node views and the loader, settled with the user before coding it.
+
+- **The root of a load given no source is at `NoSourceLocation`**, `no source` (§10): the empty map
+  was written nowhere, and §10 gives what is no file a location of its own instead of a fake file
+  position. Rejected: `SourceLocation("", 1, 1)`, that fake position.
+- **A source can be loaded from a string**, `Psi.parse(name, text)`, besides `Psi(urls*)`; `name` is
+  the `<source>` of its locations (§10). It costs nothing and serves tests, the docs' mdoc snippets
+  and configs built in code. What a relative `#include(file: …)` resolves against in such a source
+  is for plan step 11, with `Path` and `File` inputs. Rejected: URLs only, as `impl/yaml` and
+  `impl/hocon` have.
+- **Until directives and substitutions land, each is a `NotSupportedYet`**, a temporary error gone
+  before the release (plan step 14): a directive with the syntax errors, before merging (session
+  15); a substitution, alone or in a concatenation, with the merge errors, as phase 4's would be.
+- Taken as they stood, not raised as questions: the extension of a URL passed to the loader is not
+  checked, as in `impl/yaml`; errors come in the order of the sources, each source's in the order
+  found; an unreadable source does not keep the others' errors from being reported.

@@ -232,5 +232,13 @@ final case class UnclosedBracket(location: SourceLocation) extends PsiError
   */
 final case class MergeWithSubstitution(location: SourceLocation, earlier: PsiLocation) extends PsiError
 
+/** Something this version of the loader cannot load yet: a directive, or a substitution, alone or in a concatenation.
+  * Plan steps 9–11 replace it with the real thing.
+  *
+  * @param what
+  *   what it is, as `#name` or `\${…}`
+  */
+final case class NotSupportedYet(location: SourceLocation, what: String) extends PsiError
+
 /** Every error a load reported, in the order found. The loader reports as many as it can without inventing any. */
 final case class PsiErrors(errors: ::[PsiError]) extends CfgError
