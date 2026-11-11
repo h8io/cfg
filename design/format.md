@@ -1605,3 +1605,29 @@ Spec gaps of plan step 7, the node views and the loader, settled with the user b
   found in the first batch and by line and column in the second, since merging and resolving go by
   key and would otherwise put a later source's error first (found in review of #157); an
   unreadable source does not keep the others' errors from being reported.
+
+### Session 17 — 2026-11-11
+
+Spec gaps of plan step 8, the renderer, settled with the user before coding it. Correctness does
+not depend on them — a rendered tree parses and merges back to itself, its locations aside, which a
+property test checks — only how the output reads does.
+
+- **A field per line**, nested maps indented by two spaces, LF, a newline after the last field; for
+  documents and `toString` alike. A one-line form, for error messages if they need one, is plan
+  step 12's to decide. Rejected for now: one line, and both behind a switch.
+- **Nested maps in the block form**, `key { … }`, `key {}` when empty; `key: @t { … }` with tags,
+  which the block form has no place for (session 12). A chain of maps stays nested, never written
+  as a dotted key. Rejected: `key: { … }` always, uniform but less idiomatic.
+- **A scalar is quoted only when it has to be**: bare when the lexer reads it back alone as the same
+  unquoted scalar, with no error, and it is not `null`; in `"…"` otherwise, with what may not stand
+  raw escaped (§3) and a literal `${` as `\${`. Text over several lines is written with `\n`, not as
+  `"""`, whose markers and indent buy only looks. A concatenation is always written in `"…"`.
+  Rejected: quoting every scalar, simpler and harder to read.
+- **Tags in alphabetical order**, the set having none; tags and keys written as `Id.path` writes a
+  key, bare or in backticks.
+- **`toString`** writes the root as a document, any other node as a value with its tags.
+- **No public renderer yet.** `Psi.render` for a node of any backend would make a converter from
+  HOCON or YAML almost for free, but it is API to keep from the first release, and its right shape
+  shows only with use: after step 14, or with it. Rejected for step 8: making it public now.
+- Not raised with the user, decided while implementing: a sequence stands on one line, `[a, b]`,
+  unless it holds a map or a sequence, and then takes a line per element.

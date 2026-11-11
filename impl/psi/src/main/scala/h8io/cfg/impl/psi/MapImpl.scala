@@ -21,4 +21,7 @@ private[psi] final case class MapImpl[+I <: Id](id: I, tree: Tree.Map, location:
   override def size: Int = tree.keys.size
 
   override def -(key: String): MapImpl[I] = if (tree.entries.contains(key)) copy(tree = tree.removed(key)) else this
+
+  /** The map as Psi source: the root as a document, its fields one per line, any other map as a value. */
+  override def toString: String = if (id == Id.Root) Render.document(tree) else Render.value(tree)
 }

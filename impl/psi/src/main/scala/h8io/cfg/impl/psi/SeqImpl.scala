@@ -17,4 +17,7 @@ private[psi] final case class SeqImpl[+I <: Id](id: I, tree: Tree.Sequence) exte
   override def location: Location = tree.location
 
   override def size: Int = tree.elements.size
+
+  /** The sequence as Psi source, as a value. */
+  override def toString: String = Render.value(tree)
 }
