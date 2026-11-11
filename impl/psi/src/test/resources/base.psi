@@ -1,0 +1,7 @@
+// the base of the application
+server {
+  host: localhost
+  port: 8080
+}
+pool { min: 1, max: 10 }
+list: @t [a, null, { x: 1 }]

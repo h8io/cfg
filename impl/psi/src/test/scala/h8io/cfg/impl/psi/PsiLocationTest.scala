@@ -51,6 +51,10 @@ class PsiLocationTest extends AnyFlatSpec with Matchers {
     MergedLocation(app, ::(base, Nil)).description shouldBe "file:/etc/app/app.psi:12:9 (also base.psi:3:7)"
   }
 
+  "NoSourceLocation" should "say there was no source" in {
+    NoSourceLocation.description shouldBe "no source"
+  }
+
   "SystemPropertyLocation" should "name the property" in {
     SystemPropertyLocation("db.url").description shouldBe "system property db.url"
   }

@@ -1,0 +1,3 @@
+#include(file: "x")
+a: [#y, 1]
+b { c: #z }

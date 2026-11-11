@@ -43,6 +43,11 @@ final case class MergedLocation(at: SourceLocation, earlier: ::[SourceLocation])
   def description: String = earlier.iterator.map(_.description).mkString(at.description + " (also ", ", ", ")")
 }
 
+/** The root of a load given no source at all, an empty map that was written nowhere. */
+case object NoSourceLocation extends PsiLocation {
+  def description: String = "no source"
+}
+
 /** A value read from the system property `name`. */
 final case class SystemPropertyLocation(name: String) extends PsiLocation {
   def description: String = "system property " + name

@@ -37,8 +37,8 @@ URL ──read──▶ Source ──lex/parse──▶ Ast ──expand directi
 
 | Piece | Package member (all under `h8io.cfg.impl.psi`) | Visibility |
 |---|---|---|
-| Loader | `Psi` | public |
-| Locations | `PsiLocation`, `SourceLocation`, `ReferenceLocation`, `ConcatenationLocation`, `MergedLocation`, `SystemPropertyLocation`, `EnvLocation` (§10) | public |
+| Loader | `Psi`: `Psi(urls*)`, `Psi.parse(name, text)` | public |
+| Locations | `PsiLocation`, `SourceLocation`, `ReferenceLocation`, `ConcatenationLocation`, `MergedLocation`, `NoSourceLocation`, `SystemPropertyLocation`, `EnvLocation` (§10) | public |
 | Errors | `PsiError` (each with a `location`), `PsiErrors` (non-empty, a `CfgError`) (§11) | public |
 | Directive API | handler trait + registry passed to the loader (§6) | public, designed in step 10 |
 | Source | the text of one URL, with offset → line/column | private |
@@ -70,7 +70,7 @@ at the phase gate.
 | 4 | Parser: substitutions and directives | done |
 | 5 | Parser: error recovery | done |
 | 6 | Merge | done |
-| 7 | Node views and the loader, end to end | todo |
+| 7 | Node views and the loader, end to end | done |
 | 8 | Renderer and round-trip property tests | todo |
 | 9 | Substitutions | todo |
 | 10 | Directive and marker framework | todo |
@@ -233,6 +233,9 @@ code is the lexer alone and nothing is published.
   takes none, session 15), is reported as a "not supported yet" error, so the loader is total from
   the first version.
 - Test resources under `impl/psi/src/test/resources/*.psi`.
+- **Spec gaps:** settled in session 16 (`format.md` §10, §14): the root of a load given no source is
+  at `NoSourceLocation`; `Psi.parse(name, text)` loads a source held as a string; one temporary
+  `NotSupportedYet` error.
 
 ### 8. Renderer and round-trip property tests
 
