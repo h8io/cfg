@@ -484,7 +484,7 @@ reporting an argument it cannot read, is the handler's job. What a handler gives
 two ways:
 
 - from its context, by parsing another source — what `#include` does. A `${…}` in that source stays
-  unresolved until phase 4, so an included file may still refer to the file that included it (§8);
+  unresolved until phase 5, so an included file may still refer to the file that included it (§8);
 - from a `Node` it built — such a fragment holds no substitution. Its ids are dropped: where the
   fragment lands is the directive's position.
 
@@ -569,7 +569,7 @@ in practice it matters for maps, and anywhere the author wants the intent to be 
 - With no earlier value `:=` behaves like `:`.
 - `a := ${b}` is always allowed: whatever `${b}` resolves to, nothing before it survives.
 
-**No merging over a substitution in v1.** Merging runs in phase 3 and substitutions resolve in phase 4
+**No merging over a substitution in v1.** Merging runs in phase 3 and substitutions resolve in phase 5
 (§8), so when one side of a `:` merge is a whole-value `${…}`, phase 3 cannot know whether it is
 merging two maps or replacing one value with another. Instead of deferring the merge, v1 rejects it:
 a `:` field meeting an earlier value of the same key is an error when one side is a substitution and
@@ -749,7 +749,7 @@ mistake is worse than stopping.
   `#x(…)` alike. The braced syntax is what makes this cheap. Each source is parsed independently,
   so an error in one file never hides errors in another.
 - **What recovery skips leaves a hole.** The broken item is left out of the syntax tree, with no
-  node of its own standing for it; phases 3–5 never see the tree (below), and a directive's
+  node of its own standing for it; phases 3–6 never see the tree (below), and a directive's
   arguments are literals, so no hole can make an error of its own. What the lexer finds in skipped
   text is not reported, a fatal error excepted: the parser cannot tell what the text was meant to be.
 - **A directive call with any error in it is left out whole**, with the field or element it is the
@@ -765,7 +765,7 @@ mistake is worse than stopping.
 - **Directive failures are local.** A missing include, a cycle, an unknown or disabled
   directive or a bad argument is reported, the directive contributes nothing, and expansion
   continues.
-- **Phases are gated.** If phases 1–2 (§8) produced any error, phases 3–5 do not run: substitutions
+- **Phases are gated.** If phases 1–2 (§8) produced any error, phases 3–6 do not run: substitutions
   over a tree with holes cut by recovery would report references to fields that exist but were lost
   in the skip. Syntax and directive errors come as one batch; substitution errors, if the first
   batch was empty, as the next.
@@ -777,7 +777,7 @@ mistake is worse than stopping.
 
 - No external dependencies, like `cfg` and `impl/hocon`.
 - Unlike the hocon and yaml backends, which wrap a foreign structure lazily, this module owns its
-  data: phase 5 builds immutable `Map`/`Vector` structures once, and `MapImpl`/`SeqImpl` are thin
+  data: phase 6 builds immutable `Map`/`Vector` structures once, and `MapImpl`/`SeqImpl` are thin
   views over them.
 - Cross-built for 2.13, 2.12 and 3.9, from one source tree in Scala 2 style that Scala 3 accepts. A
   hand-written lexer is exactly the kind of code that reaches for 2.13-only collection methods;
@@ -880,7 +880,7 @@ mistake is worse than stopping.
 
    Nothing is decided. Open: whose `id` — the object the field stands in, or the field's own, and a
    way up to a parent's; when it binds — where the node ends up after merging and grafting, which the
-   template needs and which puts it in phase 4 (§8, §9), or where it is written; the syntax, which no
+   template needs and which puts it in phase 5 (§8, §9), or where it is written; the syntax, which no
    key, tag, directive or `Id.path` may clash with; what it gives at the root, and in a directive's
    arguments, where substitutions are not allowed (§6); which other meta-fields (`path`, `parent`,
    the source, the tags) and whether their set is fixed or open, with handlers like directives.
