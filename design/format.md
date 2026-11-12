@@ -475,20 +475,49 @@ name, before or after disabling it, is an error when the loader is built, so a h
 a directive back; disabling a name twice counts once. This is how a loader for input it does not
 trust leaves out `#include`. Both restrictions can be lifted later without breaking a v1 file.
 
-**A handler's contract** (session 11). A handler declares the names of its parameters and gets the
-arguments as a `Node.IMap` keyed by them, positional arguments already laid out over the parameters
-in order, as markers' are (§5); so the map never mixes the two. Every value is a scalar string, as
-everywhere in `cfg`: `true` and `"true"`, `2` and `"2"` arrive the same, and reading one, and
-reporting an argument it cannot read, is the handler's job. What a handler gives back is not a
-`Node` but a *fragment*, Psi's own unexpanded tree, opaque to the handler, and it gets one in one of
+**The loader is built by a builder** (session 19): `Psi.builder.withDirectives(…)
+.disableDirective(…).withSystemProperties(…).build`, the markers joining in plan step 10b. `build`
+gives every error of the configuration at once — a name registered twice, a disabled name
+registered, a handler declaring a parameter twice — or the loader, with `apply(urls*)` and
+`parse(name, text)` as `Psi` has; `Psi` itself is the loader with nothing added. The overrides of
+§9 come from `sys.props`, read at every load, unless the builder is given a map, an empty one
+turning them off, as a loader for input it does not trust would.
+
+**A handler's contract** (sessions 11, 19). A handler declares its parameters, each by name and
+whether it is required, and gets the arguments as a `Node.IMap` keyed by them, positional
+arguments already laid out over the parameters in order, as markers' are (§5); so the map never
+mixes the two. An argument to no parameter, given twice, or a required one missing, is reported as
+for a marker, and the handler is not called. Every value is a scalar string, as everywhere in
+`cfg`: `true` and `"true"`, `2` and `"2"` arrive the same, and reading one, and reporting an
+argument it cannot read, is the handler's job. It gets as well a *context*: the call's location,
+the name and URL of the source the call stands in (a source given as text has no URL), and a way to
+parse another source.
+
+What a handler gives back is a message, reported as the directive's failure at the call, or
+*nothing*, or a *fragment*: Psi's own unexpanded tree, opaque to the handler, which it gets in one of
 two ways:
 
 - from its context, by parsing another source — what `#include` does. A `${…}` in that source stays
-  unresolved until phase 5, so an included file may still refer to the file that included it (§8);
+  unresolved until phase 5, so an included file may still refer to the file that included it (§8).
+  A source that cannot be read is handed back to the handler to decide on, so that an optional
+  include can give nothing; every other error in it is reported in its place, with the errors of
+  every source, and the fragment comes with what was read;
 - from a `Node` it built — such a fragment holds no substitution. Its ids are dropped: where the
-  fragment lands is the directive's position.
+  fragment lands is the directive's position. Its locations are kept as origins behind the call,
+  as a reference keeps them behind its site (§10): `app.psi:1:4 (#yaml from db.yaml:3:8)`.
 
-In statement position the fragment must be a map, in value position any node (above).
+In statement position the fragment must be a map, merged into the block where the call stands as
+the fields it holds would be if written there; in value position any node. *Nothing* adds no field
+in statement position and, in value position, drops the field or the element, as `${?…}` with
+nothing to graft does (§9).
+
+**Cycles, for every directive** (session 19). Every cycle runs through the context's way to parse
+another source, which the framework keeps a stack of. Two sources are the same when their keys are:
+a URL's is its URI, normalized, and for a `file:` one the file's real path, so `..` and symbolic
+links do not hide a cycle; a source given as text is keyed by its name. Parsing a source already on
+the stack is a `DirectiveCycle` at the call that closes it, naming the chain; and a stack 64 deep is
+an error, as a backstop for a key that changes on every step (`?n=1`, `?n=2`, …), fixed in v1. A
+source parsed twice not through itself, a diamond, is no cycle: it is parsed again each time.
 
 **Tags before a directive in value position** are added to the tags of the node it produces, as
 tags before a whole-value `${…}` are added to the grafted node's (§9): `a: @t #include(…)`.
@@ -504,7 +533,7 @@ tags before a whole-value `${…}` are added to the grafted node's (§9): `a: @t
 
 Exactly one of `file` / `resource` / `url` is required. Relative paths resolve against the URL of the
 including file, never the working directory. Include cycles are reported as an error rather than
-looping; how they are caught, for every directive and not `#include` alone, is open (§13 item 5).
+looping, as every directive's are (above).
 
 ## 7. Merging
 
@@ -693,9 +722,11 @@ final case class ReferenceLocation(at: SourceLocation, path: String, origin: Loc
 // a scalar built by concatenation; one entry per `${…}`, each with its own column
 final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLocation]) extends PsiLocation
 // a map defined in several places, merged (§7); `at` the last, `earlier` the rest, the latest first
-final case class MergedLocation(at: SourceLocation, earlier: ::[SourceLocation]) extends PsiLocation
+final case class MergedLocation(at: PsiLocation, earlier: ::[PsiLocation]) extends PsiLocation
 // the root of a load given no source, an empty map written nowhere
 case object NoSourceLocation extends PsiLocation
+// a node a directive built from a `Node` and placed at `at`; `origin` is the node's own location
+final case class DirectiveLocation(at: SourceLocation, directive: String, origin: Location) extends PsiLocation
 // a value overridden at launch, not from a file
 final case class SystemPropertyLocation(name: String) extends PsiLocation
 ```
@@ -716,6 +747,7 @@ own instead of a fake file position.
 | `ConcatenationLocation` | `app.psi:12:9 (${host} from base.psi:3:7, ${port} from system property db.port)` |
 | `MergedLocation` | `app.psi:12:1 (also app.psi:7:1, base.psi:3:1)` |
 | `NoSourceLocation` | `no source` |
+| `DirectiveLocation` | `app.psi:1:4 (#yaml from db.yaml:3:8)` |
 | `SystemPropertyLocation` | `system property db.url` |
 
 A part of a concatenation is rendered without its own site, which shares the concatenation's line;
@@ -858,13 +890,7 @@ mistake is worse than stopping.
    - **Options inside `${…}`**, the user's idea: `${array; null="-1", separator=", "}`. Not in v1;
      the syntax stays free, `;` being outside `Id.SafeKeyPattern`, so `${a; …}` is an error today.
 
-5. **Cycles, for every directive.** Raised by the user in session 12: a universal way to catch
-   cycles, not one for `#include` alone. Every cycle runs through the context's way to parse
-   another source (§6), so the framework can keep the stack there for every handler. Open: what
-   makes two sources the same (a key passed with the source; by default the normalized URI and a
-   file's real path; a handler's own for a source that is no URL), a depth limit as a backstop, a
-   source included twice not through itself (no cycle, so presumably allowed; parsed again or cached), and where the error
-   points. To be settled in plan step 10.
+5. ~~**Cycles, for every directive.**~~ — closed in session 19, settled in §6.
 
 6. **Meta-fields.** Raised by the user in session 15, **after v1**: a meta-field `id`, the key or
    index of an object, to start with. The protocol already gives every node its `Id`; what a
@@ -1695,4 +1721,34 @@ Spec gaps of plan step 9, substitutions, settled with the user before coding it 
   and a concatenation left with none is located at its own site alone; `null` in a concatenation is
   a non-scalar like a map or a sequence; a sequence is looked into by the position its elements end
   up at, so only the optional substitutions before the index are resolved to find it.
+
+### Session 19 — 2026-11-12
+
+Spec gaps of plan step 10, the directive and marker framework, settled with the user before
+coding it (§6, §10, §13 item 5). The step is split: 10a the directives, 10b the markers as handlers,
+whose API is settled when 10b starts. All proposed by me and taken by the user, the last after a
+question of its own.
+
+- **A builder**, `Psi.builder…build`, whose `build` gives every error of the configuration at once
+  as a value rather than throwing, as the rest of the module does. Rejected: throwing on the first.
+- **The launch overrides of §9 are the builder's to set**: `sys.props` at every load by default,
+  a map given instead, an empty one turning them off, for input that is not trusted as
+  `disableDirective("include")` is for.
+- **A parameter is declared required or not**, so the framework reports a missing one, as it does
+  for markers, before the handler runs.
+- **A handler gives back a message, nothing, or a fragment.** The message becomes the framework's
+  own error at the call, so the module's error type stays closed. Nothing drops a value-position
+  field or element, as `${?…}` does, and adds nothing in statement position: an optional include
+  of a missing file.
+- **A fragment has no surface**: made by the context's `parse`, or from a `Node`. The context gives
+  the call's location, the including source's name and URL, and `parse`; a source that cannot be
+  read is handed back to the handler, any other error in it is reported with every source's.
+- **Cycles** (§13 item 5, closed): a source's key is its normalized URI, a file's real path, a
+  text source's name; the error at the call closing the cycle names the chain; a stack 64 deep is
+  an error, the limit fixed in v1; a diamond is parsed again each time, no cache.
+- **Nodes of a fragment built from a `Node` keep their location as an origin behind the call**,
+  `DirectiveLocation(at, directive, origin)`, as a reference does (§10) — the user's pick, with
+  importing YAML (§13 item 8) in mind. Rejected: the call's location alone, simpler but losing the
+  line in the imported file. `MergedLocation` takes any location for it, since a block a
+  directive built merges as one written does.
 

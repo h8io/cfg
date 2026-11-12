@@ -73,7 +73,8 @@ at the phase gate.
 | 7 | Node views and the loader, end to end | done |
 | 8 | Renderer and round-trip property tests | done |
 | 9 | Substitutions | done |
-| 10 | Directive and marker framework | todo |
+| 10a | Directive framework | in progress |
+| 10b | Markers as handlers | todo |
 | 11 | `#include` | todo |
 | 12 | Error messages and hints | todo |
 | 13 | Hardening | todo |
@@ -265,6 +266,10 @@ code is the lexer alone and nothing is published.
   only at launch is `format.md` §13 item 7, for later.
 
 ### 10. Directive and marker framework
+
+Split in session 19 into 10a, the directives — the builder, the handler API, the fragment, the
+context and cycles, settled in `format.md` §6 — and 10b, the markers as handlers, whose spec gaps
+below are settled when it starts. The rest of this section is the step as first planned.
 
 - Markers become handlers too (session 10, `format.md` §14): a builder,
   `Psi.builder.withMarkers(…).withDirectives(…)`. `withMarkers` adds to the reserved `<`, `>`,
