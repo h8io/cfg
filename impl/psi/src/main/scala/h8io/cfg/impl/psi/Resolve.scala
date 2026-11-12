@@ -36,13 +36,16 @@ private[psi] final class Resolve(root: Tree.Map) {
         once(id)(reference(path, optional, at).map(_.map(graft(_, at, path, tags))))
       case concatenation: Tree.Concatenation => once(id)(this.concatenation(concatenation).map(Some(_)))
       case Tree.Marked(value, markers) =>
-        val text = value match {
-          case concatenation: Tree.Concatenation => this.concatenation(concatenation)
-          case scalar: Tree.Scalar => Right(scalar)
-          // the parser marks quoted blocks only, which are scalars or concatenations
-          case other => throw new IllegalStateException("Markers on a non-scalar at " + other.location.description)
+        // resolved inside `once`, so that a cycle through the block is caught and the block resolved only once
+        once(id) {
+          val text = value match {
+            case concatenation: Tree.Concatenation => this.concatenation(concatenation)
+            case scalar: Tree.Scalar => Right(scalar)
+            // the parser marks quoted blocks only, which are scalars or concatenations
+            case other => throw new IllegalStateException("Markers on a non-scalar at " + other.location.description)
+          }
+          text.map(scalar => Some(marked(scalar, markers)))
         }
-        once(id)(text.map(scalar => Some(marked(scalar, markers))))
     }
 
   /** `scalar` with the loader's markers run over its value in turn (§5); with none of them when one fails. */

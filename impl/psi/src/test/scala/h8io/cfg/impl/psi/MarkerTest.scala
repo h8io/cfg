@@ -122,7 +122,16 @@ class MarkerTest extends AnyFlatSpec with Matchers {
     runs shouldBe 0
   }
 
-  "A marked block" should "be a scalar with nothing to look into" in {
+  "A marked block" should "be caught in a cycle, and resolved once however many refer to it" in {
+    val identity = marker("identity")((_, value) => Right(value))
+    errors(loader(identity), "a: \"\"\"identity\n  ${a}\n  \"\"\"") shouldBe List(SubstitutionCycle(at(2, 3), "a"))
+    errors(loader(identity), "a: \"\"\"identity\n  ${b}\n  \"\"\"\nb: \"\"\"identity\n  ${a}\n  \"\"\"") shouldBe
+      List(SubstitutionCycle(at(5, 3), "a"))
+    errors(loader(identity), "a: \"\"\"identity\n  ${missing}\n  \"\"\"\nb: ${a}\nc: ${a}") shouldBe
+      List(UnresolvedSubstitution(at(2, 3), "missing"))
+  }
+
+  it should "be a scalar with nothing to look into" in {
     errors(loader(upper), "a: \"\"\"upper\n  v\n  \"\"\"\nb: ${a.x}") shouldBe
       List(UnresolvedSubstitution(at(4, 4), "a.x"))
   }
