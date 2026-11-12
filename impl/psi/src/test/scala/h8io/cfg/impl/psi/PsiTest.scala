@@ -122,10 +122,11 @@ class PsiTest extends AnyFlatSpec with Matchers {
         NotSupportedYet(at(directives, 3, 8), "#z"))
     errors(Psi(resource("broken.psi"), references)) shouldBe
       List(ExpectedColon(at(resource("broken.psi"), 1, 3)), SpaceInValue(at(resource("broken.psi"), 3, 8)))
-    errors(Psi(references)) shouldBe
-      List(NotSupportedYet(at(references, 1, 4), "${b}"), NotSupportedYet(at(references, 2, 6), "${?d}"))
+    errors(Psi(references)) shouldBe List(UnresolvedSubstitution(at(references, 4, 4), "psi-test-e"))
     errors(Psi(conflict)) shouldBe
-      List(MergeWithSubstitution(at(conflict, 2, 4), at(conflict, 1, 3)), NotSupportedYet(at(conflict, 3, 5), "${t}"))
+      List(
+        MergeWithSubstitution(at(conflict, 2, 4), at(conflict, 1, 3)),
+        UnresolvedSubstitution(at(conflict, 3, 5), "psi-test-t"))
   }
 
   it should "come in the order of the sources in the second batch too, each source's by position" in {
@@ -133,9 +134,17 @@ class PsiTest extends AnyFlatSpec with Matchers {
     val second = resource("second.psi")
     errors(Psi(first, second)) shouldBe
       List(
-        NotSupportedYet(at(first, 2, 4), "${x}"),
-        NotSupportedYet(at(second, 1, 4), "${y}"),
-        MergeWithSubstitution(at(second, 2, 3), at(first, 3, 4)))
+        UnresolvedSubstitution(at(first, 2, 4), "psi-test-x"),
+        UnresolvedSubstitution(at(second, 1, 4), "psi-test-y"),
+        MergeWithSubstitution(at(second, 2, 3), at(first, 3, 4))
+      )
+  }
+
+  it should "resolve substitutions, looking past the tree into the system properties and the environment" in {
+    val root = loaded(Psi.parse("s", "a: ${b}\nb: 1\nc: \"x${?psi-test-none}\""))
+    root("a") shouldBe Node.IScalar(Id.Key("a", Id.Root), Set.empty, "1",
+      ReferenceLocation(SourceLocation("s", 1, 4), "b", SourceLocation("s", 2, 4)))
+    root("c") shouldBe Node.IScalar(Id.Key("c", Id.Root), Set.empty, "x", SourceLocation("s", 3, 4))
   }
 
   "A node" should "not be made of a substitution left unresolved, which is a bug of the loader" in {

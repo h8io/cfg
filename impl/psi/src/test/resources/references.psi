@@ -1,3 +1,4 @@
 a: ${b}
-c: "x${?d}"
+c: "x${?psi-test-d}"
 b: 1
+e: ${psi-test-e}

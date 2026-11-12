@@ -5,7 +5,8 @@ import h8io.cfg.Id
 import scala.collection.immutable
 
 /** A configuration tree merged from one source or several (`format.md` §7): no operators, no duplicate keys, no
-  * directives; substitutions still unresolved.
+  * directives. Merged, its substitutions are still unresolved; resolved (§9), it holds none, and a grafted node carries
+  * a [[ReferenceLocation]].
   */
 private[psi] object Tree {
 
@@ -14,11 +15,11 @@ private[psi] object Tree {
     def location: PsiLocation
   }
 
-  final case class Scalar(value: String, tags: Set[String], location: SourceLocation) extends Value
+  final case class Scalar(value: String, tags: Set[String], location: PsiLocation) extends Value
 
-  final case class Null(tags: Set[String], location: SourceLocation) extends Value
+  final case class Null(tags: Set[String], location: PsiLocation) extends Value
 
-  final case class Sequence(elements: Vector[Value], tags: Set[String], location: SourceLocation) extends Value
+  final case class Sequence(elements: Vector[Value], tags: Set[String], location: PsiLocation) extends Value
 
   /** `\${path}` or `\${?path}`, alone and unquoted: a graft. */
   final case class Substitution(path: Id.Branch, optional: Boolean, tags: Set[String], location: SourceLocation)
@@ -29,20 +30,12 @@ private[psi] object Tree {
 
   /** A map, its keys in the order they first appeared (`format.md` §7).
     *
-    * @param sites
-    *   where it was defined, the latest first: one place, or each block merged into it since it was last replaced
+    * @param location
+    *   where it was defined: one place, or a [[MergedLocation]] of each block merged into it since it was last replaced
     */
-  final case class Map(
-      keys: Vector[String],
-      entries: immutable.Map[String, Value],
-      tags: Set[String],
-      sites: ::[SourceLocation])
+  final case class Map(keys: Vector[String], entries: immutable.Map[String, Value], tags: Set[String],
+      location: PsiLocation)
       extends Value {
-    def location: PsiLocation =
-      sites.tail match {
-        case Nil => sites.head
-        case earlier @ ::(_, _) => MergedLocation(sites.head, earlier)
-      }
 
     /** This map with `value` at `key`: in its place when the key is there, last when it is not. */
     def updated(key: String, value: Value): Map =
@@ -53,7 +46,6 @@ private[psi] object Tree {
   }
 
   object Map {
-    def empty(tags: Set[String], site: SourceLocation): Map =
-      Map(Vector.empty, immutable.Map.empty, tags, ::(site, Nil))
+    def empty(tags: Set[String], location: PsiLocation): Map = Map(Vector.empty, immutable.Map.empty, tags, location)
   }
 }

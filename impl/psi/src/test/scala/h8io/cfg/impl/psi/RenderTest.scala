@@ -40,7 +40,7 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
           tags,
           nowhere)
       case map: Tree.Map =>
-        Tree.Map(map.keys, map.entries.map { case (k, v) => k -> located(v) }, map.tags, ::(nowhere, Nil))
+        Tree.Map(map.keys, map.entries.map { case (k, v) => k -> located(v) }, map.tags, nowhere)
     }
 
   private def roundTrip(text: String): Unit = {
@@ -176,7 +176,7 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
       val unique = entries.foldLeft(Vector.empty[(String, Tree.Value)]) { case (all, (k, v)) =>
         if (all.exists(_._1 == k)) all else all :+ (k -> v)
       }
-      Tree.Map(unique.map(_._1), immutable.Map(unique*), g, ::(nowhere, Nil))
+      Tree.Map(unique.map(_._1), immutable.Map(unique*), g, nowhere)
     }
 
   it should "write any tree so that it parses and merges back to the same tree" in

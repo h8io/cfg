@@ -35,7 +35,15 @@ class MergeTest extends AnyFlatSpec with Matchers {
   private def map(sites: SourceLocation*)(entries: (String, Value)*): Tree.Map = tagged()(sites*)(entries*)
 
   private def tagged(tags: String*)(sites: SourceLocation*)(entries: (String, Value)*): Tree.Map =
-    Tree.Map(entries.map(_._1).toVector, immutable.Map(entries*), tags.toSet, ::(sites.head, sites.tail.toList))
+    Tree.Map(
+      entries.map(_._1).toVector,
+      immutable.Map(entries*),
+      tags.toSet,
+      sites.tail.toList match {
+        case Nil => sites.head
+        case earlier @ ::(_, _) => MergedLocation(sites.head, earlier)
+      }
+    )
 
   private def top(entries: (String, Value)*): Tree.Map = map(loc(1, 1))(entries*)
 
