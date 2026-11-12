@@ -1664,7 +1664,9 @@ Spec gaps of plan step 9, substitutions, settled with the user before coding it 
 - **System properties override the sources**, only the values the sources define (§8, §9): the
   user's call — they exist to change at launch what the file says. **The environment is not read at
   all**, and a `${…}` is looked up in the overridden tree only: the user's call, after rejecting each
-  way of naming a variable by a path. Supersedes, within this session: an environment not split,
+  way of naming a variable by a path. The user's reason besides: the environment often holds
+  secrets, and a config able to read any variable could hand one out — into a value, a rendered
+  tree or an error message. Supersedes, within this session: an environment not split,
   reached by a one-key path (proposed by me, confirmed, then rejected); a variable named from the
   path, `db.url` → `DB_URL` (proposed by me, taken, then rejected); system properties, split at the
   dots into a tree, and the environment as places a `${…}` falls back to, after the tree, as in
