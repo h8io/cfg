@@ -34,7 +34,26 @@ private[psi] final class Resolve(root: Tree.Map) {
       case sequence: Tree.Sequence => this.sequence(id, sequence).map(Some(_))
       case Tree.Substitution(path, optional, tags, at) =>
         once(id)(reference(path, optional, at).map(_.map(graft(_, at, path, tags))))
-      case concatenation: Tree.Concatenation => once(id)(this.concatenation(concatenation))
+      case concatenation: Tree.Concatenation => once(id)(this.concatenation(concatenation).map(Some(_)))
+      case Tree.Marked(value, markers) =>
+        val text = value match {
+          case concatenation: Tree.Concatenation => this.concatenation(concatenation)
+          case scalar: Tree.Scalar => Right(scalar)
+          // the parser marks quoted blocks only, which are scalars or concatenations
+          case other => throw new IllegalStateException("Markers on a non-scalar at " + other.location.description)
+        }
+        once(id)(text.map(scalar => Some(marked(scalar, markers))))
+    }
+
+  /** `scalar` with the loader's markers run over its value in turn (§5); with none of them when one fails. */
+  private def marked(scalar: Tree.Scalar, markers: Vector[MarkerParser.MarkerCall]): Tree.Scalar =
+    markers.foldLeft[Either[PsiError, String]](Right(scalar.value)) { (text, call) =>
+      text.flatMap(text => call.marker(call.arguments, text).left.map(MarkerFailed(call.location, call.marker.name, _)))
+    } match {
+      case Right(text) => scalar.copy(value = text)
+      case Left(error) =>
+        errors += error
+        scalar
     }
 
   private def map(id: Id, map: Tree.Map): Either[Failure, Tree.Map] = {
@@ -83,7 +102,7 @@ private[psi] final class Resolve(root: Tree.Map) {
       case Nil => resolve(id, value)
       case next :: rest =>
         val here = value match {
-          case _: Tree.Substitution | _: Tree.Concatenation => resolve(id, value)
+          case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Marked => resolve(id, value)
           case _ => Right(Some(value))
         }
         here.flatMap(_.fold[Resolution](Right(None)) { container =>
@@ -123,7 +142,7 @@ private[psi] final class Resolve(root: Tree.Map) {
     }
 
   /** A scalar of text and `\${…}`, each referring to a scalar; an optional one with nothing to refer to is empty. */
-  private def concatenation(concatenation: Tree.Concatenation): Resolution = {
+  private def concatenation(concatenation: Tree.Concatenation): Either[Failure, Tree.Scalar] = {
     val parts = concatenation.parts.map {
       case Token.Text(text) => Right(text -> None)
       case Token.Reference(path, optional, at) =>
@@ -139,7 +158,7 @@ private[psi] final class Resolve(root: Tree.Map) {
         case Nil => concatenation.location
         case first :: rest => ConcatenationLocation(concatenation.location, ::(first, rest))
       }
-      Some(Tree.Scalar(texts.mkString, concatenation.tags, location))
+      Tree.Scalar(texts.mkString, concatenation.tags, location)
     }
   }
 }
@@ -189,7 +208,7 @@ private[psi] object Resolve {
           val entries = map.entries.map { case (key, child) => key -> moved(child, Id.Key(key, id), Set.empty) }
           map.copy(entries = entries, tags = map.tags ++ tags, location = location)
         // a node is resolved whole before it is grafted
-        case _: Tree.Substitution | _: Tree.Concatenation =>
+        case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Marked =>
           throw new IllegalStateException("An unresolved substitution at " + value.location.description + " grafted")
       }
     }

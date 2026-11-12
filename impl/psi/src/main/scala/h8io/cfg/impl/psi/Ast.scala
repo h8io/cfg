@@ -85,6 +85,14 @@ private[psi] object Ast {
     */
   final case class Concatenation(parts: Vector[Token.Part], tags: Set[String], location: SourceLocation) extends Value
 
+  /** A block, a scalar or a concatenation, with the loader's markers to run over its value once its substitutions are
+    * resolved (§5).
+    */
+  final case class Marked(value: Value, markers: Vector[MarkerParser.MarkerCall]) extends Value {
+    def tags: Set[String] = value.tags
+    def location: PsiLocation = value.location
+  }
+
   /** A directive in value position, which is to produce a node; the tags are added to that node's (§6). */
   final case class DirectiveValue(call: Call, tags: Set[String]) extends Value {
     def location: SourceLocation = call.location

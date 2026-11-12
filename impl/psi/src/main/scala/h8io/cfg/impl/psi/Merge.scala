@@ -80,6 +80,7 @@ private[psi] final class Merge {
       case Ast.Sequence(elements, tags, location) => Tree.Sequence(elements.map(e => tree(e.value)), tags, location)
       case Ast.Substitution(path, optional, tags, location) => Tree.Substitution(path, optional, tags, location)
       case Ast.Concatenation(parts, tags, location) => Tree.Concatenation(parts, tags, location)
+      case Ast.Marked(value, markers) => Tree.Marked(tree(value), markers)
       case Ast.DirectiveValue(call, _) => unexpanded(call)
     }
 

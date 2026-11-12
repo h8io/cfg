@@ -30,6 +30,10 @@ import java.net.URL
   * ==Directives==
   * `#name(…)` is expanded by the handler registered for it, while its source is read (§6); [[builder]] builds a loader
   * with handlers of its own. `#include` is reported as [[NotSupportedYet]] until the plan's step 11 lands.
+  *
+  * ==Markers==
+  * A triple-quoted block's built-in markers shape its lines; a loader's own markers, registered through the [[builder]],
+  * are functions of the block's finished value, run left to right after its substitutions are resolved (§5).
   */
 object Psi {
 
@@ -42,11 +46,11 @@ object Psi {
   /** Loads a source held as `text`, named `name` in locations. */
   def parse(name: String, text: String): Either[PsiErrors, Node.IMap[Id.Root]] = loader.parse(name, text)
 
-  private def loader: PsiLoader = new PsiLoader(Map.empty, Set.empty, None)
+  private def loader: PsiLoader = new PsiLoader(Map.empty, Set.empty, Map.empty, None)
 
   /** Loads `sources` with no directive of its own, their values overridden by `properties`. */
   private[psi] def load(
       sources: Seq[Either[PsiError, Source]],
       properties: Map[String, String]): Either[PsiErrors, Node.IMap[Id.Root]] =
-    new PsiLoader(Map.empty, Set.empty, Some(properties)).load(sources)
+    new PsiLoader(Map.empty, Set.empty, Map.empty, Some(properties)).load(sources)
 }

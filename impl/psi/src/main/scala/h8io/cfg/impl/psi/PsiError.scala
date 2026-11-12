@@ -247,14 +247,24 @@ final case class SubstitutionCycle(location: SourceLocation, path: String) exten
   */
 final case class NonScalarInConcatenation(location: SourceLocation, path: String, origin: PsiLocation) extends PsiError
 
+/** A loader's marker that failed on a block's value, with its handler's error (`format.md` §5); the block stands for
+  * its value with none of the loader's markers.
+  */
+final case class MarkerFailed(location: SourceLocation, name: String, error: MarkerError) extends PsiError
+
+/** A built-in marker after one of the loader's: the built-in ones shape the lines, before the loader's run over the
+  * value (§5); the block is read as with no marker.
+  */
+final case class BuiltInMarkerAfterLoaders(location: SourceLocation, name: String) extends PsiError
+
 /** A call of a directive the loader has no handler for (`format.md` §6). */
 final case class UnknownDirective(location: SourceLocation, name: String) extends PsiError
 
 /** A call of a directive the loader was built with disabled (§6). */
 final case class DisabledDirective(location: SourceLocation, name: String) extends PsiError
 
-/** A call whose handler failed, with the handler's message. */
-final case class DirectiveFailed(location: SourceLocation, name: String, message: String) extends PsiError
+/** A call whose handler failed, with the handler's error. */
+final case class DirectiveFailed(location: SourceLocation, name: String, error: DirectiveError) extends PsiError
 
 /** A call in statement position whose handler gave something other than a map. */
 final case class DirectiveNotMap(location: SourceLocation, name: String) extends PsiError

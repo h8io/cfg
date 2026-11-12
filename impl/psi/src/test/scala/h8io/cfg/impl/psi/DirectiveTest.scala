@@ -16,11 +16,12 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
 
   private def directive(
       directiveName: String,
-      params: Parameter*)(body: (Node.IMap[Id.Root], DirectiveContext) => Either[String, Option[Fragment]]): Directive =
+      params: Parameter*)(
+      body: (Node.IMap[Id.Root], DirectiveContext) => Either[DirectiveError, Option[Fragment]]): Directive =
     new Directive {
       def name: String = directiveName
       def parameters: Seq[Parameter] = params
-      def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[String, Option[Fragment]] =
+      def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Option[Fragment]] =
         body(arguments, context)
     }
 
@@ -114,8 +115,8 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
   }
 
   it should "fail with its handler's message, contributing nothing" in {
-    errors(loader(directive("d")((_, _) => Left("no"))), "a: #d\nb: 1") shouldBe
-      List(DirectiveFailed(at(1, 4), "d", "no"))
+    errors(loader(directive("d")((_, _) => Left(Problem("no")))), "a: #d\nb: 1") shouldBe
+      List(DirectiveFailed(at(1, 4), "d", Problem("no")))
   }
 
   it should "give nothing: no field in statement position, the field or element dropped in value position" in {
@@ -174,7 +175,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     val parsing = directive("p", Parameter("text", required = true)) { (arguments, context) =>
       arguments("text") match {
         case Node.IScalar(_, _, text, _) => Right(Some(context.parse("t", text)))
-        case other => Left(other.toString)
+        case other => Left(Problem(other.toString))
       }
     }
     val root = loaded(loader(parsing, constant("k", Fragment(Node.IScalar(Id.Root, NoTags, "v", at(9, 9))))),
@@ -257,9 +258,9 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
           context.parse(file, context.url.getOrElse(dir.toUri.toURL).toURI.resolve(file).toURL) match {
             case Right(fragment) => Right(Some(fragment))
             case Left(e: IOException) =>
-              if (file.startsWith("optional")) Right(None) else Left(e.getClass.getSimpleName)
+              if (file.startsWith("optional")) Right(None) else Left(Problem(e.getClass.getSimpleName))
           }
-        case other => Left(other.toString)
+        case other => Left(Problem(other.toString))
       }
     }
     val main = write(dir, "main.psi", "#inc(\"ok.psi\")\n#inc(\"optional.psi\")")
@@ -270,7 +271,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     loader(include)(broken.toUri.toURL).left.map(_.errors) shouldBe
       Left(
         List(
-          DirectiveFailed(SourceLocation(url, 1, 1), "inc", "FileNotFoundException"),
+          DirectiveFailed(SourceLocation(url, 1, 1), "inc", Problem("FileNotFoundException")),
           InvalidEncoding(SourceLocation("bytes.psi", 1, 4))))
   }
 
@@ -282,9 +283,10 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     val include = directive("inc", Parameter("file", required = true)) { (arguments, context) =>
       arguments("file") match {
         case Node.IScalar(_, _, file, _) =>
-          context.parse(file, context.url.getOrElse(fail("no URL")).toURI.resolve(file).toURL).left.map(_.toString).map(
+          context.parse(file, context.url.getOrElse(fail("no URL")).toURI.resolve(file).toURL).left.map(e =>
+            Problem(e.toString)).map(
             Some(_))
-        case other => Left(other.toString)
+        case other => Left(Problem(other.toString))
       }
     }
     loader(include)(a.toUri.toURL).left.map(_.errors) shouldBe

@@ -15,7 +15,10 @@ import scala.collection.{immutable, mutable}
   * A source a handler parses is expanded on its own, and its errors travel with the fragment, reported where the
   * fragment is used: a fragment is a value a handler may keep and give back again, in this load or a later one.
   */
-private[psi] final class Expand private (directives: Map[String, Directive], disabled: Set[String]) {
+private[psi] final class Expand private (
+    directives: Map[String, Directive],
+    disabled: Set[String],
+    markers: Map[String, Marker]) {
   import Expand.*
 
   private val errors = mutable.ListBuffer.empty[PsiError]
@@ -27,7 +30,7 @@ private[psi] final class Expand private (directives: Map[String, Directive], dis
 
   /** `source` parsed and expanded, standing on `stack`, the sources that parsed it, the latest first. */
   private def document(source: Source, stack: List[Source]): Ast.Document = {
-    val parsed = Parser.parse(source)
+    val parsed = Parser.parse(source, markers)
     errors ++= parsed.errors
     Ast.Document(statements(parsed.value.statements, source :: stack))
   }
@@ -97,8 +100,8 @@ private[psi] final class Expand private (directives: Map[String, Directive], dis
         case Some(directive) =>
           arguments(call, directive.parameters).flatMap { arguments =>
             directive(arguments, new Context(call, stack)) match {
-              case Left(message) =>
-                report(DirectiveFailed(call.location, call.name, message))
+              case Left(error) =>
+                report(DirectiveFailed(call.location, call.name, error))
                 None
               case Right(fragment) => fragment
             }
@@ -174,7 +177,7 @@ private[psi] final class Expand private (directives: Map[String, Directive], dis
       } else if (stack.length >= MaxDepth)
         Fragment.Parsed(Ast.Document(Vector.empty), root, DirectiveTooDeep(call.location, MaxDepth) :: Nil)
       else {
-        val expand = new Expand(directives, disabled)
+        val expand = new Expand(directives, disabled, markers)
         val document = expand.document(source, stack)
         Fragment.Parsed(document, root, expand.errors.toList)
       }
@@ -188,8 +191,12 @@ private[psi] object Expand {
   def MaxDepth: Int = 64
 
   /** `source` parsed and its directives expanded, with every error found in it and in the sources it parsed. */
-  def apply(source: Source, directives: Map[String, Directive], disabled: Set[String]): Result[Ast.Document] = {
-    val expand = new Expand(directives, disabled)
+  def apply(
+      source: Source,
+      directives: Map[String, Directive],
+      disabled: Set[String],
+      markers: Map[String, Marker]): Result[Ast.Document] = {
+    val expand = new Expand(directives, disabled, markers)
     val document = expand.document(source, Nil)
     // a fragment used more than once, or two of one source, report the same errors: each is reported once
     Result(document, expand.errors.toList.distinct)
