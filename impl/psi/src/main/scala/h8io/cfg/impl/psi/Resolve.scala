@@ -43,7 +43,8 @@ private[psi] final class Resolve(root: Tree.Map, properties: () => Map[String, S
 
   private def map(id: Id, map: Tree.Map): Either[Failure, Tree.Map] = {
     val entries = map.keys.map(key => key -> resolve(Id.Key(key, id), map.entries(key)))
-    failure(entries.map(_._2)).toLeft {
+    // a key whose merge failed fails the map, after its other children have reported their own errors
+    failure(entries.map(_._2) ++ map.failed.headOption.map(_ => Left(Failed))).toLeft {
       val present = entries.collect { case (key, Right(Some(value))) => key -> value }
       map.copy(keys = present.map(_._1), entries = present.toMap)
     }
@@ -112,7 +113,11 @@ private[psi] final class Resolve(root: Tree.Map, properties: () => Map[String, S
     */
   private def child(id: Id, container: Tree.Value, segment: Id.Branch): Either[Failure, Option[(Id, Tree.Value)]] =
     (container, segment) match {
-      case (map: Tree.Map, Id.Key(key, _)) => Right(map.entries.get(key).map(Id.Key(key, id) -> _))
+      case (map: Tree.Map, Id.Key(key, _)) =>
+        map.entries.get(key) match {
+          case Some(value) => Right(Some(Id.Key(key, id) -> value))
+          case None => if (map.failed(key)) Left(Failed) else Right(None)
+        }
       case (sequence: Tree.Sequence, Id.Index(index, _)) =>
         @tailrec def element(i: Int, left: Int): Either[Failure, Option[(Id, Tree.Value)]] =
           if (i == sequence.elements.size) Right(None)
