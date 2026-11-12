@@ -38,7 +38,7 @@ URL ──read──▶ Source ──lex/parse──▶ Ast ──expand directi
 | Piece | Package member (all under `h8io.cfg.impl.psi`) | Visibility |
 |---|---|---|
 | Loader | `Psi`: `Psi(urls*)`, `Psi.parse(name, text)` | public |
-| Locations | `PsiLocation`, `SourceLocation`, `ReferenceLocation`, `ConcatenationLocation`, `MergedLocation`, `NoSourceLocation`, `SystemPropertyLocation`, `EnvLocation` (§10) | public |
+| Locations | `PsiLocation`, `SourceLocation`, `ReferenceLocation`, `ConcatenationLocation`, `MergedLocation`, `NoSourceLocation`, `SystemPropertyLocation` (§10) | public |
 | Errors | `PsiError` (each with a `location`), `PsiErrors` (non-empty, a `CfgError`) (§11) | public |
 | Directive API | handler trait + registry passed to the loader (§6) | public, designed in step 10 |
 | Source | the text of one URL, with offset → line/column | private |
@@ -249,23 +249,20 @@ code is the lexer alone and nothing is published.
 ### 9. Substitutions
 
 - Resolution over the merged Tree (§9): whole-value graft of any node including `null`, `${?…}` drops
-  the field, concatenation of scalars only, lookup order tree → system properties → environment; before it, the tree's
-  values overridden at launch from the system properties and the environment.
-  System properties and the environment are injected as functions, so tests do not touch the real
-  ones.
+  the field, concatenation of scalars only, looked up in the tree alone; before it, the tree's values overridden
+  at launch from the system properties. The system properties are injected, so tests do not touch the
+  real ones; the environment is not read.
 - Tags written before a whole-value `${…}` are added to the grafted node's (§9); a concatenation carries only
   the tags written before it.
 - Cycles are errors naming the path; self-reference is a cycle (§9).
 - Root causes only: a node depending on a failed one is dropped silently (§11).
 - Locations (§10): `ReferenceLocation` on every node of a grafted subtree, chains for chained
-  references, `ConcatenationLocation` with one entry per `${…}`, `SystemPropertyLocation` and
-  `EnvLocation`.
+  references, `ConcatenationLocation` with one entry per `${…}`, `SystemPropertyLocation`.
 - Remove the "not supported yet" path for `${…}` from step 7.
 - **Spec gaps:** settled in session 18 (`format.md` §9, §14): `${?x}` drops a sequence element and
-  reads as empty in a concatenation; a grafted node's id is its new position; system properties are a
-  tree split at the dots for a lookup; both override the sources' values, `-D` over the environment, the
-  variable's name made from the path (`db.url` → `DB_URL`). `#define` for a key given only at launch is
-  `format.md` §13 item 7, for later.
+  reads as empty in a concatenation; a grafted node's id is its new position; system properties override the
+  sources' values, the environment is not read, `${…}` looks in the tree only. `#define` for a key given
+  only at launch is `format.md` §13 item 7, for later.
 
 ### 10. Directive and marker framework
 

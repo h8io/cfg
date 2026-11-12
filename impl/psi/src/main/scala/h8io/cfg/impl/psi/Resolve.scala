@@ -8,24 +8,21 @@ import scala.collection.mutable
 /** Resolves the substitutions of a merged tree (`format.md` §9), its values already overridden at launch, giving a tree
   * with none left.
   *
-  * A path is looked up in the tree, then in the system properties split at the dots, then in the environment by the
-  * name [[Override.env]] gives it, the first that has it winning. A substitution on the way is resolved first, to look
-  * into what it grafts; the node found is resolved whole before it is grafted. Each substitution of the tree is
-  * resolved once, by its position, and the position is marked while it is being resolved: reaching it again is a cycle,
-  * reported by the reference that reached it.
+  * A path is looked up in the tree alone. A substitution on the way is resolved first, to look into what it grafts; the
+  * node found is resolved whole before it is grafted. Each substitution of the tree is resolved once, by its position,
+  * and the position is marked while it is being resolved: reaching it again is a cycle, reported by the reference that
+  * reached it.
   *
   * Errors are root causes only (§11): a node that depends on a failed one fails silently, and so does every container
   * holding it — the result is then discarded anyway.
   */
-private[psi] final class Resolve(root: Tree.Map, properties: Map[String, String], env: Map[String, String]) {
+private[psi] final class Resolve(root: Tree.Map) {
   import Resolve.*
 
   private val errors = mutable.ListBuffer.empty[PsiError]
 
   /** By position, a substitution resolved, or `None` while it is being resolved. */
   private val resolved = mutable.Map.empty[Id, Option[Resolution]]
-
-  private lazy val propertyTree = Resolve.properties(properties)
 
   def tree: Result[Tree.Map] = Result(map(Id.Root, root).getOrElse(root), errors.toList)
 
@@ -78,30 +75,7 @@ private[psi] final class Resolve(root: Tree.Map, properties: Map[String, String]
     Left(Failed)
   }
 
-  /** The tree, the system properties and the environment in turn; a failure in the tree is not looked past. */
-  private def lookup(path: Id.Branch): Resolution = {
-    val segments = Resolve.segments(path)
-    find(Id.Root, root, segments) match {
-      case Right(None) =>
-        find(Id.Root, propertyTree, segments) match {
-          case Right(None) => Right(environment(segments))
-          case found => found
-        }
-      case other => other
-    }
-  }
-
-  /** The environment variable a path of keys names, as a scalar; a path with an index names none. */
-  private def environment(segments: List[Id.Branch]): Option[Tree.Value] =
-    segments
-      .foldRight(Option(List.empty[String])) {
-        case (Id.Key(key, _), keys) => keys.map(key :: _)
-        case (_: Id.Index, _) => None
-      }
-      .flatMap { keys =>
-        val variable = Override.env(keys)
-        env.get(variable).map(Tree.Scalar(_, Set.empty, EnvLocation(variable)))
-      }
+  private def lookup(path: Id.Branch): Resolution = find(Id.Root, root, Resolve.segments(path))
 
   /** The node at `segments` below `value` at `id`, resolved. */
   private def find(id: Id, value: Tree.Value, segments: List[Id.Branch]): Resolution =
@@ -181,8 +155,7 @@ private[psi] object Resolve {
 
   type Resolution = Either[Failure, Option[Tree.Value]]
 
-  def apply(root: Tree.Map, properties: Map[String, String], env: Map[String, String]): Result[Tree.Map] =
-    new Resolve(root, properties, env).tree
+  def apply(root: Tree.Map): Result[Tree.Map] = new Resolve(root).tree
 
   /** The failure of a container: a cycle if any of its children is in one, to be reported by the reference closing it.
     */
@@ -222,25 +195,4 @@ private[psi] object Resolve {
     }
     moved(value, path, tags)
   }
-
-  /** The system properties as a tree of strings, their names split at the dots: a name that is both a value and a
-    * prefix of others, `a` with `a.b`, loses its value to the map (§9). Sorted, a prefix comes before the names it
-    * prefixes, so a map is never found where a value is to go.
-    */
-  private[psi] def properties(properties: Map[String, String]): Tree.Map =
-    properties.toVector.sortBy(_._1).foldLeft(Tree.Map.empty(Set.empty, NoSourceLocation)) {
-      case (tree, (name, value)) =>
-        def put(map: Tree.Map, path: String, key: String, rest: List[String]): Tree.Map =
-          rest match {
-            case Nil => map.updated(key, Tree.Scalar(value, Set.empty, SystemPropertyLocation(name)))
-            case next :: more =>
-              val nested = map.entries.get(key) match {
-                case Some(nested: Tree.Map) => nested
-                case _ => Tree.Map.empty(Set.empty, SystemPropertyLocation(path))
-              }
-              map.updated(key, put(nested, path + '.' + next, next, more))
-          }
-        val keys = name.split("\\.", -1).toList
-        put(tree, keys.head, keys.head, keys.tail)
-    }
 }

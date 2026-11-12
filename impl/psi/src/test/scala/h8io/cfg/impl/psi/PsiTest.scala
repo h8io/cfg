@@ -140,7 +140,7 @@ class PsiTest extends AnyFlatSpec with Matchers {
       )
   }
 
-  it should "resolve substitutions, looking past the tree into the system properties and the environment" in {
+  it should "resolve substitutions over the tree" in {
     val root = loaded(Psi.parse("s", "a: ${b}\nb: 1\nc: \"x${?psi-test-none}\""))
     root("a") shouldBe Node.IScalar(Id.Key("a", Id.Root), Set.empty, "1",
       ReferenceLocation(SourceLocation("s", 1, 4), "b", SourceLocation("s", 2, 4)))

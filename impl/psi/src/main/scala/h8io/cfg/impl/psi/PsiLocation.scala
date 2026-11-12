@@ -67,16 +67,9 @@ case object NoSourceLocation extends PsiLocation {
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = (sources.size, 0, 0)
 }
 
-/** A value read from the system property `name`. */
+/** A value overridden at launch by the system property `name`. */
 final case class SystemPropertyLocation(name: String) extends PsiLocation {
   def description: String = "system property " + name
-
-  private[psi] def order(sources: Seq[String]): (Int, Int, Int) = (sources.size, 0, 0)
-}
-
-/** A value read from the environment variable `name`. */
-final case class EnvLocation(name: String) extends PsiLocation {
-  def description: String = "env " + name
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = (sources.size, 0, 0)
 }

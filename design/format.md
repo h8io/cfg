@@ -602,7 +602,7 @@ cannot be expressed any other way.
 2. Expand directives depth-first. `#include` parses the referenced source recursively and merges it
    positionally. Cycle detection lives here.
 3. Merge the input sources, last wins.
-4. Override the merged tree's values from the system properties and the environment (§9).
+4. Override the merged tree's values from the system properties (§9).
 5. Resolve substitutions over the overridden tree.
 6. Wrap the result as `Node.IMap[Id.Root]`.
 
@@ -635,29 +635,19 @@ from a substitution.
 - `${?path}` is optional: when it does not resolve, the field is omitted entirely, so a later lookup
   yields `Node.INone` rather than an error. As an element of a sequence, it drops the element, the
   ones after it moving up. As a part of a concatenation, it reads as the empty string.
-- **System properties and the environment override the sources**, as they are meant to: they are
-  what is easiest to change at launch. Before any substitution is resolved, every value of the
-  merged tree that is not a container — a scalar, `null`, a `${…}` or a concatenation — standing at a
-  path of keys only, no index on the way, is replaced by the system property named by that path, or
-  failing it by the environment variable named by it; a system property wins over the environment.
-  Only keys the sources define are overridden: a property or a variable naming no such value adds
-  nothing, and a map or a sequence is never replaced. The value is a string, with the tags written in
-  the source kept and the location of the property or the variable (§10). Declaring a key with no
+- **System properties override the sources**, as they are meant to: they are what is easiest to
+  change at launch. Before any substitution is resolved, every value of the merged tree that is not
+  a container — a scalar, `null`, a `${…}` or a concatenation — standing at a path of keys only, no
+  index on the way, is replaced by the system property named by the path's keys joined by dots,
+  `db.url`, if there is one. Only keys the sources define are overridden: a property naming no such
+  value adds nothing, and a map or a sequence is never replaced. The value is a string, with the
+  tags written in the source kept and the location of the property (§10). Declaring a key with no
   value, to be given at launch, is §13 item 7.
-- **The names.** A system property is named by the path's keys joined by dots, `db.url`; an
-  environment variable by the same keys in upper case, a `-` in them as `_`, joined by `_`:
-  `db.url` is `DB_URL`, `pool.max-size` is `POOL_MAX_SIZE`. The mapping goes from a path to a name
-  only, so two paths can name one variable, which then overrides both.
-- **Lookup order of `${path}`** is the overridden tree, then system properties, then environment
-  variables — HOCON's places, chosen deliberately over an explicit `${env:…}` form. Each is looked up
-  by the whole path, and the first that has it wins; a path that fails in the tree for another
-  reason than its absence — a cycle, a node that failed — is not looked up further.
-- **For a lookup, system properties form a tree of strings**, their names split at every dot:
-  `${java.home}` is the property and `${java}` grafts a map of every `java.*` one. Where a name is
-  both a value and a prefix of others, `a=1` and `a.b=2`, the map wins and the value is lost, as in
-  HOCON. The environment is looked up by the name of the path above: `${HOME}`, `${home}` and
-  `${db.url}` read `HOME`, `HOME` and `DB_URL`. Turning a string into structure — a list out of
-  `PATH` — is a directive's job, not the lookup's.
+- **The environment is not read**, and a system property is not read but to override a value of
+  the sources.
+- **`${path}` is looked up in the overridden tree only.** A path the sources do not define does not
+  resolve, whatever the system properties or the environment hold; a value from either has to be
+  given a key in the sources first.
 - **A grafted node takes its new position**, the id of the field it is grafted at, not that of the
   node it came from; its location keeps the origin (§10). The graft is made in the merged tree,
   before the nodes are wrapped, so `Node` never hands a container a foreign id.
@@ -706,15 +696,14 @@ final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLo
 final case class MergedLocation(at: SourceLocation, earlier: ::[SourceLocation]) extends PsiLocation
 // the root of a load given no source, an empty map written nowhere
 case object NoSourceLocation extends PsiLocation
-// origins that are not a file
+// a value overridden at launch, not from a file
 final case class SystemPropertyLocation(name: String) extends PsiLocation
-final case class EnvLocation(name: String) extends PsiLocation
 ```
 
 `origin` is a `Location`, not a `SourceLocation`, so chains fall out on their own: with
 `a: ${b}`, `b: ${c}`, `c: 1`, the node at `a` is `ReferenceLocation(a-site, "b",
-ReferenceLocation(b-site, "c", SourceLocation(c-site)))`. The environment and system properties get
-a location of their own instead of a fake file position.
+ReferenceLocation(b-site, "c", SourceLocation(c-site)))`. A system property gets a location of its
+own instead of a fake file position.
 
 `description` puts the reference site first, because that is where the reader has to go:
 `file:/etc/app/app.psi:12:9 (${db.url} from base.psi:3:7)`. The other cases follow the same shape:
@@ -724,11 +713,10 @@ a location of their own instead of a fake file position.
 | `SourceLocation` | `app.psi:12:9` |
 | `ReferenceLocation` | `app.psi:12:9 (${db.url} from base.psi:3:7)` |
 | — in a chain | `app.psi:1:4 (${b} from app.psi:2:4 (${c} from app.psi:3:4))` |
-| `ConcatenationLocation` | `app.psi:12:9 (${host} from base.psi:3:7, ${port} from env DB_PORT)` |
+| `ConcatenationLocation` | `app.psi:12:9 (${host} from base.psi:3:7, ${port} from system property db.port)` |
 | `MergedLocation` | `app.psi:12:1 (also app.psi:7:1, base.psi:3:1)` |
 | `NoSourceLocation` | `no source` |
 | `SystemPropertyLocation` | `system property db.url` |
-| `EnvLocation` | `env DB_PORT` |
 
 A part of a concatenation is rendered without its own site, which shares the concatenation's line;
 the part's `ReferenceLocation` still holds it.
@@ -909,7 +897,7 @@ mistake is worse than stopping.
    - With the options of item 4, presumably node, meta-field, then options: `${a^size; …}`.
 7. **`#define`: a key with no value, expected at launch.** Raised by the user in session 18, for the
    future: a directive declaring a key the sources do not give a value, so that the override from
-   the system properties or the environment (§9) has a key to override, the config naming what it
+   the system properties (§9) has a key to override, the config naming what it
    expects from the launch instead of writing a placeholder value. Nothing decided: its arguments, a
    default, whether a key left undefined at launch is an error, its type or tags.
 
@@ -1673,22 +1661,18 @@ Spec gaps of plan step 9, substitutions, settled with the user before coding it 
   dropping the whole scalar.
 - **A grafted node's id is its new position**, confirmed; the graft is made in the merged tree and
   the views give it its ids while wrapping.
-- **System properties are a tree of strings, split at the dots**, for a lookup. Structure out of a
-  string, splitting a value, is left to a directive if it is ever needed. The user's call. My
-  proposal of a property name both a value and a prefix losing the value to the map, as in HOCON,
-  confirmed by the user.
-- **System properties and the environment override the sources, the properties over the
-  environment** (§8, §9): the user's call — they exist to change at launch what the file says. My
-  proposals, which the user took: only values the sources define are overridden, so neither adds
-  keys nor floods the root with `PATH` and `java.*` as HOCON's `ConfigFactory.load` does; the
-  environment variable's name made from the path, `db.url` → `DB_URL`, rather than a variable's name
-  split into a path. Supersedes my earlier proposal, first confirmed then rejected by the user, of
-  an environment not split and reached only by a one-key path. Rejected: overriding from every
-  property and variable, and HOCON's `CONFIG_FORCE_` prefix for the environment.
+- **System properties override the sources**, only the values the sources define (§8, §9): the
+  user's call — they exist to change at launch what the file says. **The environment is not read at
+  all**, and a `${…}` is looked up in the overridden tree only: the user's call, after rejecting each
+  way of naming a variable by a path. Supersedes, within this session: an environment not split,
+  reached by a one-key path (proposed by me, confirmed, then rejected); a variable named from the
+  path, `db.url` → `DB_URL` (proposed by me, taken, then rejected); system properties, split at the
+  dots into a tree, and the environment as places a `${…}` falls back to, after the tree, as in
+  HOCON. Rejected as well: overriding from every property, flooding the root with `java.*` as
+  HOCON's `ConfigFactory.load` does.
 - Mine, not raised: only a value that is not a container is overridden, at a path through maps only
-  — a string cannot stand for a map or a sequence, and an index has no name in either source; the
-  tags written in the source are kept; the environment is looked up by the same name in a
-  `${…}`.
+  — a string cannot stand for a map or a sequence, and an index has no name as a property; the tags
+  written in the source are kept.
 - **Meta-fields (`${path^meta}`, §13 item 6) stay out of step 9**: they are after v1.
 - Not raised with the user, decided while implementing: a cycle is reported once, at the reference
   that reaches a node still being resolved, naming the path that reference was written with; an

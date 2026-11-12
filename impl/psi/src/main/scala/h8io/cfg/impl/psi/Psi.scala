@@ -21,12 +21,11 @@ import java.net.URL
   *
   * ==Launch overrides==
   * A value the sources define that is not a container, at a path of keys, is replaced by the system property of that
-  * path, `db.url`, or failing it by the environment variable, `DB_URL` (§9).
+  * path, `db.url`, if there is one (§9). The environment is not read.
   *
   * ==Substitutions==
-  * `\${path}` grafts the node at `path` whole, looked up in the overridden tree, then in the system properties split at
-  * the dots, then in the environment; `\${?path}` with nothing there drops its field or element, and reads as empty in
-  * a concatenation (§9).
+  * `\${path}` grafts the node at `path` whole, looked up in the overridden tree; `\${?path}` with nothing there drops
+  * its field or element, and reads as empty in a concatenation (§9).
   *
   * ==Not yet==
   * Directives are reported as [[NotSupportedYet]] until the plan's steps 10–11 land.
@@ -35,17 +34,16 @@ object Psi {
 
   /** Loads and merges the sources at `urls`, in order, each named in locations by its URL as given (§10). */
   def apply(urls: URL*): Either[PsiErrors, Node.IMap[Id.Root]] =
-    load(urls.map(url => Source.read(url.toString, url)), sys.props.toMap, sys.env)
+    load(urls.map(url => Source.read(url.toString, url)), sys.props.toMap)
 
   /** Loads a source held as `text`, named `name` in locations. */
   def parse(name: String, text: String): Either[PsiErrors, Node.IMap[Id.Root]] =
-    load(Right(Source(name, text)) :: Nil, sys.props.toMap, sys.env)
+    load(Right(Source(name, text)) :: Nil, sys.props.toMap)
 
-  /** Loads `sources`, their values overridden by `properties` and `env`, the system properties and the environment. */
+  /** Loads `sources`, their values overridden by `properties`, the system properties. */
   private[psi] def load(
       sources: Seq[Either[PsiError, Source]],
-      properties: Map[String, String],
-      env: Map[String, String]): Either[PsiErrors, Node.IMap[Id.Root]] = {
+      properties: Map[String, String]): Either[PsiErrors, Node.IMap[Id.Root]] = {
     val parsed = Result.sequence(sources.map {
       case Right(source) => Parser.parse(source).flatMap(expand).map(document => Some((document, source.name)))
       case Left(error) => Result.failed(None, error)
@@ -56,7 +54,7 @@ object Psi {
         case (document, name) :: rest =>
           val located = rest.map { case (document, name) => (document, SourceLocation(name, 1, 1)) }
           val merged = Merge(::((document, SourceLocation(name, 1, 1)), located)).flatMap(tree =>
-            Resolve(Override(tree, properties, env), properties, env))
+            Resolve(Override(tree, properties)))
           // merging and resolving go by key, not by source: the errors are put back in the order of the sources
           val sources = name :: rest.map(_._2)
           Result(MapImpl(Id.Root, merged.value), merged.errors.sortBy(_.location.order(sources)))
