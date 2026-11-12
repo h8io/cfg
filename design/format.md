@@ -1658,8 +1658,8 @@ Spec gaps of plan step 9, substitutions, settled with the user before coding it 
 - **System properties are a tree of strings, split at the dots; the environment is a map of
   strings, not split.** Looked up by the whole path each. Structure out of a string, splitting a
   value, is left to a directive if it is ever needed. The user's call, splitting the properties
-  included. Proposed by me and not yet confirmed: the environment not split, and a property name
-  that is both a value and a prefix losing the value to the map, as in HOCON.
+  included. Proposed by me and confirmed by the user: the environment not split, and a property
+  name that is both a value and a prefix losing the value to the map, as in HOCON.
 - **Meta-fields (`${path^meta}`, §13 item 6) stay out of step 9**: they are after v1.
 - Not raised with the user, decided while implementing: a cycle is reported once, at the reference
   that reaches a node still being resolved, naming the path that reference was written with; an
