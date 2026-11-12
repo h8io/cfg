@@ -900,6 +900,19 @@ mistake is worse than stopping.
    the system properties (§9) has a key to override, the config naming what it
    expects from the launch instead of writing a placeholder value. Nothing decided: its arguments, a
    default, whether a key left undefined at launch is an error, its type or tags.
+8. **Importing YAML and HOCON.** Raised by the user in session 18, for the future: a Psi source
+   pulling in a YAML or HOCON file, as `#include` pulls in a Psi one. Nothing decided. Noted so far:
+   - Psi depends on nothing but `cfg`, so the readers would come from `cfg-yaml` and `cfg-hocon` as
+     directives registered with the loader (plan step 10), not from Psi itself; or as `#include`
+     choosing a reader by the extension, which then has to be given the readers.
+   - What comes in is a `Node`, and a handler's fragment made from a `Node` holds no substitution
+     (§6): HOCON's own `${…}` is resolved by typesafe-config inside the imported file, and a Psi
+     `${…}` cannot reach into it before the merge, nor can it reach out of it.
+   - What maps how: YAML tags to Psi tags, as `cfg-yaml` already gives them; HOCON has none;
+     locations, which have to name the imported file and a line in it, as a `SourceLocation` does
+     for Psi; a key that is not bare, written in backticks when rendered.
+   - Open as well: where it merges, as a field's value or into the block it stands in, as
+     `#include` does; errors of the imported file in Psi's own error list or as one.
 
 ## 14. Decision log
 
