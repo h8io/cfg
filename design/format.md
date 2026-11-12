@@ -286,7 +286,17 @@ are — and then strips it. `<`, `>` and `width` set the indent, and a block tak
 them; with none, Java's rule comes first, so `"""+` folds what that rule left.
 
 **The set of markers is open**, as the set of directives is (§6): the loader is built with the
-marker handlers it knows, and a handler maps the lines of a block to lines (§14, session 10). **The
+marker handlers it knows (§14, session 19). **A loader's own markers are a pipeline over the
+block's finished value**: the first gets the string the block stands for — its layout applied, its
+escapes read, its substitutions resolved — and each next one what the one before it gave; what the
+last gives is the value. They run with the substitutions (§8, phase 5), so a block refers to a value
+of the tree and still goes through them, and whatever grafts the block gets what they gave. A
+handler declares its parameters as a directive's does (§6), gets its arguments as a `Node.IMap` and
+the string, and gives back the new string or a message, reported at the marker as its failure;
+the block then stands for its value as with none of the loader's markers. A value overridden at
+launch (§9) replaces the block, its markers included. The built-in markers below shape the lines,
+before any escape is read, and so come first: one of them after one of the loader's is an error.
+**The
 four above — `<`, `>`, `width` and `+` — are reserved**: every loader has them, and none can
 replace or remove them, so `"""<` means the same whatever loader reads the file. A loader's own
 markers are added to them, and registering one of the four names is an error when the loader is
@@ -297,7 +307,8 @@ disable it (§6). Each of these is reported, none of them fatal, and the block i
 then read as with no marker: a marker the loader does not know; a named argument it does not take,
 a positional one past its last parameter, a positional one after a named one, an argument given
 twice — by name, or by position and then by name; a value it cannot take, an argument it requires
-and was not given; and a second marker that sets the indent. Markers that cannot be read at all — `"""2`, `"""<x`, `"""abc"""` —
+and was not given; a second marker that sets the indent; and a built-in marker after one of the
+loader's. Markers that cannot be read at all — `"""2`, `"""<x`, `"""abc"""` —
 are one error, where they stop fitting, and the rest of the line is not looked at. Whitespace after
 the delimiter or after the last marker is an error as well, but the markers are applied.
 
@@ -635,7 +646,8 @@ cannot be expressed any other way.
    positionally. Cycle detection lives here.
 3. Merge the input sources, last wins.
 4. Override the merged tree's values from the system properties (§9).
-5. Resolve substitutions over the overridden tree.
+5. Resolve substitutions over the overridden tree, and run the loader's own markers over the
+   blocks that have them (§5).
 6. Wrap the result as `Node.IMap[Id.Root]`.
 
 The consequence worth stating out loud: because 2 runs before 5, an included file may reference
@@ -1758,4 +1770,22 @@ question of its own.
   importing YAML (§13 item 8) in mind. Rejected: the call's location alone, simpler but losing the
   line in the imported file. `MergedLocation` takes any location for it, since a block a
   directive built merges as one written does.
+
+Plan step 10b, the markers as handlers, settled with the user before coding it (§5).
+
+- **A loader's markers take the block's finished string and give a string**, in a pipeline left to
+  right — the user's call, over my proposal of lines of pieces at the layout stage (written text,
+  escapes, opaque substitutions), and supersedes session 10's "a handler maps the lines of a block
+  to lines". The first gets the value after the layout, the escapes and the substitutions: the
+  user's call, the markers running after phase 5 rather than being refused on a block with a
+  `${…}`, or seeing it as text. The built-in markers stay at the layout stage, and one of them
+  after a loader's marker is an error, read as with no marker.
+- Mine, taken by the user: a handler declares parameters as a directive's, its argument errors
+  are a directive's; a failure is a message, reported at the marker, the block then standing for
+  its value as with none of the loader's markers. A marker name is checked when the loader is
+  built — a run of symbols or a name by the key rule, as the syntax reads one — and so is one
+  registered twice, a built-in included. Markers and directives have names of their own: a marker
+  `include` is no `#include`. The built-in markers stay internal, as `#include` does.
+- Mine, not raised: a value overridden at launch replaces the block and its markers with it; a
+  marker's failure fails no node that depends on the block, the block having a value without it.
 
