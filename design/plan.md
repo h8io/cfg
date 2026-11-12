@@ -37,13 +37,13 @@ URL ──read──▶ Source ──lex/parse──▶ Ast ──expand directi
 
 | Piece | Package member (all under `h8io.cfg.impl.psi`) | Visibility |
 |---|---|---|
-| Loader | `Psi`: `Psi(urls*)`, `Psi.parse(name, text)` | public |
-| Locations | `PsiLocation`, `SourceLocation`, `ReferenceLocation`, `ConcatenationLocation`, `MergedLocation`, `NoSourceLocation`, `SystemPropertyLocation` (§10) | public |
+| Loader | `Psi`: `Psi(urls*)`, `Psi.parse(name, text)`, `Psi.builder`; `PsiBuilder`, `PsiLoader`, `PsiBuildError`s | public |
+| Locations | `PsiLocation`, `SourceLocation`, `ReferenceLocation`, `ConcatenationLocation`, `MergedLocation`, `NoSourceLocation`, `DirectiveLocation`, `SystemPropertyLocation` (§10) | public |
 | Errors | `PsiError` (each with a `location`), `PsiErrors` (non-empty, a `CfgError`) (§11) | public |
-| Directive API | handler trait + registry passed to the loader (§6) | public, designed in step 10 |
+| Directive API | `Directive`, `Parameter`, `DirectiveContext`, `Fragment` (§6) | public, since step 10a |
 | Source | the text of one URL, with offset → line/column | private |
 | Lexer | mode-driven: the parser asks for the next token *in key mode* or *in value mode* | private |
-| Ast | syntax tree of one source: fields with key path and operator (`:`/`:=`/block), values, `${…}`, concatenations, directives, every node with a `SourceLocation` | private |
+| Ast | syntax tree of one source: fields with key path and operator (`:`/`:=`/block), values, `${…}`, concatenations, directives, every node with a `SourceLocation`, or a `DirectiveLocation` when a directive built it from a `Node` | private |
 | Tree | merged, operator-free tree; leaves may still be `${…}` | private |
 | Node views | `MapImpl`/`SeqImpl` over immutable `Map`/`Vector` (§12) | private |
 
@@ -73,7 +73,7 @@ at the phase gate.
 | 7 | Node views and the loader, end to end | done |
 | 8 | Renderer and round-trip property tests | done |
 | 9 | Substitutions | done |
-| 10a | Directive framework | in progress |
+| 10a | Directive framework | done |
 | 10b | Markers as handlers | todo |
 | 11 | `#include` | todo |
 | 12 | Error messages and hints | todo |

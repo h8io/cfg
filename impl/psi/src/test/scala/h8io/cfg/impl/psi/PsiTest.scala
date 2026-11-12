@@ -118,8 +118,8 @@ class PsiTest extends AnyFlatSpec with Matchers {
     errors(Psi(directives, references)) shouldBe
       List(
         NotSupportedYet(at(directives, 1, 1), "#include"),
-        NotSupportedYet(at(directives, 2, 5), "#y"),
-        NotSupportedYet(at(directives, 3, 8), "#z"))
+        UnknownDirective(at(directives, 2, 5), "y"),
+        UnknownDirective(at(directives, 3, 8), "z"))
     errors(Psi(resource("broken.psi"), references)) shouldBe
       List(ExpectedColon(at(resource("broken.psi"), 1, 3)), SpaceInValue(at(resource("broken.psi"), 3, 8)))
     errors(Psi(references)) shouldBe List(UnresolvedSubstitution(at(references, 4, 4), "psi-test-e"))
