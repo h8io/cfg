@@ -3,8 +3,9 @@ package h8io.cfg.impl.psi
 import h8io.cfg.{Id, Node}
 
 import java.io.{FileNotFoundException, IOException}
-import java.net.{MalformedURLException, URI, URISyntaxException, URL}
-import java.nio.file.{NoSuchFileException, Paths}
+import java.net.{JarURLConnection, MalformedURLException, URI, URISyntaxException, URL}
+import java.nio.file.{Files, Paths}
+import java.util.jar.JarFile
 
 /** Why `#include` failed (`format.md` §6), carried by the [[DirectiveFailed]] at the call. */
 sealed trait IncludeError extends DirectiveError
@@ -102,7 +103,10 @@ private[psi] object Include extends Directive {
      else URI.create(text.substring(0, entry + 1) + URI.create(text.substring(entry + 1)).resolve(relative))).toURL
   }
 
-  /** The first candidate there, parsed; nothing when none is and the include is optional. */
+  /** The first candidate there, parsed; nothing when none is and the include is optional. Whether a candidate is there
+    * is asked before it is read: a file that cannot be read, its permissions denying it, throws what a missing one
+    * does.
+    */
   private def read(
       target: String,
       candidates: List[URL],
@@ -110,11 +114,45 @@ private[psi] object Include extends Directive {
       context: DirectiveContext): Either[IncludeError, Option[Fragment]] =
     candidates match {
       case url :: rest =>
-        context.parse(target, url) match {
-          case Right(fragment) => Right(Some(fragment))
-          case Left(_: FileNotFoundException | _: NoSuchFileException) => read(target, rest, optional, context)
-          case Left(cause) => Left(IncludeUnreadable(target, cause))
+        present(target, url).flatMap { there =>
+          if (there.contains(false)) read(target, rest, optional, context)
+          else
+            context.parse(target, url) match {
+              case Right(fragment) => Right(Some(fragment))
+              // a target known to be there only once read is not there when reading it finds nothing: a page not found
+              case Left(_: FileNotFoundException) if there.isEmpty => read(target, rest, optional, context)
+              case Left(cause) => Left(IncludeUnreadable(target, cause))
+            }
         }
       case Nil => if (optional) Right(None) else Left(IncludeNotFound(target))
+    }
+
+  /** Whether `url` is there, as the file system says for a file and for an entry of a jar that is a file; none for any
+    * other URL, which is known only once read.
+    */
+  private def present(target: String, url: URL): Either[IncludeError, Option[Boolean]] =
+    try
+      url.getProtocol match {
+        case "file" => Right(Some(Files.exists(Paths.get(url.toURI))))
+        case "jar" =>
+          // opening no connection: a connection to a missing entry fails as one the jar cannot give
+          val connection = url.openConnection().asInstanceOf[JarURLConnection]
+          val archive = connection.getJarFileURL
+          if (archive.getProtocol != "file") Right(None)
+          else {
+            val path = Paths.get(archive.toURI)
+            if (!Files.exists(path)) Right(Some(false))
+            else {
+              val jar = new JarFile(path.toFile)
+              try Right(Some(jar.getEntry(connection.getEntryName) != null))
+              finally jar.close()
+            }
+          }
+        case _ => Right(None)
+      }
+    catch {
+      case cause: IOException => Left(IncludeUnreadable(target, cause))
+      // a `file:` URL with a host, `file://host/x`, is no path
+      case _: IllegalArgumentException => Left(IncludeInvalidTarget(target))
     }
 }

@@ -1,11 +1,13 @@
 package h8io.cfg.impl.psi
 
+import com.sun.net.httpserver.HttpServer
 import h8io.cfg.{Id, Node}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import java.io.{FileNotFoundException, IOException}
 import java.nio.charset.StandardCharsets
+import java.net.{InetAddress, InetSocketAddress}
 import java.nio.file.{Files, Path, Paths}
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
@@ -144,6 +146,94 @@ class IncludeTest extends AnyFlatSpec with Matchers {
         encoding shouldBe SourceLocation("bytes.psi", 1, 4)
       case other => fail(other.toString)
     }
+  }
+
+  it should "not take a file it may not read for one not there" in {
+    val dir = Files.createTempDirectory("psi")
+    val locked = write(dir, "x.Ψ", "v: locked")
+    write(dir, "x.psi", "v: open")
+    Files.setPosixFilePermissions(locked, java.util.Collections.emptySet())
+    assume(!Files.isReadable(locked), "the tests run with every permission")
+    val main = write(dir, "main.psi", "#include(file: \"x\")\n#include(file: \"x.Ψ\", optional: true)")
+    errors(main) match {
+      case List(
+            DirectiveFailed(_, "include", IncludeUnreadable("x", _)),
+            DirectiveFailed(_, "include", IncludeUnreadable("x.Ψ", _))) => succeed
+      case other => fail(other.toString)
+    }
+  }
+
+  it should "know a jar entry and the jar itself not there" in {
+    val dir = Files.createTempDirectory("psi")
+    val jar = dir.resolve("c.jar")
+    val out = new ZipOutputStream(Files.newOutputStream(jar))
+    try {
+      out.putNextEntry(new ZipEntry("a.psi"))
+      out.write("v: 1".getBytes(StandardCharsets.UTF_8))
+      out.closeEntry()
+    } finally out.close()
+    def entry(name: String) = "jar:" + url(jar) + "!/" + name
+    val missingJar = "jar:" + url(dir.resolve("none.jar")) + "!/a.psi"
+    loader.parse(
+      "s",
+      "#include(url: \"" + entry("b.psi") + "\", optional: true)\n#include(url: \"" + missingJar +
+        "\", optional: true)\nx: #include(url: \"" + entry("a.psi") + "\")"
+    ).map(_.size) shouldBe Right(1)
+    loader.parse("s", "#include(url: \"" + entry("b.psi") + "\")").left.map(_.errors) shouldBe
+      Left(List(DirectiveFailed(SourceLocation("s", 1, 1), "include", IncludeNotFound(entry("b.psi")))))
+  }
+
+  private def jarBytes: Array[Byte] = {
+    val bytes = new java.io.ByteArrayOutputStream
+    val out = new ZipOutputStream(bytes)
+    try {
+      out.putNextEntry(new ZipEntry("a.psi"))
+      out.write("w: 2".getBytes(StandardCharsets.UTF_8))
+      out.closeEntry()
+    } finally out.close()
+    bytes.toByteArray
+  }
+
+  it should "take a page not found for a target not there, and any other failure for one it cannot read" in {
+    val server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress, 0), 0)
+    server.createContext(
+      "/",
+      { exchange =>
+        val (status, body) = exchange.getRequestURI.getPath match {
+          case "/ok.psi" => (200, "v: 1")
+          case "/fail.psi" => (500, "")
+          case "/c.jar" => (200, "")
+          case _ => (404, "")
+        }
+        val bytes = if (exchange.getRequestURI.getPath == "/c.jar") jarBytes else body.getBytes(StandardCharsets.UTF_8)
+        exchange.sendResponseHeaders(status, if (bytes.isEmpty) -1L else bytes.length.toLong)
+        if (bytes.nonEmpty) exchange.getResponseBody.write(bytes)
+        exchange.close()
+      }
+    )
+    server.start()
+    try {
+      val base = "http://" + server.getAddress.getHostString + ":" + server.getAddress.getPort.toString + "/"
+      loader.parse(
+        "s",
+        "#include(url: \"" + base + "ok.psi\")\n#include(url: \"" + base + "none.psi\", optional: true)\n" +
+          "#include(url: \"jar:" + base + "c.jar!/a.psi\")\n#include(url: \"jar:" + base +
+          "c.jar!/b.psi\", optional: true)"
+      ).map(_.size) shouldBe Right(2)
+      loader.parse("s", "#include(url: \"" + base + "none.psi\")\n#include(url: \"" + base + "fail.psi\")") match {
+        case Left(PsiErrors(
+              ::(
+                DirectiveFailed(_, "include", IncludeNotFound(_)),
+                List(DirectiveFailed(_, "include", IncludeUnreadable(_, cause)))))) =>
+          cause should not be a[FileNotFoundException]
+        case other => fail(other.toString)
+      }
+    } finally server.stop(0)
+  }
+
+  it should "take a file URL with a host for no path" in {
+    loader.parse("s", "#include(url: \"file://host/x.psi\")").left.map(_.errors) shouldBe
+      Left(List(DirectiveFailed(SourceLocation("s", 1, 1), "include", IncludeInvalidTarget("file://host/x.psi"))))
   }
 
   it should "be caught in a cycle" in {
