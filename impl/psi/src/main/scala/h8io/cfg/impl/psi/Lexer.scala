@@ -12,7 +12,7 @@ import scala.collection.mutable
   * Errors are collected rather than thrown. A fatal one — an unterminated quote or comment — leaves nothing to
   * resynchronise on, so the lexer reports it and answers [[Token.End]] from then on (§11).
   */
-private[psi] final class Lexer(source: Source) {
+private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Map.empty) {
   private val text = source.text
   private var offset = 0
   private var atLineStart = true
@@ -409,16 +409,16 @@ private[psi] final class Lexer(source: Source) {
     */
   private def triple(start: Int, quote: Char): Kind = {
     offset = start + 3
-    val stages = markers()
+    val (stages, calls) = blockMarkers()
     if (has(offset)) {
       offset += (if (at(offset, '\r')) 2 else 1)
-      content(start, quote).fold[Kind](End)(lines => scalar(arrange(lines, stages, start)))
+      content(start, quote).fold[Kind](End)(lines => scalar(arrange(lines, stages, start), calls))
     } else fail(UnterminatedString.apply, start)
   }
 
   /** The layout stages the markers on the rest of this line pick; a forbidden character there is reported and left out.
     */
-  private def markers(): Vector[Stage] = {
+  private def blockMarkers(): (Vector[Stage], Vector[MarkerParser.MarkerCall]) = {
     val line = new StringBuilder
     val offsets = Vector.newBuilder[Int]
     while (has(offset) && !isNewline(offset))
@@ -428,7 +428,8 @@ private[psi] final class Lexer(source: Source) {
         offset += 1
       }
     offsets += offset
-    new MarkerParser(line.result(), offsets.result(), (error, at) => report(error, at)).stages()
+    new MarkerParser(line.result(), offsets.result(), (error, at) => report(error, at), source.location, markers)
+      .stages()
   }
 
   /** The content of a triple-quoted string up to its closing delimiter, split into lines, escapes and substitutions
@@ -585,8 +586,8 @@ private[psi] final class Lexer(source: Source) {
   private def join(lines: Vector[Line]): Vector[Piece] =
     lines.map(_.pieces).reduceOption((a, b) => (a :+ Escaped("\n")) ++ b).getOrElse(Vector.empty)
 
-  /** A quoted scalar of `pieces`. */
-  private def scalar(pieces: Vector[Piece]): Kind = {
+  /** A quoted scalar of `pieces`, the loader's markers to run over its value. */
+  private def scalar(pieces: Vector[Piece], calls: Vector[MarkerParser.MarkerCall]): Kind = {
     val parts = new Parts
     pieces.foreach {
       case Written(c) =>
@@ -597,7 +598,7 @@ private[psi] final class Lexer(source: Source) {
         ()
       case Substituted(reference) => parts.reference(reference)
     }
-    Scalar(parts.result(), quoted = true)
+    Scalar(parts.result(), quoted = true, calls)
   }
 
   /** `${path}` or `${?path}` from its `$`, its path written as `Id.path` renders one (`format.md` §9). A path that

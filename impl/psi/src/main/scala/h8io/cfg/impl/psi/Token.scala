@@ -49,9 +49,10 @@ private[psi] object Token {
 
   /** A scalar in value position, as text and the substitutions inside it, in order: unquoted, or `quoted` in any of
     * `"…"`, `"""…"""`, `'…'` and `'''…'''`, its escapes interpreted and the layout of a block applied. Consecutive text
-    * is one part; `""` has no parts.
+    * is one part; `""` has no parts. `markers` are the loader's markers on a block, to run over its value (§5).
     */
-  final case class Scalar(parts: Vector[Part], quoted: Boolean) extends Kind
+  final case class Scalar(parts: Vector[Part], quoted: Boolean, markers: Vector[MarkerParser.MarkerCall] = Vector.empty)
+      extends Kind
 
   sealed trait Part
 

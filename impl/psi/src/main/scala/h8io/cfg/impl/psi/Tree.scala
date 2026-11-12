@@ -28,6 +28,12 @@ private[psi] object Tree {
   /** A scalar with `\${…}` inside it. */
   final case class Concatenation(parts: Vector[Token.Part], tags: Set[String], location: SourceLocation) extends Value
 
+  /** A block with the loader's markers to run over its value, a scalar or a concatenation, once resolved (§5). */
+  final case class Marked(value: Value, markers: Vector[MarkerParser.MarkerCall]) extends Value {
+    def tags: Set[String] = value.tags
+    def location: PsiLocation = value.location
+  }
+
   /** A map, its keys in the order they first appeared (`format.md` §7).
     *
     * @param location

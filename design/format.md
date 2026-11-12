@@ -292,7 +292,8 @@ escapes read, its substitutions resolved — and each next one what the one befo
 last gives is the value. They run with the substitutions (§8, phase 5), so a block refers to a value
 of the tree and still goes through them, and whatever grafts the block gets what they gave. A
 handler declares its parameters as a directive's does (§6), gets its arguments as a `Node.IMap` and
-the string, and gives back the new string or a message, reported at the marker as its failure;
+the string, and gives back the new string or an error of its own, reported at the marker as its
+failure;
 the block then stands for its value as with none of the loader's markers. A value overridden at
 launch (§9) replaces the block, its markers included. The built-in markers below shape the lines,
 before any escape is read, and so come first: one of them after one of the loader's is an error.
@@ -504,7 +505,7 @@ argument it cannot read, is the handler's job. It gets as well a *context*: the 
 the name and URL of the source the call stands in (a source given as text has no URL), and a way to
 parse another source.
 
-What a handler gives back is a message, reported as the directive's failure at the call, or
+What a handler gives back is an error of its own, reported as the directive's failure at the call, or
 *nothing*, or a *fragment*: Psi's own unexpanded tree, opaque to the handler, which it gets in one of
 two ways:
 
@@ -1780,8 +1781,11 @@ Plan step 10b, the markers as handlers, settled with the user before coding it (
   user's call, the markers running after phase 5 rather than being refused on a block with a
   `${…}`, or seeing it as text. The built-in markers stay at the layout stage, and one of them
   after a loader's marker is an error, read as with no marker.
+- **A failure is an error of the handler's own type**, a `MarkerError`, which the framework's error
+  carries whole — the user's call, over a message as a string; the directives' `DirectiveError`
+  follows it, replacing step 10a's string, so the two APIs stay alike.
 - Mine, taken by the user: a handler declares parameters as a directive's, its argument errors
-  are a directive's; a failure is a message, reported at the marker, the block then standing for
+  are a directive's; a failure is reported at the marker, the block then standing for
   its value as with none of the loader's markers. A marker name is checked when the loader is
   built — a run of symbols or a name by the key rule, as the syntax reads one — and so is one
   registered twice, a built-in included. Markers and directives have names of their own: a marker

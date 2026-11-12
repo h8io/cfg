@@ -41,6 +41,8 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
           nowhere)
       case map: Tree.Map =>
         Tree.Map(map.keys, map.entries.map { case (k, v) => k -> located(v) }, map.tags, nowhere)
+      // no loader's marker in these trees
+      case marked: Tree.Marked => fail(marked.toString)
     }
 
   private def roundTrip(text: String): Unit = {

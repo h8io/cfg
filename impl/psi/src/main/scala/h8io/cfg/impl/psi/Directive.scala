@@ -24,13 +24,45 @@ trait Directive {
     * @param arguments
     *   the arguments by parameter, in the order the parameters are declared; every value a scalar string
     * @return
-    *   a message, reported as the directive's failure at the call; nothing, which adds no field in statement position
+    *   an error, reported as the directive's failure at the call; nothing, which adds no field in statement position
     *   and drops the field or element in value position; or a fragment, which must be a map in statement position
     */
-  def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[String, Option[Fragment]]
+  def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Option[Fragment]]
 }
 
-/** A parameter of a [[Directive]]: an argument for a required one must be given. */
+/** A marker of a triple-quoted block, registered with a loader through [[PsiBuilder.withMarkers]] (`format.md` §5): a
+  * function from the block's value to a new one, given its arguments. The loader's markers on a block run left to
+  * right, after the built-in ones, over the value with its escapes read and its substitutions resolved.
+  */
+trait Marker {
+
+  /** The name the marker is written by: a run of the symbols `! # $ % & * + - . : ; < = > ? @ ^ | ~`, or a name by the
+    * key rule.
+    */
+  def name: String
+
+  /** The parameters, in the order positional arguments go to them. */
+  def parameters: Seq[Parameter]
+
+  /** The new value of a block, or an error, reported at the marker as its failure.
+    *
+    * @param arguments
+    *   the arguments by parameter, in the order the parameters are declared; every value a scalar string
+    */
+  def apply(arguments: Node.IMap[Id.Root], value: String): Either[MarkerError, String]
+}
+
+/** Why a [[Marker]] could not give a new value; a handler's own errors extend it. */
+trait MarkerError {
+  def message: String
+}
+
+/** Why a [[Directive]] could not be expanded; a handler's own errors extend it. */
+trait DirectiveError {
+  def message: String
+}
+
+/** A parameter of a [[Directive]] or a [[Marker]]: an argument for a required one must be given. */
 final case class Parameter(name: String, required: Boolean)
 
 /** What a [[Directive]] is given besides its arguments. */

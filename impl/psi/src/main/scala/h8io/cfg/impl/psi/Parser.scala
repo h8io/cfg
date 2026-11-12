@@ -275,14 +275,14 @@ private[psi] final class Parser(lexer: Lexer) {
     */
   private def wordError(word: Token, inBlock: Boolean): PsiError =
     word.kind match {
-      case Scalar(_, _) if substituted || substitutes(word) => JoinedValues(word.location)
-      case Scalar(_, _) if inBlock && unquoted => SpaceInValue(word.location)
+      case Scalar(_, _, _) if substituted || substitutes(word) => JoinedValues(word.location)
+      case Scalar(_, _, _) if inBlock && unquoted => SpaceInValue(word.location)
       case _ => MissingSeparator(word.location)
     }
 
   private def substitutes(token: Token): Boolean =
     token.kind match {
-      case Scalar(parts, _) => parts.exists(_.isInstanceOf[Reference])
+      case Scalar(parts, _, _) => parts.exists(_.isInstanceOf[Reference])
       case _ => false
     }
 
@@ -301,7 +301,7 @@ private[psi] final class Parser(lexer: Lexer) {
       case Name(name, _) => keys(Ast.Key(name, first.location), Nil, doc)
       case Directive(name) => Ast.DirectiveStatement(call(first, name), doc)
       case Tag(_) => fail(first, TagBeforeKey(first.location))
-      case Scalar(_, _) => fail(first, QuotedKey(first.location))
+      case Scalar(_, _, _) => fail(first, QuotedKey(first.location))
       case _ => fail(first, ExpectedKey(first.location))
     }
 
@@ -334,7 +334,7 @@ private[psi] final class Parser(lexer: Lexer) {
       case Name(name, _) =>
         if (token.spaced) fail(token, SpaceAroundDot(dot.location))
         Ast.Key(name, token.location)
-      case Scalar(_, _) => fail(token, QuotedKey(token.location))
+      case Scalar(_, _, _) => fail(token, QuotedKey(token.location))
       case _ => fail(token, ExpectedKey(token.location))
     }
   }
@@ -343,7 +343,9 @@ private[psi] final class Parser(lexer: Lexer) {
   @tailrec private def value(token: Token, tags: Set[String]): Ast.Value =
     token.kind match {
       case Tag(name) => value(next(ValueMode), tags + name)
-      case Scalar(parts, quoted) => scalar(token, parts, quoted, tags)
+      case Scalar(parts, quoted, markers) =>
+        val value = scalar(token, parts, quoted, tags)
+        if (markers.isEmpty) value else Ast.Marked(value, markers)
       case LeftBrace => block(token, tags)
       case LeftBracket =>
         val elements = items(ValueMode, Some(Closing(RightBracket, token.location)), documented = true)(element)
@@ -354,7 +356,7 @@ private[psi] final class Parser(lexer: Lexer) {
       case Newline =>
         val after = skipNewlines(ValueMode)
         after.kind match {
-          case Scalar(_, _) | LeftBrace | LeftBracket | Tag(_) | Directive(_) | Name(_, _) =>
+          case Scalar(_, _, _) | LeftBrace | LeftBracket | Tag(_) | Directive(_) | Name(_, _) =>
             fail(after, ValueOnNextLine(after.location))
           // a separator, a closing bracket, the end or a doc comment, where skipping stops or which it drops
           case _ => fail(after, MissingValue(token.location))
@@ -451,7 +453,7 @@ private[psi] final class Parser(lexer: Lexer) {
             rewind(mark)
             Ast.Argument(None, literal(first), first.location, first.location)
         }
-      case Integer(_) | Scalar(_, _) => Ast.Argument(None, literal(first), first.location, first.location)
+      case Integer(_) | Scalar(_, _, _) => Ast.Argument(None, literal(first), first.location, first.location)
       case _ => fail(first, ExpectedArgument(first.location))
     }
 
@@ -461,7 +463,7 @@ private[psi] final class Parser(lexer: Lexer) {
       case Name(name, false) => name
       case Name(_, true) => fail(token, BacktickedValue(token.location))
       case Integer(value) => value
-      case Scalar(parts, _) =>
+      case Scalar(parts, _, _) =>
         parts.collectFirst { case reference: Reference => reference } match {
           case Some(reference) => fail(token, SubstitutionInArgument(reference.location))
           case None => text(parts)
@@ -473,7 +475,8 @@ private[psi] final class Parser(lexer: Lexer) {
 }
 
 private[psi] object Parser {
-  def parse(source: Source): Result[Ast.Document] = new Parser(new Lexer(source)).document()
+  def parse(source: Source, markers: Map[String, Marker] = Map.empty): Result[Ast.Document] =
+    new Parser(new Lexer(source, markers)).document()
 
   /** The bracket that closes a container, and where the one that opened it stands. */
   private final case class Closing(kind: Kind, opening: SourceLocation)

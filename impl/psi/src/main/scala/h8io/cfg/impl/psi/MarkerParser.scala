@@ -2,7 +2,9 @@ package h8io.cfg.impl.psi
 
 import h8io.cfg.impl.psi.Lexer.*
 
-import scala.collection.mutable
+import h8io.cfg.{Id, Node}
+
+import scala.collection.{immutable, mutable}
 
 /** Reads the markers of a triple-quoted block (`format.md` §5) — what stands between the opening delimiter and the end
   * of its line — into the layout stages they pick.
@@ -14,19 +16,23 @@ import scala.collection.mutable
 private[psi] final class MarkerParser(
     line: String,
     offsets: IndexedSeq[Int],
-    report: (SourceLocation => PsiError, Int) => Unit) {
+    report: (SourceLocation => PsiError, Int) => Unit,
+    locate: Int => SourceLocation,
+    markers: Map[String, Marker]) {
   import MarkerParser.*
 
   private var i = 0
   private var failed = false
 
-  /** The stages to apply, in order, Java's rule first when no marker sets the indent. */
-  def stages(): Vector[Stage] = {
+  /** The stages to apply, in order, Java's rule first when no marker sets the indent, and the loader's markers to run
+    * over the value after them (`format.md` §5); none of the latter when any marker is wrong.
+    */
+  def stages(): (Vector[Stage], Vector[MarkerCall]) = {
     val read = chain().map(check)
     read match {
-      case Some(stages) if !failed =>
-        if (stages.exists(_.isInstanceOf[Indent])) stages else CommonIndent +: stages
-      case _ => Vector(CommonIndent)
+      case Some((stages, calls)) if !failed =>
+        (if (stages.exists(_.isInstanceOf[Indent])) stages else CommonIndent +: stages, calls)
+      case _ => (Vector(CommonIndent), Vector.empty)
     }
   }
 
@@ -259,27 +265,51 @@ private[psi] final class MarkerParser(
   }
 
   /** The stages the markers pick; every unknown marker, bad argument and second indent is reported. */
-  private def check(calls: Vector[Call]): Vector[Stage] = {
+  private def check(calls: Vector[Call]): (Vector[Stage], Vector[MarkerCall]) = {
     var indented = false
-    calls.flatMap { call =>
-      val stage = builtIn(call)
-      stage.foreach {
-        case _: Indent =>
-          if (indented) error(ConflictingIndent.apply, call.at)
-          indented = true
-        case Fold => ()
+    val stages = Vector.newBuilder[Stage]
+    val loaders = Vector.newBuilder[MarkerCall]
+    var loaderSeen = false
+    calls.foreach { call =>
+      builtIns.get(call.name) match {
+        case Some(BuiltIn(parameters, stage)) =>
+          if (loaderSeen) error(BuiltInMarkerAfterLoaders(_, call.name), call.at)
+          stage(call, bind(call, parameters.map(Parameter(_, required = false)))).foreach { stage =>
+            stage match {
+              case _: Indent =>
+                if (indented) error(ConflictingIndent.apply, call.at)
+                indented = true
+              case Fold => ()
+            }
+            stages += stage
+            ()
+          }
+        case None =>
+          markers.get(call.name) match {
+            case Some(marker) =>
+              loaderSeen = true
+              loaders +=
+                MarkerCall(marker, arguments(call, bind(call, marker.parameters.toVector)), locate(offsets(call.at)))
+              ()
+            case None => error(UnknownMarker(_, call.name), call.at)
+          }
       }
-      stage
     }
+    (stages.result(), loaders.result())
   }
 
-  private def builtIn(call: Call): Option[Stage] =
-    builtIns.get(call.name) match {
-      case Some(BuiltIn(parameters, stage)) => stage(call, bind(call, parameters))
-      case None =>
-        error(UnknownMarker(_, call.name), call.at)
-        None
+  /** The arguments of a loader's marker, as its handler gets them: by parameter, in the order declared. */
+  private def arguments(call: Call, bound: Map[String, Argument]): Node.IMap[Id.Root] = {
+    val entries = bound.toVector.map { case (name, argument) =>
+      val text = argument.value match {
+        case StringLiteral(value) => value
+        case IntegerLiteral(value) => value.toString
+        case NameLiteral(value) => value
+      }
+      name -> (Tree.Scalar(text, Set.empty, locate(offsets(argument.valueAt))): Tree.Value)
     }
+    MapImpl(Id.Root, Tree.Map(entries.map(_._1), immutable.Map(entries*), Set.empty, locate(offsets(call.at))))
+  }
 
   /** The markers every loader knows until handlers can be registered (plan step 10), each with its parameters. */
   private def builtIns: Map[String, BuiltIn] =
@@ -304,7 +334,8 @@ private[psi] final class MarkerParser(
   /** The arguments of `call` by the parameter they go to — positional ones in order, then named ones, as in Scala —
     * every one that goes to none, or to one already given, reported.
     */
-  private def bind(call: Call, parameters: Vector[String]): Map[String, Argument] = {
+  private def bind(call: Call, declared: Vector[Parameter]): Map[String, Argument] = {
+    val parameters = declared.map(_.name)
     val bound = mutable.LinkedHashMap.empty[String, Argument]
     var named = false
     call.arguments.zipWithIndex.foreach {
@@ -318,7 +349,10 @@ private[psi] final class MarkerParser(
         else if (bound.contains(name)) error(DuplicateArgument(_, name), at)
         else bound(name) = argument
     }
-    bound.toMap
+    declared.foreach { parameter =>
+      if (parameter.required && !bound.contains(parameter.name)) error(MissingArgument(_, parameter.name), call.at)
+    }
+    immutable.ListMap(parameters.flatMap(name => bound.get(name).map(name -> _))*)
   }
 }
 
@@ -335,6 +369,9 @@ private object MarkerParser {
 
   /** An argument, named or positional. */
   final case class Argument(name: Option[String], at: Int, value: Literal, valueAt: Int)
+
+  /** A loader's marker called on a block, with its arguments, at `location`, run over the block's value (§5). */
+  final case class MarkerCall(marker: Marker, arguments: Node.IMap[Id.Root], location: SourceLocation)
 
   /** A built-in marker: its parameters, in order, and the stage it picks from its arguments by parameter. */
   final case class BuiltIn(parameters: Vector[String], stage: (Call, Map[String, Argument]) => Option[Stage])

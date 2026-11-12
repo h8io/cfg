@@ -83,6 +83,9 @@ private[psi] object Render {
         }
       case Tree.Substitution(path, optional, _, _) => reference(out, path, optional)
       case Tree.Concatenation(parts, _, _) => quoted(out, parts)
+      // the loader's markers run as the tree is resolved, and only a resolved tree is shown
+      case marked: Tree.Marked =>
+        throw new IllegalStateException("Unresolved markers at " + marked.location.description)
     }
     ()
   }

@@ -40,7 +40,7 @@ URL ──read──▶ Source ──lex/parse──▶ Ast ──expand directi
 | Loader | `Psi`: `Psi(urls*)`, `Psi.parse(name, text)`, `Psi.builder`; `PsiBuilder`, `PsiLoader`, `PsiBuildError`s | public |
 | Locations | `PsiLocation`, `SourceLocation`, `ReferenceLocation`, `ConcatenationLocation`, `MergedLocation`, `NoSourceLocation`, `DirectiveLocation`, `SystemPropertyLocation` (§10) | public |
 | Errors | `PsiError` (each with a `location`), `PsiErrors` (non-empty, a `CfgError`) (§11) | public |
-| Directive API | `Directive`, `Parameter`, `DirectiveContext`, `Fragment` (§6) | public, since step 10a |
+| Handler API | `Directive`, `DirectiveContext`, `Fragment`, `DirectiveError` (§6); `Marker`, `MarkerError` (§5); `Parameter` | public, since steps 10a, 10b |
 | Source | the text of one URL, with offset → line/column | private |
 | Lexer | mode-driven: the parser asks for the next token *in key mode* or *in value mode* | private |
 | Ast | syntax tree of one source: fields with key path and operator (`:`/`:=`/block), values, `${…}`, concatenations, directives, every node with a `SourceLocation`, or a `DirectiveLocation` when a directive built it from a `Node` | private |
@@ -74,7 +74,7 @@ at the phase gate.
 | 8 | Renderer and round-trip property tests | done |
 | 9 | Substitutions | done |
 | 10a | Directive framework | done |
-| 10b | Markers as handlers | in progress |
+| 10b | Markers as handlers | done |
 | 11 | `#include` | todo |
 | 12 | Error messages and hints | todo |
 | 13 | Hardening | todo |
