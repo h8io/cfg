@@ -75,7 +75,7 @@ at the phase gate.
 | 9 | Substitutions | done |
 | 10a | Directive framework | done |
 | 10b | Markers as handlers | done |
-| 11 | `#include` | todo |
+| 11 | `#include` | in progress |
 | 12 | Error messages and hints | todo |
 | 13 | Hardening | todo |
 | 14 | Docs and release | todo |
@@ -310,10 +310,10 @@ below are settled when it starts. The rest of this section is the step as first 
 - Cycles are caught by step 10's framework; `#include` passes its source's key (step 10's gap).
   Nested includes; includes inside blocks land at the right path.
 - Errors inside an included source are collected along with everyone else's.
-- **Spec gaps:** whether `file` without an extension gets one appended — `.Ψ`, `.ψ`, `.psi` in
-  that order (session 10), first found or every one found merged, as HOCON does;
-  which class loader `resource` uses; whether an optional include swallows only "not found" or also
-  I/O and parse errors (it should only swallow "not found").
+- **Spec gaps:** settled in session 20 (`format.md` §6, §11): extensions `.Ψ`, `.ψ`, `.psi`, the
+  first found; the context class loader; `optional` swallows "not found" only; a relative `file` in a
+  text source resolves against the working directory; included sources' errors sort after their
+  includer's.
 
 ### 12. Error messages and hints
 

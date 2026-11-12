@@ -546,9 +546,29 @@ tags before a whole-value `${…}` are added to the grafted node's (§9): `a: @t
 #include(url: "https://…")
 ```
 
-Exactly one of `file` / `resource` / `url` is required. Relative paths resolve against the URL of the
-including file, never the working directory. Include cycles are reported as an error rather than
-looping, as every directive's are (above).
+Exactly one of `file` / `resource` / `url` is required, and `optional` is `true` or `false`, `false`
+when not given (session 20):
+
+- **`file`** is a path. A relative one resolves against the URL of the including source, whatever
+  that URL is — a file, an entry of a jar, a web page — and never against the working directory,
+  with one exception: a source given as text has no URL, and a relative path in it resolves against
+  the directory the application runs in. A source it includes has a URL, so the paths in that one
+  resolve against it again. An absolute path is a file of the file system.
+- **`resource`** is a name on the class path, read through the thread's context class loader, or
+  the one that loaded Psi when the thread has none.
+- **`url`** is an absolute URL, read as it is written.
+- **A `file` or a `resource` with no extension** — no `.` in its last segment — is looked for as
+  `.Ψ`, `.ψ` and `.psi` in that order, and the first found is read; they are one format under
+  three names, so nothing is merged. A `url` is never extended.
+- **`optional: true` tolerates only a target that is not there**: no file, no resource, a page not
+  found. A target that is there and cannot be read, or is not UTF-8, or does not parse, is an
+  error, optional or not.
+- **Its failures are errors of its own**, carried by the `DirectiveFailed` at the call: the target
+  not found, unreadable, or not a path or URL at all, and the arguments not giving exactly one
+  target or an `optional` that is neither `true` nor `false`.
+- The source it reads is named in locations by its argument as written (§10), extension or not.
+
+Include cycles are reported as an error rather than looping, as every directive's are (above).
 
 ## 7. Merging
 
@@ -813,6 +833,9 @@ mistake is worse than stopping.
 - **Directive failures are local.** A missing include, a cycle, an unknown or disabled
   directive or a bad argument is reported, the directive contributes nothing, and expansion
   continues.
+- **The second batch goes in the order of the sources**, each source's errors by line and column,
+  and the sources directives parsed right after the one that parsed them, in the order they were
+  parsed (session 20).
 - **Phases are gated.** If phases 1–2 (§8) produced any error, phases 3–6 do not run: substitutions
   over a tree with holes cut by recovery would report references to fields that exist but were lost
   in the skip. Syntax and directive errors come as one batch; substitution errors, if the first
@@ -1792,4 +1815,26 @@ Plan step 10b, the markers as handlers, settled with the user before coding it (
   `include` is no `#include`. The built-in markers stay internal, as `#include` does.
 - Mine, not raised: a value overridden at launch replaces the block and its markers with it; a
   marker's failure fails no node that depends on the block, the block having a value without it.
+
+### Session 20 — 2026-11-12
+
+Spec gaps of plan step 11, `#include`, settled with the user before coding it (§6, §11). All
+proposed by me and taken by the user but one.
+
+- **A relative `file` in a source given as text resolves against the working directory** — the
+  user's call, over my proposal of an error, there being no URL to resolve it against. A narrow
+  exception to "never the working directory": a source read from a URL resolves against its URL,
+  and so does every source a text source includes, so only the first step depends on where the
+  application runs.
+- **A `file` or `resource` with no extension is looked for as `.Ψ`, `.ψ`, `.psi`, the first found
+  read**: one format under three names, unlike HOCON's three formats merged. A `url` is read as
+  written.
+- **`resource` reads through the thread's context class loader**, or Psi's own, as HOCON does; no
+  builder option until one is needed.
+- **`optional` tolerates "not found" only**, as plan step 11 proposed.
+- **`#include`'s failures are `DirectiveError`s of its own**, public, inside `DirectiveFailed`.
+- **`url` takes any scheme**: a loader for input it does not trust disables `#include` whole (§6).
+- **Errors located in included sources sort right after the including source's** in the second
+  batch, in the order the sources were parsed; before, they sorted after every source the loader
+  was given.
 
