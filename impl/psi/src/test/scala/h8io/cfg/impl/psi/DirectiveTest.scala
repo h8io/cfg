@@ -73,12 +73,12 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     Psi.builder.build.map(_.parse("s", "a: 1").isRight) shouldBe Right(true)
   }
 
-  "A call" should "be reported when its directive is unknown, disabled or not there yet" in {
+  "A call" should "be reported when its directive is unknown or disabled" in {
     val disabling =
       Psi.builder.disableDirective("include").disableDirective("off").build.fold(e => fail(e.toString), identity)
     errors(disabling, "#include\na: #off\nb: #x") shouldBe
       List(DisabledDirective(at(1, 1), "include"), DisabledDirective(at(2, 4), "off"), UnknownDirective(at(3, 4), "x"))
-    errors(loader(), "#include(file: \"x\")") shouldBe List(NotSupportedYet(at(1, 1), "#include"))
+    errors(loader(), "#include(file: \"x\")") shouldBe List(DirectiveFailed(at(1, 1), "include", IncludeNotFound("x")))
   }
 
   it should "give its arguments by parameter, in the order the parameters are declared" in {

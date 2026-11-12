@@ -14,6 +14,9 @@ final class PsiLoader private[psi] (
     markers: Map[String, Marker],
     properties: Option[Map[String, String]]) {
 
+  /** The directives with the built-in `#include` among them. */
+  private val handlers: Map[String, Directive] = directives.updated(Include.name, Include)
+
   /** Loads and merges the sources at `urls`, in order, each named in locations by its URL as given (§10). */
   def apply(urls: URL*): Either[PsiErrors, Node.IMap[Id.Root]] = load(urls.map(url => Source.read(url.toString, url)))
 
@@ -22,19 +25,23 @@ final class PsiLoader private[psi] (
 
   private[psi] def load(sources: Seq[Either[PsiError, Source]]): Either[PsiErrors, Node.IMap[Id.Root]] = {
     val parsed = Result.sequence(sources.map {
-      case Right(source) => Expand(source, directives, disabled, markers).map(document => Some((document, source.name)))
+      case Right(source) =>
+        Expand(source, handlers, disabled, markers).map { case (document, included) =>
+          Some((document, source.name, included))
+        }
       case Left(error) => Result.failed(None, error)
     })
     for {
       documents <- parsed.toEither
       root <- (documents.flatten.toList match {
-        case (document, name) :: rest =>
-          val located = rest.map { case (document, name) => (document, SourceLocation(name, 1, 1)) }
+        case (document, name, included) :: rest =>
+          val located = rest.map { case (document, name, _) => (document, SourceLocation(name, 1, 1)) }
           val overrides = properties.getOrElse(sys.props.toMap)
           val merged = Merge(::((document, SourceLocation(name, 1, 1)), located)).flatMap(tree =>
             Resolve(Override(tree, overrides)))
-          // merging and resolving go by key, not by source: the errors are put back in the order of the sources
-          val sources = name :: rest.map(_._2)
+          // merging and resolving go by key, not by source: the errors are put back in the order of the sources,
+          // those directives parsed right after the one that parsed them
+          val sources = (name :: included) ++ rest.flatMap { case (_, name, included) => name :: included }
           Result(MapImpl(Id.Root, merged.value), merged.errors.sortBy(_.location.order(sources)))
         case Nil => Result.pure(MapImpl(Id.Root, Tree.Map.empty(Set.empty, NoSourceLocation)))
       }).toEither

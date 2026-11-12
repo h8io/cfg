@@ -101,9 +101,13 @@ object Fragment {
   def apply(node: Node.ISome[Id]): Fragment = Built(node)
 
   /** A source parsed, its directives expanded; `root` is where it starts, `errors` what was found in it, reported
-    * wherever the fragment is used.
+    * wherever the fragment is used, and `sources` the names of it and of the sources it parsed, in the order parsed.
     */
-  private[psi] final case class Parsed(document: Ast.Document, root: SourceLocation, errors: List[PsiError])
+  private[psi] final case class Parsed(
+      document: Ast.Document,
+      root: SourceLocation,
+      errors: List[PsiError],
+      sources: List[String])
       extends Fragment
 
   private[psi] final case class Built(node: Node.ISome[Id]) extends Fragment

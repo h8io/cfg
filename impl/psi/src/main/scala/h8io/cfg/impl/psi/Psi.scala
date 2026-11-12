@@ -29,7 +29,8 @@ import java.net.URL
   *
   * ==Directives==
   * `#name(…)` is expanded by the handler registered for it, while its source is read (§6); [[builder]] builds a loader
-  * with handlers of its own. `#include` is reported as [[NotSupportedYet]] until the plan's step 11 lands.
+  * with handlers of its own. The built-in `#include(file: …)`, `#include(resource: …)` and `#include(url: …)` read
+  * another Psi source where the call stands.
   *
   * ==Markers==
   * A triple-quoted block's built-in markers shape its lines; a loader's own markers, registered through the

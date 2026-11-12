@@ -279,12 +279,5 @@ final case class DirectiveCycle(location: SourceLocation, chain: ::[String]) ext
 /** A call that parses a source `limit` sources deep: a backstop for a cycle no key catches (§6). */
 final case class DirectiveTooDeep(location: SourceLocation, limit: Int) extends PsiError
 
-/** Something this version of the loader cannot load yet: `#include`. Plan step 11 replaces it with the real thing.
-  *
-  * @param what
-  *   what it is, as `#name`
-  */
-final case class NotSupportedYet(location: SourceLocation, what: String) extends PsiError
-
 /** Every error a load reported, in the order found. The loader reports as many as it can without inventing any. */
 final case class PsiErrors(errors: ::[PsiError]) extends CfgError
