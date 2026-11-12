@@ -1,6 +1,6 @@
 package h8io.cfg.impl.psi
 
-import h8io.cfg.Location
+import h8io.cfg.{Id, Location}
 
 /** Where a node of a Psi configuration came from.
   *
@@ -54,7 +54,7 @@ final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLo
 /** A map defined in more places than one, merged (`format.md` §7, §10): `at` is where it was defined last, `earlier`
   * the places before, the latest first.
   */
-final case class MergedLocation(at: SourceLocation, earlier: ::[SourceLocation]) extends PsiLocation {
+final case class MergedLocation(at: PsiLocation, earlier: ::[PsiLocation]) extends PsiLocation {
   def description: String = earlier.iterator.map(_.description).mkString(at.description + " (also ", ", ", ")")
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
@@ -65,6 +65,20 @@ case object NoSourceLocation extends PsiLocation {
   def description: String = "no source"
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = (sources.size, 0, 0)
+}
+
+/** A node a directive built from a `Node` of its own and placed at `at`, the call (`format.md` §6, §10).
+  *
+  * @param directive
+  *   the directive's name, rendered after `#` as a key is, in backticks when it is not bare
+  * @param origin
+  *   the location the node had
+  */
+final case class DirectiveLocation(at: SourceLocation, directive: String, origin: Location) extends PsiLocation {
+  def description: String =
+    at.description + " (#" + Id.Key(directive, Id.Root).path + " from " + origin.description + ')'
+
+  private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
 }
 
 /** A value overridden at launch by the system property `name`. */

@@ -66,7 +66,7 @@ private[psi] final class Merge {
       case _ => Some(tree(value))
     }
 
-  private def conflict(location: SourceLocation, earlier: Tree.Value): Option[Tree.Value] = {
+  private def conflict(location: PsiLocation, earlier: Tree.Value): Option[Tree.Value] = {
     errors += MergeWithSubstitution(location, earlier.location)
     None
   }
@@ -90,12 +90,10 @@ private[psi] final class Merge {
 private[psi] object Merge {
 
   /** The location of a map written at `earlier` and again at `site`. */
-  private[psi] def again(site: SourceLocation, earlier: PsiLocation): MergedLocation =
+  private[psi] def again(site: PsiLocation, earlier: PsiLocation): MergedLocation =
     earlier match {
       case MergedLocation(at, rest) => MergedLocation(site, ::(at, rest))
-      case at: SourceLocation => MergedLocation(site, ::(at, Nil))
-      // a map is merged before any substitution is resolved, so it never carries another location
-      case other => throw new IllegalStateException("A map at " + other.description + " is merged")
+      case at => MergedLocation(site, ::(at, Nil))
     }
 
   def apply(documents: ::[(Ast.Document, SourceLocation)]): Result[Tree.Map] = new Merge().sources(documents)

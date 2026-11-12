@@ -41,7 +41,7 @@ class MergeTest extends AnyFlatSpec with Matchers {
       tags.toSet,
       sites.tail.toList match {
         case Nil => sites.head
-        case earlier @ ::(_, _) => MergedLocation(sites.head, earlier)
+        case first :: rest => MergedLocation(sites.head, ::[PsiLocation](first, rest))
       }
     )
 

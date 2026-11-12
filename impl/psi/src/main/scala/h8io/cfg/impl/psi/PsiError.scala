@@ -72,7 +72,7 @@ final case class UnknownMarker(location: SourceLocation, name: String) extends P
 /** A second marker that sets the indent, such as `>` after `<`; the block is read as with no marker. */
 final case class ConflictingIndent(location: SourceLocation) extends PsiError
 
-/** A named argument the marker does not take; `argument` is its name. */
+/** A named argument the marker or directive does not take; `argument` is its name. */
 final case class UnknownArgument(location: SourceLocation, argument: String) extends PsiError
 
 /** A positional argument past the last parameter. */
@@ -84,7 +84,7 @@ final case class PositionalAfterNamed(location: SourceLocation) extends PsiError
 /** An argument given twice, by name or by position and then by name; the error points at the second. */
 final case class DuplicateArgument(location: SourceLocation, argument: String) extends PsiError
 
-/** An argument the marker requires and was not given; the error points at the marker. */
+/** An argument the marker or directive requires and was not given; the error points at the call. */
 final case class MissingArgument(location: SourceLocation, argument: String) extends PsiError
 
 /** An argument whose value the marker cannot take, such as a width that is not a positive integer; the error points at
@@ -230,7 +230,7 @@ final case class UnclosedBracket(location: SourceLocation) extends PsiError
   * @param earlier
   *   where the earlier value was defined
   */
-final case class MergeWithSubstitution(location: SourceLocation, earlier: PsiLocation) extends PsiError
+final case class MergeWithSubstitution(location: PsiLocation, earlier: PsiLocation) extends PsiError
 
 /** `\${path}`, alone or in a concatenation, at `location`, the `\${`, with nothing at `path` in the tree (`format.md`
   * §9).
@@ -247,7 +247,29 @@ final case class SubstitutionCycle(location: SourceLocation, path: String) exten
   */
 final case class NonScalarInConcatenation(location: SourceLocation, path: String, origin: PsiLocation) extends PsiError
 
-/** Something this version of the loader cannot load yet: a directive. Plan steps 10–11 replace it with the real thing.
+/** A call of a directive the loader has no handler for (`format.md` §6). */
+final case class UnknownDirective(location: SourceLocation, name: String) extends PsiError
+
+/** A call of a directive the loader was built with disabled (§6). */
+final case class DisabledDirective(location: SourceLocation, name: String) extends PsiError
+
+/** A call whose handler failed, with the handler's message. */
+final case class DirectiveFailed(location: SourceLocation, name: String, message: String) extends PsiError
+
+/** A call in statement position whose handler gave something other than a map. */
+final case class DirectiveNotMap(location: SourceLocation, name: String) extends PsiError
+
+/** A call that parses a source already being expanded (§6).
+  *
+  * @param chain
+  *   the sources from the one loaded to the one parsed again, each as locations name it
+  */
+final case class DirectiveCycle(location: SourceLocation, chain: ::[String]) extends PsiError
+
+/** A call that parses a source `limit` sources deep: a backstop for a cycle no key catches (§6). */
+final case class DirectiveTooDeep(location: SourceLocation, limit: Int) extends PsiError
+
+/** Something this version of the loader cannot load yet: `#include`. Plan step 11 replaces it with the real thing.
   *
   * @param what
   *   what it is, as `#name`

@@ -27,68 +27,26 @@ import java.net.URL
   * `\${path}` grafts the node at `path` whole, looked up in the overridden tree; `\${?path}` with nothing there drops
   * its field or element, and reads as empty in a concatenation (§9).
   *
-  * ==Not yet==
-  * Directives are reported as [[NotSupportedYet]] until the plan's steps 10–11 land.
+  * ==Directives==
+  * `#name(…)` is expanded by the handler registered for it, while its source is read (§6); [[builder]] builds a loader
+  * with handlers of its own. `#include` is reported as [[NotSupportedYet]] until the plan's step 11 lands.
   */
 object Psi {
 
+  /** A builder of a loader with directives of its own. */
+  def builder: PsiBuilder = PsiBuilder.empty
+
   /** Loads and merges the sources at `urls`, in order, each named in locations by its URL as given (§10). */
-  def apply(urls: URL*): Either[PsiErrors, Node.IMap[Id.Root]] =
-    load(urls.map(url => Source.read(url.toString, url)), sys.props.toMap)
+  def apply(urls: URL*): Either[PsiErrors, Node.IMap[Id.Root]] = loader.apply(urls*)
 
   /** Loads a source held as `text`, named `name` in locations. */
-  def parse(name: String, text: String): Either[PsiErrors, Node.IMap[Id.Root]] =
-    load(Right(Source(name, text)) :: Nil, sys.props.toMap)
+  def parse(name: String, text: String): Either[PsiErrors, Node.IMap[Id.Root]] = loader.parse(name, text)
 
-  /** Loads `sources`, their values overridden by `properties`, the system properties. */
+  private def loader: PsiLoader = new PsiLoader(Map.empty, Set.empty, None)
+
+  /** Loads `sources` with no directive of its own, their values overridden by `properties`. */
   private[psi] def load(
       sources: Seq[Either[PsiError, Source]],
-      properties: Map[String, String]): Either[PsiErrors, Node.IMap[Id.Root]] = {
-    val parsed = Result.sequence(sources.map {
-      case Right(source) => Parser.parse(source).flatMap(expand).map(document => Some((document, source.name)))
-      case Left(error) => Result.failed(None, error)
-    })
-    for {
-      documents <- parsed.toEither
-      root <- (documents.flatten.toList match {
-        case (document, name) :: rest =>
-          val located = rest.map { case (document, name) => (document, SourceLocation(name, 1, 1)) }
-          val merged = Merge(::((document, SourceLocation(name, 1, 1)), located)).flatMap(tree =>
-            Resolve(Override(tree, properties)))
-          // merging and resolving go by key, not by source: the errors are put back in the order of the sources
-          val sources = name :: rest.map(_._2)
-          Result(MapImpl(Id.Root, merged.value), merged.errors.sortBy(_.location.order(sources)))
-        case Nil => Result.pure(MapImpl(Id.Root, Tree.Map.empty(Set.empty, NoSourceLocation)))
-      }).toEither
-    } yield root
-  }
-
-  /** Expands the directives of a source (§6, §8): none yet, each reported, its field or element left out. */
-  private def expand(document: Ast.Document): Result[Ast.Document] = {
-    val errors = List.newBuilder[PsiError]
-    def unsupported(call: Ast.Call): Unit = {
-      errors += NotSupportedYet(call.location, "#" + call.name)
-      ()
-    }
-    def statements(statements: Vector[Ast.Statement]): Vector[Ast.Statement] =
-      statements.flatMap {
-        case field: Ast.Field => expanded(field.value).map(value => field.copy(value = value))
-        case Ast.DirectiveStatement(call, _) =>
-          unsupported(call)
-          None
-      }
-    def expanded(value: Ast.Value): Option[Ast.Value] =
-      value match {
-        case block: Ast.Block => Some(block.copy(statements = statements(block.statements)))
-        case sequence: Ast.Sequence =>
-          Some(
-            sequence.copy(elements = sequence.elements.flatMap(e => expanded(e.value).map(v => e.copy(value = v)))))
-        case Ast.DirectiveValue(call, _) =>
-          unsupported(call)
-          None
-        case _ => Some(value)
-      }
-    val read = Ast.Document(statements(document.statements))
-    Result(read, errors.result())
-  }
+      properties: Map[String, String]): Either[PsiErrors, Node.IMap[Id.Root]] =
+    new PsiLoader(Map.empty, Set.empty, Some(properties)).load(sources)
 }

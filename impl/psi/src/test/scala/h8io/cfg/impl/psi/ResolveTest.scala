@@ -166,9 +166,4 @@ class ResolveTest extends AnyFlatSpec with Matchers {
     the[IllegalStateException] thrownBy Resolve.graft(substitution, at(2, 4), keyed("b"), NoTags) should have message
       "An unresolved substitution at s:1:4 grafted"
   }
-
-  "A map" should "not be merged once grafted, which is a bug of the loader" in {
-    the[IllegalStateException] thrownBy Merge.again(at(2, 1), ref(1, 4, "b", at(1, 1))) should have message
-      "A map at s:1:4 (${b} from s:1:1) is merged"
-  }
 }

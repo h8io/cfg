@@ -59,20 +59,20 @@ private[psi] object Ast {
   /** A value with the tags written before it; its location is where the value itself starts, past its tags. */
   sealed trait Value {
     def tags: Set[String]
-    def location: SourceLocation
+    def location: PsiLocation
   }
 
   /** A scalar, quoted or not, its escapes read and its layout applied. */
-  final case class Scalar(value: String, tags: Set[String], location: SourceLocation) extends Value
+  final case class Scalar(value: String, tags: Set[String], location: PsiLocation) extends Value
 
   /** `null`, unquoted. */
-  final case class Null(tags: Set[String], location: SourceLocation) extends Value
+  final case class Null(tags: Set[String], location: PsiLocation) extends Value
 
   /** `{ … }` in value position. */
-  final case class Block(statements: Vector[Statement], tags: Set[String], location: SourceLocation) extends Value
+  final case class Block(statements: Vector[Statement], tags: Set[String], location: PsiLocation) extends Value
 
   /** `[ … ]`. */
-  final case class Sequence(elements: Vector[Element], tags: Set[String], location: SourceLocation) extends Value
+  final case class Sequence(elements: Vector[Element], tags: Set[String], location: PsiLocation) extends Value
 
   /** `\${path}` or `\${?path}` unquoted and alone: the node it refers to, grafted whole (§9). */
   final case class Substitution(path: Id.Branch, optional: Boolean, tags: Set[String], location: SourceLocation)
