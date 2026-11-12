@@ -632,9 +632,22 @@ from a substitution.
   separator, a comment or a closing bracket (§3), and so does `"a" ${b}`, whitespace never joining
   values.
 - `${?path}` is optional: when it does not resolve, the field is omitted entirely, so a later lookup
-  yields `Node.INone` rather than an error.
+  yields `Node.INone` rather than an error. As an element of a sequence, it drops the element, the
+  ones after it moving up. As a part of a concatenation, it reads as the empty string.
 - Lookup order is the merged tree, then system properties, then environment variables — the HOCON
-  behaviour, chosen deliberately over an explicit `${env:…}` form.
+  behaviour, chosen deliberately over an explicit `${env:…}` form. Each is looked up by the whole
+  path, and the first that has it wins; a path that fails in the tree for another reason than its
+  absence — a cycle, a node that failed — is not looked up further.
+- **System properties form a tree of strings**, their names split at every dot: `java.home` is
+  `home` in `java`, so `${java.home}` is the property and `${java}` grafts a map of every `java.*`
+  one. Where a name is both a value and a prefix of others, `a=1` and `a.b=2`, the map wins and the
+  value is lost, as in HOCON. **Environment variables are not split**: each is a key at the top,
+  its value a string, so `${HOME}` reads `HOME` and a multi-segment path never reaches the
+  environment. Turning a string into structure — a list out of `PATH` — is a directive's job, not
+  the lookup's.
+- **A grafted node takes its new position**, the id of the field it is grafted at, not that of the
+  node it came from; its location keeps the origin (§10). The graft is made in the merged tree,
+  before the nodes are wrapped, so `Node` never hands a container a foreign id.
 - The graft keeps `null`: `b: ${a}` with `a: null` gives an `INull` at `b`, which is not the same
   as `${?a}` over a missing `a`.
 - Cycles are an error naming the path. Self-reference (`a: ${a}" x"` reading the pre-merge value) is
@@ -1631,3 +1644,21 @@ property test checks — only how the output reads does.
   shows only with use: after step 14, or with it. Rejected for step 8: making it public now.
 - Not raised with the user, decided while implementing: a sequence stands on one line, `[a, b]`,
   unless it holds a map or a sequence, and then takes a line per element.
+
+### Session 18 — 2026-11-12
+
+Spec gaps of plan step 9, substitutions, settled with the user before coding it (§9).
+
+- **`${?x}` as an element of a sequence drops the element** when it does not resolve, as it drops a
+  field. Rejected: an error, and a `null` in its place.
+- **`${?x}` as a part of a concatenation reads as the empty string.** Rejected: an error, and
+  dropping the whole scalar.
+- **A grafted node's id is its new position**, confirmed; the graft is made in the merged tree and
+  the views give it its ids while wrapping.
+- **System properties are a tree of strings, split at the dots; the environment is a map of
+  strings, not split.** Looked up by the whole path each. Structure out of a string, splitting a
+  value, is left to a directive if it is ever needed. The user's call, splitting the properties
+  included. Proposed by me and not yet confirmed: the environment not split, and a property name
+  that is both a value and a prefix losing the value to the map, as in HOCON.
+- **Meta-fields (`${path^meta}`, §13 item 6) stay out of step 9**: they are after v1.
+
