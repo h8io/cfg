@@ -3,9 +3,8 @@ package h8io.cfg.impl.psi
 import h8io.cfg.{Id, Node}
 
 import java.io.{FileNotFoundException, IOException}
-import java.net.{MalformedURLException, URI, URL}
+import java.net.{MalformedURLException, URI, URISyntaxException, URL}
 import java.nio.file.{NoSuchFileException, Paths}
-import scala.annotation.nowarn
 
 /** Why `#include` failed (`format.md` §6), carried by the [[DirectiveFailed]] at the call. */
 sealed trait IncludeError extends DirectiveError
@@ -78,7 +77,8 @@ private[psi] object Include extends Directive {
       }
     catch {
       // a path the file system cannot take, an `InvalidPathException`, is an `IllegalArgumentException`
-      case _: MalformedURLException | _: IllegalArgumentException => Left(IncludeInvalidTarget(target))
+      case _: MalformedURLException | _: URISyntaxException | _: IllegalArgumentException =>
+        Left(IncludeInvalidTarget(target))
     }
 
   /** A path or a name with no extension, as each of Psi's; one with an extension, as it is. */
@@ -87,10 +87,20 @@ private[psi] object Include extends Directive {
     else List(".Ψ", ".ψ", ".psi").map(target + _)
 
   /** A path: absolute, a file; relative, against the including source's URL, or the working directory with none. */
-  @nowarn("cat=deprecation")
   private def file(path: String, base: Option[URL]): URL =
     if (Paths.get(path).isAbsolute) Paths.get(path).toUri.toURL
-    else base.fold(Paths.get(path).toAbsolutePath.toUri.toURL)(new URL(_, path))
+    else base.fold(Paths.get(path).toAbsolutePath.toUri.toURL)(resolve(_, path))
+
+  /** `path` against `base`, an entry of a jar against the entry's path: a `jar:` URI is opaque, and `URI.resolve`
+    * cannot look into it.
+    */
+  private def resolve(base: URL, path: String): URL = {
+    val relative = new URI(null, null, path, null)
+    val text = base.toString
+    val entry = text.indexOf("!/")
+    (if (entry < 0) base.toURI.resolve(relative)
+     else URI.create(text.substring(0, entry + 1) + URI.create(text.substring(entry + 1)).resolve(relative))).toURL
+  }
 
   /** The first candidate there, parsed; nothing when none is and the include is optional. */
   private def read(
