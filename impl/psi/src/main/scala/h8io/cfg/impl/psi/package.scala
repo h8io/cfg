@@ -9,7 +9,7 @@ package object psi {
     value match {
       case Tree.Scalar(text, tags, location) => Node.IScalar(id, tags, text, location)
       case Tree.Null(tags, location) => Node.INull(id, tags, location)
-      case map: Tree.Map => MapImpl(id, map, map.location)
+      case map: Tree.Map => MapImpl(id, map)
       case sequence: Tree.Sequence => SeqImpl(id, sequence)
       case _: Tree.Substitution | _: Tree.Concatenation =>
         throw new IllegalStateException("An unresolved substitution at " + value.location.description)

@@ -232,11 +232,25 @@ final case class UnclosedBracket(location: SourceLocation) extends PsiError
   */
 final case class MergeWithSubstitution(location: SourceLocation, earlier: PsiLocation) extends PsiError
 
-/** Something this version of the loader cannot load yet: a directive, or a substitution, alone or in a concatenation.
-  * Plan steps 9–11 replace it with the real thing.
+/** `\${path}`, alone or in a concatenation, at `location`, the `\${`, with nothing at `path` in the tree, the system
+  * properties or the environment (`format.md` §9).
+  */
+final case class UnresolvedSubstitution(location: SourceLocation, path: String) extends PsiError
+
+/** `\${path}` at `location` that leads back to itself, directly or through other substitutions (§9). Reported once, at
+  * the reference that closes the cycle.
+  */
+final case class SubstitutionCycle(location: SourceLocation, path: String) extends PsiError
+
+/** `\${path}` at `location`, a part of a concatenation, referring to a node that is not a scalar: a map, a sequence or
+  * `null`, defined at `origin` (§9).
+  */
+final case class NonScalarInConcatenation(location: SourceLocation, path: String, origin: PsiLocation) extends PsiError
+
+/** Something this version of the loader cannot load yet: a directive. Plan steps 10–11 replace it with the real thing.
   *
   * @param what
-  *   what it is, as `#name` or `\${…}`
+  *   what it is, as `#name`
   */
 final case class NotSupportedYet(location: SourceLocation, what: String) extends PsiError
 

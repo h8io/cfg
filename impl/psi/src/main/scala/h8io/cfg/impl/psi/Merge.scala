@@ -18,7 +18,7 @@ private[psi] final class Merge {
     val (first, site) = documents.head
     val root = documents.tail.foldLeft(block(Tree.Map.empty(Set.empty, site), first.statements)) {
       case (root, (document, site)) =>
-        block(root.copy(sites = ::(site, root.sites)), document.statements)
+        block(root.copy(location = Merge.again(site, root.location)), document.statements)
     }
     Result(root, errors.toList)
   }
@@ -55,7 +55,7 @@ private[psi] final class Merge {
   private def merged(earlier: Tree.Value, value: Ast.Value): Option[Tree.Value] =
     (earlier, value) match {
       case (map: Tree.Map, Ast.Block(statements, tags, location)) =>
-        Some(block(map.copy(tags = map.tags ++ tags, sites = ::(location, map.sites)), statements))
+        Some(block(map.copy(tags = map.tags ++ tags, location = Merge.again(location, map.location)), statements))
       case (_: Tree.Map | _: Tree.Substitution, substitution: Ast.Substitution) =>
         conflict(substitution.location, earlier)
       case (_: Tree.Substitution, block: Ast.Block) =>
@@ -88,5 +88,15 @@ private[psi] final class Merge {
 }
 
 private[psi] object Merge {
+
+  /** The location of a map written at `earlier` and again at `site`. */
+  private[psi] def again(site: SourceLocation, earlier: PsiLocation): MergedLocation =
+    earlier match {
+      case MergedLocation(at, rest) => MergedLocation(site, ::(at, rest))
+      case at: SourceLocation => MergedLocation(site, ::(at, Nil))
+      // a map is merged before any substitution is resolved, so it never carries another location
+      case other => throw new IllegalStateException("A map at " + other.description + " is merged")
+    }
+
   def apply(documents: ::[(Ast.Document, SourceLocation)]): Result[Tree.Map] = new Merge().sources(documents)
 }

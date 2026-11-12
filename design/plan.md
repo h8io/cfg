@@ -72,7 +72,7 @@ at the phase gate.
 | 6 | Merge | done |
 | 7 | Node views and the loader, end to end | done |
 | 8 | Renderer and round-trip property tests | done |
-| 9 | Substitutions | in progress |
+| 9 | Substitutions | done |
 | 10 | Directive and marker framework | todo |
 | 11 | `#include` | todo |
 | 12 | Error messages and hints | todo |

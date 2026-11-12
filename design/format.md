@@ -1661,4 +1661,10 @@ Spec gaps of plan step 9, substitutions, settled with the user before coding it 
   included. Proposed by me and not yet confirmed: the environment not split, and a property name
   that is both a value and a prefix losing the value to the map, as in HOCON.
 - **Meta-fields (`${path^meta}`, §13 item 6) stay out of step 9**: they are after v1.
+- Not raised with the user, decided while implementing: a cycle is reported once, at the reference
+  that reaches a node still being resolved, naming the path that reference was written with; an
+  optional part of a concatenation that reads as empty has no entry in its `ConcatenationLocation`,
+  and a concatenation left with none is located at its own site alone; `null` in a concatenation is
+  a non-scalar like a map or a sequence; a sequence is looked into by the position its elements end
+  up at, so only the optional substitutions before the index are resolved to find it.
 

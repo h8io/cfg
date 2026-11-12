@@ -19,19 +19,29 @@ import java.net.URL
   * their tags united, anything else is replaced; `:=` replaces a map too. Keys keep the order they first appeared in.
   * No sources give an empty root map (§7).
   *
+  * ==Substitutions==
+  * `\${path}` grafts the node at `path` whole, looked up in the merged tree, then in the system properties split at the
+  * dots, then in the environment; `\${?path}` with nothing there drops its field or element, and reads as empty in a
+  * concatenation (§9).
+  *
   * ==Not yet==
-  * Directives and substitutions are reported as [[NotSupportedYet]] until the plan's steps 9–11 land.
+  * Directives are reported as [[NotSupportedYet]] until the plan's steps 10–11 land.
   */
 object Psi {
 
   /** Loads and merges the sources at `urls`, in order, each named in locations by its URL as given (§10). */
   def apply(urls: URL*): Either[PsiErrors, Node.IMap[Id.Root]] =
-    load(urls.map(url => Source.read(url.toString, url)))
+    load(urls.map(url => Source.read(url.toString, url)), () => sys.props.toMap, () => sys.env)
 
   /** Loads a source held as `text`, named `name` in locations. */
-  def parse(name: String, text: String): Either[PsiErrors, Node.IMap[Id.Root]] = load(Right(Source(name, text)) :: Nil)
+  def parse(name: String, text: String): Either[PsiErrors, Node.IMap[Id.Root]] =
+    load(Right(Source(name, text)) :: Nil, () => sys.props.toMap, () => sys.env)
 
-  private def load(sources: Seq[Either[PsiError, Source]]): Either[PsiErrors, Node.IMap[Id.Root]] = {
+  /** Loads `sources`, looking up what the tree does not have in `properties` and `env`, read only if needed. */
+  private[psi] def load(
+      sources: Seq[Either[PsiError, Source]],
+      properties: () => Map[String, String],
+      env: () => Map[String, String]): Either[PsiErrors, Node.IMap[Id.Root]] = {
     val parsed = Result.sequence(sources.map {
       case Right(source) => Parser.parse(source).flatMap(expand).map(document => Some((document, source.name)))
       case Left(error) => Result.failed(None, error)
@@ -41,12 +51,11 @@ object Psi {
       root <- (documents.flatten.toList match {
         case (document, name) :: rest =>
           val located = rest.map { case (document, name) => (document, SourceLocation(name, 1, 1)) }
-          val merged = Merge(::((document, SourceLocation(name, 1, 1)), located)).flatMap(resolve)
+          val merged = Merge(::((document, SourceLocation(name, 1, 1)), located)).flatMap(Resolve(_, properties, env))
           // merging and resolving go by key, not by source: the errors are put back in the order of the sources
           val sources = name :: rest.map(_._2)
-          Result(MapImpl(Id.Root, merged.value, merged.value.location), merged.errors.sortBy(_.location.order(sources)))
-        // the tree's site is never shown: the view has a location of its own
-        case Nil => Result.pure(MapImpl(Id.Root, Tree.Map.empty(Set.empty, SourceLocation("", 1, 1)), NoSourceLocation))
+          Result(MapImpl(Id.Root, merged.value), merged.errors.sortBy(_.location.order(sources)))
+        case Nil => Result.pure(MapImpl(Id.Root, Tree.Map.empty(Set.empty, NoSourceLocation)))
       }).toEither
     } yield root
   }
@@ -78,28 +87,5 @@ object Psi {
       }
     val read = Ast.Document(statements(document.statements))
     Result(read, errors.result())
-  }
-
-  /** Resolves the substitutions of the merged tree (§9): none yet, each reported. */
-  private def resolve(root: Tree.Map): Result[Tree.Map] = {
-    val errors = List.newBuilder[PsiError]
-    def unsupported(path: Id.Branch, optional: Boolean, location: SourceLocation): Unit = {
-      errors += NotSupportedYet(location, (if (optional) "${?" else "${") + path.path + "}")
-      ()
-    }
-    def walk(value: Tree.Value): Unit =
-      value match {
-        case map: Tree.Map => map.keys.foreach(key => walk(map.entries(key)))
-        case sequence: Tree.Sequence => sequence.elements.foreach(walk)
-        case Tree.Substitution(path, optional, _, location) => unsupported(path, optional, location)
-        case Tree.Concatenation(parts, _, _) =>
-          parts.foreach {
-            case Token.Reference(path, optional, location) => unsupported(path, optional, location)
-            case Token.Text(_) => ()
-          }
-        case _: Tree.Scalar | _: Tree.Null => ()
-      }
-    walk(root)
-    Result(root, errors.result())
   }
 }

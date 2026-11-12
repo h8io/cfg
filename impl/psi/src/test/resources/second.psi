@@ -1,2 +1,2 @@
-a: ${y}
+a: ${psi-test-y}
 c { p: 1 }
