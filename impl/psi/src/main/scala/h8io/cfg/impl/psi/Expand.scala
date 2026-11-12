@@ -11,6 +11,9 @@ import scala.collection.{immutable, mutable}
   * A call is expanded only when its directive is registered and not disabled and its arguments go to its parameters;
   * any failure is reported at the call, which then contributes nothing, and expansion goes on. Every source being
   * expanded is on a stack, known by its key: parsing one already there is a cycle.
+  *
+  * A source a handler parses is expanded on its own, and its errors travel with the fragment, reported where the
+  * fragment is used: a fragment is a value a handler may keep and give back again, in this load or a later one.
   */
 private[psi] final class Expand private (directives: Map[String, Directive], disabled: Set[String]) {
   import Expand.*
@@ -48,7 +51,9 @@ private[psi] final class Expand private (directives: Map[String, Directive], dis
   /** The fields of a fragment in statement position, which must be a map. */
   private def fields(call: Ast.Call, fragment: Fragment): Vector[Ast.Statement] =
     fragment match {
-      case Fragment.Parsed(document, _) => document.statements
+      case Fragment.Parsed(document, _, errors) =>
+        this.errors ++= errors
+        document.statements
       case Fragment.Built(map: Node.IMap[?]) => statements(call, map)
       case Fragment.Built(_) =>
         report(DirectiveNotMap(call.location, call.name))
@@ -58,7 +63,9 @@ private[psi] final class Expand private (directives: Map[String, Directive], dis
   /** A fragment in value position, with the tags written before the call added to its own. */
   private def placed(call: Ast.Call, tags: Set[String], fragment: Fragment): Ast.Value =
     fragment match {
-      case Fragment.Parsed(document, root) => Ast.Block(document.statements, tags, root)
+      case Fragment.Parsed(document, root, errors) =>
+        this.errors ++= errors
+        Ast.Block(document.statements, tags, root)
       case Fragment.Built(node) => built(call, node, tags)
     }
 
@@ -153,9 +160,7 @@ private[psi] final class Expand private (directives: Map[String, Directive], dis
       Source.read(name, url) match {
         case Right(source) => Right(nested(source))
         case Left(SourceUnreadable(_, cause)) => Left(cause)
-        case Left(error) =>
-          report(error)
-          Right(Fragment.Parsed(Ast.Document(Vector.empty), SourceLocation(name, 1, 1)))
+        case Left(error) => Right(Fragment.Parsed(Ast.Document(Vector.empty), SourceLocation(name, 1, 1), error :: Nil))
       }
 
     def parse(name: String, text: String): Fragment = nested(Source(name, text))
@@ -164,12 +169,15 @@ private[psi] final class Expand private (directives: Map[String, Directive], dis
       val root = SourceLocation(source.name, 1, 1)
       if (stack.exists(_.key == source.key)) {
         val chain = (source :: stack).reverse.map(_.name)
-        report(DirectiveCycle(call.location, ::(chain.head, chain.tail)))
-        Fragment.Parsed(Ast.Document(Vector.empty), root)
-      } else if (stack.length >= MaxDepth) {
-        report(DirectiveTooDeep(call.location, MaxDepth))
-        Fragment.Parsed(Ast.Document(Vector.empty), root)
-      } else Fragment.Parsed(document(source, stack), root)
+        Fragment.Parsed(
+          Ast.Document(Vector.empty), root, DirectiveCycle(call.location, ::(chain.head, chain.tail)) :: Nil)
+      } else if (stack.length >= MaxDepth)
+        Fragment.Parsed(Ast.Document(Vector.empty), root, DirectiveTooDeep(call.location, MaxDepth) :: Nil)
+      else {
+        val expand = new Expand(directives, disabled)
+        val document = expand.document(source, stack)
+        Fragment.Parsed(document, root, expand.errors.toList)
+      }
     }
   }
 }
@@ -183,6 +191,7 @@ private[psi] object Expand {
   def apply(source: Source, directives: Map[String, Directive], disabled: Set[String]): Result[Ast.Document] = {
     val expand = new Expand(directives, disabled)
     val document = expand.document(source, Nil)
-    Result(document, expand.errors.toList)
+    // a fragment used more than once, or two of one source, report the same errors: each is reported once
+    Result(document, expand.errors.toList.distinct)
   }
 }

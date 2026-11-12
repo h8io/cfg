@@ -195,6 +195,24 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     errors(loader(bad), "#bad\nc: ${d}") shouldBe List(ExpectedColon(at(1, 3, "t")))
   }
 
+  it should "carry its errors, reported wherever it is used, once per load, and not where it is not" in {
+    var kept: Option[Fragment] = None
+    val cache = directive("cache") { (_, context) =>
+      Right(Some(kept.getOrElse {
+        val fragment = context.parse("child", "good: 1\nbroken value")
+        kept = Some(fragment)
+        fragment
+      }))
+    }
+    errors(loader(cache), "#cache") shouldBe List(ExpectedColon(at(2, 8, "child")))
+    errors(loader(cache), "#cache\na: #cache") shouldBe List(ExpectedColon(at(2, 8, "child")))
+    val dropped = directive("dropped") { (_, context) =>
+      val _ = context.parse("child", "broken value")
+      Right(None)
+    }
+    loaded(loader(dropped), "#dropped").isEmpty shouldBe true
+  }
+
   it should "be a cycle when its source is being expanded, named by the chain" in {
     val self = directive("self")((_, context) => Right(Some(context.parse("again", "#self"))))
     errors(loader(self), "#self") shouldBe List(DirectiveCycle(at(1, 1, "again"), ::("s", List("again", "again"))))
