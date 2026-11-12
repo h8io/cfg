@@ -72,7 +72,7 @@ at the phase gate.
 | 6 | Merge | done |
 | 7 | Node views and the loader, end to end | done |
 | 8 | Renderer and round-trip property tests | done |
-| 9 | Substitutions | todo |
+| 9 | Substitutions | in progress |
 | 10 | Directive and marker framework | todo |
 | 11 | `#include` | todo |
 | 12 | Error messages and hints | todo |
@@ -252,7 +252,7 @@ code is the lexer alone and nothing is published.
   the field, concatenation of scalars only, lookup order tree → system properties → environment.
   System properties and the environment are injected as functions, so tests do not touch the real
   ones.
-- Tags written before a whole-value `${…}` are added to the grafted node's (§9).; a concatenation carries only
+- Tags written before a whole-value `${…}` are added to the grafted node's (§9); a concatenation carries only
   the tags written before it.
 - Cycles are errors naming the path; self-reference is a cycle (§9).
 - Root causes only: a node depending on a failed one is dropped silently (§11).
@@ -260,12 +260,9 @@ code is the lexer alone and nothing is published.
   references, `ConcatenationLocation` with one entry per `${…}`, `SystemPropertyLocation` and
   `EnvLocation`.
 - Remove the "not supported yet" path for `${…}` from step 7.
-- **Spec gaps:** `${?x}` as a sequence element — drop the element? `${?x}` as one part of a
-  concatenation? The Id of a grafted node is its new position, not its origin — confirm. If so, the graft
-  happens in the Tree and step 7's views give it its new ids while wrapping; `Node` deliberately has no
-  way to hand a container a foreign id, so moving a subtree is never a side effect of a lookup. Which names
-  are looked up in system properties and the environment: the path as written (`${java.home}`,
-  `${HOME}`), and only for single-segment paths in the environment?
+- **Spec gaps:** settled in session 18 (`format.md` §9, §14): `${?x}` drops a sequence element and
+  reads as empty in a concatenation; a grafted node's id is its new position; system properties are a
+  tree split at the dots, the environment a flat map, both of strings.
 
 ### 10. Directive and marker framework
 
