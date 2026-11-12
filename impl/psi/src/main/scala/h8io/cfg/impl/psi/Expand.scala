@@ -23,6 +23,9 @@ private[psi] final class Expand private (
 
   private val errors = mutable.ListBuffer.empty[PsiError]
 
+  /** The names of the sources whose fragments were used, in the order parsed, nested ones after theirs. */
+  private val included = mutable.ListBuffer.empty[String]
+
   private def report(error: PsiError): Unit = {
     errors += error
     ()
@@ -54,8 +57,9 @@ private[psi] final class Expand private (
   /** The fields of a fragment in statement position, which must be a map. */
   private def fields(call: Ast.Call, fragment: Fragment): Vector[Ast.Statement] =
     fragment match {
-      case Fragment.Parsed(document, _, errors) =>
+      case Fragment.Parsed(document, _, errors, sources) =>
         this.errors ++= errors
+        included ++= sources
         document.statements
       case Fragment.Built(map: Node.IMap[?]) => statements(call, map)
       case Fragment.Built(_) =>
@@ -66,8 +70,9 @@ private[psi] final class Expand private (
   /** A fragment in value position, with the tags written before the call added to its own. */
   private def placed(call: Ast.Call, tags: Set[String], fragment: Fragment): Ast.Value =
     fragment match {
-      case Fragment.Parsed(document, root, errors) =>
+      case Fragment.Parsed(document, root, errors, sources) =>
         this.errors ++= errors
+        included ++= sources
         Ast.Block(document.statements, tags, root)
       case Fragment.Built(node) => built(call, node, tags)
     }
@@ -106,10 +111,6 @@ private[psi] final class Expand private (
               case Right(fragment) => fragment
             }
           }
-        // the built-in one, plan step 11
-        case None if call.name == "include" =>
-          report(NotSupportedYet(call.location, "#include"))
-          None
         case None =>
           report(UnknownDirective(call.location, call.name))
           None
@@ -163,7 +164,8 @@ private[psi] final class Expand private (
       Source.read(name, url) match {
         case Right(source) => Right(nested(source))
         case Left(SourceUnreadable(_, cause)) => Left(cause)
-        case Left(error) => Right(Fragment.Parsed(Ast.Document(Vector.empty), SourceLocation(name, 1, 1), error :: Nil))
+        case Left(error) =>
+          Right(Fragment.Parsed(Ast.Document(Vector.empty), SourceLocation(name, 1, 1), error :: Nil, Nil))
       }
 
     def parse(name: String, text: String): Fragment = nested(Source(name, text))
@@ -173,13 +175,13 @@ private[psi] final class Expand private (
       if (stack.exists(_.key == source.key)) {
         val chain = (source :: stack).reverse.map(_.name)
         Fragment.Parsed(
-          Ast.Document(Vector.empty), root, DirectiveCycle(call.location, ::(chain.head, chain.tail)) :: Nil)
+          Ast.Document(Vector.empty), root, DirectiveCycle(call.location, ::(chain.head, chain.tail)) :: Nil, Nil)
       } else if (stack.length >= MaxDepth)
-        Fragment.Parsed(Ast.Document(Vector.empty), root, DirectiveTooDeep(call.location, MaxDepth) :: Nil)
+        Fragment.Parsed(Ast.Document(Vector.empty), root, DirectiveTooDeep(call.location, MaxDepth) :: Nil, Nil)
       else {
         val expand = new Expand(directives, disabled, markers)
         val document = expand.document(source, stack)
-        Fragment.Parsed(document, root, expand.errors.toList)
+        Fragment.Parsed(document, root, expand.errors.toList, source.name :: expand.included.toList)
       }
     }
   }
@@ -190,15 +192,17 @@ private[psi] object Expand {
   /** How many sources deep directives may parse, a backstop for a key that changes on every step (§6). */
   def MaxDepth: Int = 64
 
-  /** `source` parsed and its directives expanded, with every error found in it and in the sources it parsed. */
+  /** `source` parsed and its directives expanded, with every error found in it and in the sources it parsed, and the
+    * names of those sources, in the order parsed.
+    */
   def apply(
       source: Source,
       directives: Map[String, Directive],
       disabled: Set[String],
-      markers: Map[String, Marker]): Result[Ast.Document] = {
+      markers: Map[String, Marker]): Result[(Ast.Document, List[String])] = {
     val expand = new Expand(directives, disabled, markers)
     val document = expand.document(source, Nil)
     // a fragment used more than once, or two of one source, report the same errors: each is reported once
-    Result(document, expand.errors.toList.distinct)
+    Result((document, expand.included.toList), expand.errors.toList.distinct)
   }
 }
