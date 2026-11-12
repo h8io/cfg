@@ -500,8 +500,11 @@ two ways:
 - from its context, by parsing another source — what `#include` does. A `${…}` in that source stays
   unresolved until phase 5, so an included file may still refer to the file that included it (§8).
   A source that cannot be read is handed back to the handler to decide on, so that an optional
-  include can give nothing; every other error in it is reported in its place, with the errors of
-  every source, and the fragment comes with what was read;
+  include can give nothing; every other error in it, and a cycle, goes with the fragment, which
+  comes with what was read, and is reported, with the errors of every source, where the fragment is
+  used. A fragment is a value: a handler may keep one and give it back again, in the load it was
+  made in or a later one, and its errors come back with it; one parsed and not given back reports
+  nothing. An error found twice in one load, as through a source included twice, is reported once;
 - from a `Node` it built — such a fragment holds no substitution. Its ids are dropped: where the
   fragment lands is the directive's position. Its locations are kept as origins behind the call,
   as a reference keeps them behind its site (§10): `app.psi:1:4 (#yaml from db.yaml:3:8)`.
@@ -1746,6 +1749,10 @@ question of its own.
 - **Cycles** (§13 item 5, closed): a source's key is its normalized URI, a file's real path, a
   text source's name; the error at the call closing the cycle names the chain; a stack 64 deep is
   an error, the limit fixed in v1; a diamond is parsed again each time, no cache.
+- **A fragment carries its errors**, reported where it is used, each once per load — after Codex's
+  review of #161, which found a fragment kept by a handler and given back in a later load losing
+  them, since they stayed with the load that made it. Rejected: tying a fragment to its load and
+  checking that, which forbids a handler's cache rather than making it work.
 - **Nodes of a fragment built from a `Node` keep their location as an origin behind the call**,
   `DirectiveLocation(at, directive, origin)`, as a reference does (§10) — the user's pick, with
   importing YAML (§13 item 8) in mind. Rejected: the call's location alone, simpler but losing the

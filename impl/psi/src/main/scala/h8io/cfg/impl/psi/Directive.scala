@@ -46,8 +46,8 @@ trait DirectiveContext {
   def url: Option[URL]
 
   /** Reads and parses the source at `url`, named `name` in locations, its own directives expanded. A source that cannot
-    * be read is handed back; every other error in it is reported with every source's, and the fragment holds what was
-    * read. Parsing a source already being expanded is a cycle, reported at the call.
+    * be read is handed back; every other error in it, and a cycle — parsing a source already being expanded — goes with
+    * the fragment, which holds what was read, and is reported where the fragment is used.
     */
   def parse(name: String, url: URL): Either[IOException, Fragment]
 
@@ -55,7 +55,10 @@ trait DirectiveContext {
   def parse(name: String, text: String): Fragment
 }
 
-/** What a [[Directive]] gives back: Psi's own unexpanded tree, opaque to the handler. */
+/** What a [[Directive]] gives back: Psi's own unexpanded tree, opaque to the handler. A fragment is a value: it carries
+  * the errors found in making it, reported wherever it is used, so a handler may keep one and give it back again, in
+  * the same load or a later one.
+  */
 sealed abstract class Fragment
 
 object Fragment {
@@ -65,8 +68,11 @@ object Fragment {
     */
   def apply(node: Node.ISome[Id]): Fragment = Built(node)
 
-  /** A source parsed, its directives expanded; `root` is where it starts. */
-  private[psi] final case class Parsed(document: Ast.Document, root: SourceLocation) extends Fragment
+  /** A source parsed, its directives expanded; `root` is where it starts, `errors` what was found in it, reported
+    * wherever the fragment is used.
+    */
+  private[psi] final case class Parsed(document: Ast.Document, root: SourceLocation, errors: List[PsiError])
+      extends Fragment
 
   private[psi] final case class Built(node: Node.ISome[Id]) extends Fragment
 }
