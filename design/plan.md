@@ -249,7 +249,8 @@ code is the lexer alone and nothing is published.
 ### 9. Substitutions
 
 - Resolution over the merged Tree (§9): whole-value graft of any node including `null`, `${?…}` drops
-  the field, concatenation of scalars only, lookup order tree → system properties → environment.
+  the field, concatenation of scalars only, lookup order tree → system properties → environment; before it, the tree's
+  values overridden at launch from the system properties and the environment.
   System properties and the environment are injected as functions, so tests do not touch the real
   ones.
 - Tags written before a whole-value `${…}` are added to the grafted node's (§9); a concatenation carries only
@@ -262,7 +263,9 @@ code is the lexer alone and nothing is published.
 - Remove the "not supported yet" path for `${…}` from step 7.
 - **Spec gaps:** settled in session 18 (`format.md` §9, §14): `${?x}` drops a sequence element and
   reads as empty in a concatenation; a grafted node's id is its new position; system properties are a
-  tree split at the dots, the environment a flat map, both of strings.
+  tree split at the dots for a lookup; both override the sources' values, `-D` over the environment, the
+  variable's name made from the path (`db.url` → `DB_URL`). `#define` for a key given only at launch is
+  `format.md` §13 item 7, for later.
 
 ### 10. Directive and marker framework
 
