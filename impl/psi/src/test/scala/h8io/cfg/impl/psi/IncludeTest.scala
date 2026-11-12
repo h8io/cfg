@@ -64,6 +64,8 @@ class IncludeTest extends AnyFlatSpec with Matchers {
     value("x") should include("upper")
     value("y") should include("lower")
     value("z") should include("ascii")
+    write(dir, "with space/w.psi", "v: spaced")
+    value("with space/w.psi") should include("spaced")
   }
 
   it should "read an absolute path, and resolve a relative one in a text source against the working directory" in {
