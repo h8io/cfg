@@ -32,8 +32,9 @@ import java.net.URL
   * with handlers of its own. `#include` is reported as [[NotSupportedYet]] until the plan's step 11 lands.
   *
   * ==Markers==
-  * A triple-quoted block's built-in markers shape its lines; a loader's own markers, registered through the [[builder]],
-  * are functions of the block's finished value, run left to right after its substitutions are resolved (§5).
+  * A triple-quoted block's built-in markers shape its lines; a loader's own markers, registered through the
+  * [[builder]], are functions of the block's finished value, run left to right after its substitutions are resolved
+  * (§5).
   */
 object Psi {
 
