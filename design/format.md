@@ -978,6 +978,16 @@ mistake is worse than stopping.
      for Psi; a key that is not bare, written in backticks when rendered.
    - Open as well: where it merges, as a field's value or into the block it stands in, as
      `#include` does; errors of the imported file in Psi's own error list or as one.
+9. **Two included sources named alike.** Raised by Codex's review of plan step 11, recorded as
+   unsolved by the user in session 20. An included source is named as its argument is written
+   (§10), so two files that two sources each include as `common.psi` give errors located alike,
+   `common.psi:3:4`: a reader cannot tell which of them an error is in, and the order of the second
+   batch (§11), which goes by the name, puts both after the first source that included one — `root1`,
+   `common.psi` of `root1`, `common.psi` of `root2`, `root2` — where `root2`'s should follow `root2`.
+   §10 accepted the ambiguity for the reader; the order shows it is not harmless. Open: naming an
+   included source unambiguously (its resolved URL, the include chain, either beside the name as
+   written), or a source's identity kept in its locations apart from the name shown; plan step 12,
+   on error messages, may settle the first.
 
 ## 14. Decision log
 
@@ -1837,4 +1847,10 @@ proposed by me and taken by the user but one.
 - **Errors located in included sources sort right after the including source's** in the second
   batch, in the order the sources were parsed; before, they sorted after every source the loader
   was given.
+- **`optional` asks whether a target is there before reading it** — after Codex's review of #163:
+  Java throws one `FileNotFoundException` for a missing file and for one the permissions deny, so an
+  optional include skipped an unreadable file, and the extension search went on past one. A file is
+  there when the file system says so, a jar entry when its jar does; only for any other URL does a
+  failure to read mean "not found", a page not found.
+- **Two included sources named alike sort as one**, found by the same review: §13 item 9, unsolved.
 
