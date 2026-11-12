@@ -31,7 +31,7 @@ The pipeline follows the phase order in `format.md` §8. Everything is private t
 the loader, the location types, the error types and the directive extension API.
 
 ```
-URL ──read──▶ Source ──lex/parse──▶ Ast ──expand directives──▶ Ast ──merge──▶ Tree ──resolve ${}──▶ Tree ──wrap──▶ Node.IMap[Id.Root]
+URL ──read──▶ Source ──lex/parse──▶ Ast ──expand directives──▶ Ast ──merge──▶ Tree ──override -D──▶ Tree ──resolve ${}──▶ Tree ──wrap──▶ Node.IMap[Id.Root]
                                     (per source, with recovery)       (N sources)   (phase-gated)
 ```
 
