@@ -44,7 +44,7 @@ private[psi] final class Merge {
       case (Ast.Operator.Merge, Some(earlier)) =>
         merged(earlier, value) match {
           case Some(tree) => map.updated(key, tree)
-          case None => map.removed(key)
+          case None => map.failedAt(key)
         }
       case _ => map.updated(key, tree(value))
     }

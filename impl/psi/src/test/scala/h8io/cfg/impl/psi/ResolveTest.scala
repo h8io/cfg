@@ -139,6 +139,14 @@ class ResolveTest extends AnyFlatSpec with Matchers {
       List(UnresolvedSubstitution(at(1, 4), "x"))
   }
 
+  "A key whose merge failed" should "fail what refers to it, and the maps holding it, silently" in {
+    errors("a {}\na: ${target}\nb: ${a}\nc: ${m.k}\nm { k: ${t}, k {} }\nn: ${m}\nd: ${x}\ntarget: 1") shouldBe
+      List(
+        MergeWithSubstitution(at(2, 4), at(1, 3)),
+        MergeWithSubstitution(at(5, 16), at(5, 8)),
+        UnresolvedSubstitution(at(7, 4), "x"))
+  }
+
   "A cycle" should "be an error at the reference that closes it" in {
     errors("a: ${a}") shouldBe List(SubstitutionCycle(at(1, 4), "a"))
     errors("a: ${b}\nb: ${a}") shouldBe List(SubstitutionCycle(at(2, 4), "a"))

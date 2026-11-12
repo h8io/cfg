@@ -32,14 +32,26 @@ private[psi] object Tree {
     *
     * @param location
     *   where it was defined: one place, or a [[MergedLocation]] of each block merged into it since it was last replaced
+    * @param failed
+    *   the keys left out because their merge failed (`format.md` §7): what refers to one fails silently (§11)
     */
-  final case class Map(keys: Vector[String], entries: immutable.Map[String, Value], tags: Set[String],
-      location: PsiLocation)
+  final case class Map(
+      keys: Vector[String],
+      entries: immutable.Map[String, Value],
+      tags: Set[String],
+      location: PsiLocation,
+      failed: Set[String] = Set.empty)
       extends Value {
 
     /** This map with `value` at `key`: in its place when the key is there, last when it is not. */
     def updated(key: String, value: Value): Map =
-      copy(keys = if (entries.contains(key)) keys else keys :+ key, entries = entries.updated(key, value))
+      copy(
+        keys = if (entries.contains(key)) keys else keys :+ key,
+        entries = entries.updated(key, value),
+        failed = failed - key)
+
+    /** This map without `key`, its merge having failed. */
+    def failedAt(key: String): Map = removed(key).copy(failed = failed + key)
 
     /** This map without `key`. */
     def removed(key: String): Map = copy(keys = keys.filter(_ != key), entries = entries - key)
