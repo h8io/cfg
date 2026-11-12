@@ -602,10 +602,11 @@ cannot be expressed any other way.
 2. Expand directives depth-first. `#include` parses the referenced source recursively and merges it
    positionally. Cycle detection lives here.
 3. Merge the input sources, last wins.
-4. Resolve substitutions over the merged tree.
-5. Wrap the result as `Node.IMap[Id.Root]`.
+4. Override the merged tree's values from the system properties and the environment (§9).
+5. Resolve substitutions over the overridden tree.
+6. Wrap the result as `Node.IMap[Id.Root]`.
 
-The consequence worth stating out loud: because 2 runs before 4, an included file may reference
+The consequence worth stating out loud: because 2 runs before 5, an included file may reference
 values from the file that included it and vice versa — but an include target can never be computed
 from a substitution.
 
@@ -634,17 +635,29 @@ from a substitution.
 - `${?path}` is optional: when it does not resolve, the field is omitted entirely, so a later lookup
   yields `Node.INone` rather than an error. As an element of a sequence, it drops the element, the
   ones after it moving up. As a part of a concatenation, it reads as the empty string.
-- Lookup order is the merged tree, then system properties, then environment variables — the HOCON
-  behaviour, chosen deliberately over an explicit `${env:…}` form. Each is looked up by the whole
-  path, and the first that has it wins; a path that fails in the tree for another reason than its
-  absence — a cycle, a node that failed — is not looked up further.
-- **System properties form a tree of strings**, their names split at every dot: `java.home` is
-  `home` in `java`, so `${java.home}` is the property and `${java}` grafts a map of every `java.*`
-  one. Where a name is both a value and a prefix of others, `a=1` and `a.b=2`, the map wins and the
-  value is lost, as in HOCON. **Environment variables are not split**: each is a key at the top,
-  its value a string, so `${HOME}` reads `HOME` and a multi-segment path never reaches the
-  environment. Turning a string into structure — a list out of `PATH` — is a directive's job, not
-  the lookup's.
+- **System properties and the environment override the sources**, as they are meant to: they are
+  what is easiest to change at launch. Before any substitution is resolved, every value of the
+  merged tree that is not a container — a scalar, `null`, a `${…}` or a concatenation — standing at a
+  path of keys only, no index on the way, is replaced by the system property named by that path, or
+  failing it by the environment variable named by it; a system property wins over the environment.
+  Only keys the sources define are overridden: a property or a variable naming no such value adds
+  nothing, and a map or a sequence is never replaced. The value is a string, with the tags written in
+  the source kept and the location of the property or the variable (§10). Declaring a key with no
+  value, to be given at launch, is §13 item 7.
+- **The names.** A system property is named by the path's keys joined by dots, `db.url`; an
+  environment variable by the same keys in upper case, a `-` in them as `_`, joined by `_`:
+  `db.url` is `DB_URL`, `pool.max-size` is `POOL_MAX_SIZE`. The mapping goes from a path to a name
+  only, so two paths can name one variable, which then overrides both.
+- **Lookup order of `${path}`** is the overridden tree, then system properties, then environment
+  variables — HOCON's places, chosen deliberately over an explicit `${env:…}` form. Each is looked up
+  by the whole path, and the first that has it wins; a path that fails in the tree for another
+  reason than its absence — a cycle, a node that failed — is not looked up further.
+- **For a lookup, system properties form a tree of strings**, their names split at every dot:
+  `${java.home}` is the property and `${java}` grafts a map of every `java.*` one. Where a name is
+  both a value and a prefix of others, `a=1` and `a.b=2`, the map wins and the value is lost, as in
+  HOCON. The environment is looked up by the name of the path above: `${HOME}`, `${home}` and
+  `${db.url}` read `HOME`, `HOME` and `DB_URL`. Turning a string into structure — a list out of
+  `PATH` — is a directive's job, not the lookup's.
 - **A grafted node takes its new position**, the id of the field it is grafted at, not that of the
   node it came from; its location keeps the origin (§10). The graft is made in the merged tree,
   before the nodes are wrapped, so `Node` never hands a container a foreign id.
@@ -894,6 +907,11 @@ mistake is worse than stopping.
    - With a path, `id` says little — it is the path's last segment — but other meta-fields do:
      `${workers^size}`, `${db^tags}`, `${db.url^source}`. The user had no use for `${field^id}` yet.
    - With the options of item 4, presumably node, meta-field, then options: `${a^size; …}`.
+7. **`#define`: a key with no value, expected at launch.** Raised by the user in session 18, for the
+   future: a directive declaring a key the sources do not give a value, so that the override from
+   the system properties or the environment (§9) has a key to override, the config naming what it
+   expects from the launch instead of writing a placeholder value. Nothing decided: its arguments, a
+   default, whether a key left undefined at launch is an error, its type or tags.
 
 ## 14. Decision log
 
@@ -1655,11 +1673,22 @@ Spec gaps of plan step 9, substitutions, settled with the user before coding it 
   dropping the whole scalar.
 - **A grafted node's id is its new position**, confirmed; the graft is made in the merged tree and
   the views give it its ids while wrapping.
-- **System properties are a tree of strings, split at the dots; the environment is a map of
-  strings, not split.** Looked up by the whole path each. Structure out of a string, splitting a
-  value, is left to a directive if it is ever needed. The user's call, splitting the properties
-  included. Proposed by me and confirmed by the user: the environment not split, and a property
-  name that is both a value and a prefix losing the value to the map, as in HOCON.
+- **System properties are a tree of strings, split at the dots**, for a lookup. Structure out of a
+  string, splitting a value, is left to a directive if it is ever needed. The user's call. My
+  proposal of a property name both a value and a prefix losing the value to the map, as in HOCON,
+  confirmed by the user.
+- **System properties and the environment override the sources, the properties over the
+  environment** (§8, §9): the user's call — they exist to change at launch what the file says. My
+  proposals, which the user took: only values the sources define are overridden, so neither adds
+  keys nor floods the root with `PATH` and `java.*` as HOCON's `ConfigFactory.load` does; the
+  environment variable's name made from the path, `db.url` → `DB_URL`, rather than a variable's name
+  split into a path. Supersedes my earlier proposal, first confirmed then rejected by the user, of
+  an environment not split and reached only by a one-key path. Rejected: overriding from every
+  property and variable, and HOCON's `CONFIG_FORCE_` prefix for the environment.
+- Mine, not raised: only a value that is not a container is overridden, at a path through maps only
+  — a string cannot stand for a map or a sequence, and an index has no name in either source; the
+  tags written in the source are kept; the environment is looked up by the same name in a
+  `${…}`.
 - **Meta-fields (`${path^meta}`, §13 item 6) stay out of step 9**: they are after v1.
 - Not raised with the user, decided while implementing: a cycle is reported once, at the reference
   that reaches a node still being resolved, naming the path that reference was written with; an

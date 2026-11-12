@@ -14,7 +14,7 @@ class ResolveTest extends AnyFlatSpec with Matchers {
       text: String,
       properties: Map[String, String],
       env: Map[String, String]): Either[PsiErrors, Node.IMap[Id.Root]] =
-    Psi.load(Right(Source("s", text)) :: Nil, () => properties, () => env)
+    Psi.load(Right(Source("s", text)) :: Nil, properties, env)
 
   private def loaded(
       text: String,
@@ -96,9 +96,9 @@ class ResolveTest extends AnyFlatSpec with Matchers {
   }
 
   it should "count in a sequence when it grafts something" in {
-    val root = loaded("s: [${?x}, 1]\nt: ${s[1]}\nu: ${s[0]}", env = Map("x" -> "0"))
+    val root = loaded("s: [${?x}, 1]\nt: ${s[1]}\nu: ${s[0]}", env = Map("X" -> "0"))
     root("t") shouldBe Node.IScalar(keyed("t"), NoTags, "1", ref(2, 4, "s[1]", at(1, 12)))
-    root("u") shouldBe Node.IScalar(keyed("u"), NoTags, "0", ref(3, 4, "s[0]", ref(1, 5, "x", EnvLocation("x"))))
+    root("u") shouldBe Node.IScalar(keyed("u"), NoTags, "0", ref(3, 4, "s[0]", ref(1, 5, "x", EnvLocation("X"))))
   }
 
   it should "read as empty in a concatenation" in {
@@ -135,12 +135,13 @@ class ResolveTest extends AnyFlatSpec with Matchers {
   }
 
   it should "be reported as the root cause only, what depends on it dropped silently" in {
-    errors("a: ${x}\nb: ${a}\nc: \"${a}\"\nd: [${a}]\ne { f: ${a} }\ng: ${e}", Map("a" -> "1")) shouldBe
+    errors("a: ${x}\nb: ${a}\nc: \"${a}\"\nd: [${a}]\ne { f: ${a} }\ng: ${e}") shouldBe
       List(UnresolvedSubstitution(at(1, 4), "x"))
   }
 
   "A key whose merge failed" should "fail what refers to it, and the maps holding it, silently" in {
-    errors("a {}\na: ${target}\nb: ${a}\nc: ${m.k}\nm { k: ${t}, k {} }\nn: ${m}\nd: ${x}\ntarget: 1") shouldBe
+    errors("a {}\na: ${target}\nb: ${a}\nc: ${m.k}\nm { k: ${t}, k {} }\nn: ${m}\nd: ${x}\ntarget: 1",
+      Map("a" -> "1", "m.k" -> "1")) shouldBe
       List(
         MergeWithSubstitution(at(2, 4), at(1, 3)),
         MergeWithSubstitution(at(5, 16), at(5, 8)),
@@ -161,7 +162,7 @@ class ResolveTest extends AnyFlatSpec with Matchers {
       List(UnresolvedSubstitution(at(1, 8), "x"), SubstitutionCycle(at(1, 17), "b"))
   }
 
-  "System properties" should "be looked up after the tree, split at the dots" in {
+  "System properties" should "be looked up after the tree overridden by them, split at the dots" in {
     val properties = Map("java.home" -> "/j", "java.version" -> "9", "a" -> "tree")
     val root = loaded("a: x\nh: ${java.home}\nj: ${java}\nt: ${a}", properties)
     root("h") shouldBe
@@ -180,17 +181,12 @@ class ResolveTest extends AnyFlatSpec with Matchers {
           )
       case other => fail(other.toString)
     }
-    root("t") shouldBe Node.IScalar(keyed("t"), NoTags, "x", ref(4, 4, "a", at(1, 4)))
+    root("t") shouldBe Node.IScalar(keyed("t"), NoTags, "tree", ref(4, 4, "a", SystemPropertyLocation("a")))
   }
 
   they should "come before the environment" in {
     loaded("h: ${HOME}", Map("HOME" -> "p"), Map("HOME" -> "e"))("h") shouldBe
       Node.IScalar(keyed("h"), NoTags, "p", ref(1, 4, "HOME", SystemPropertyLocation("HOME")))
-  }
-
-  they should "not be read when the tree has everything" in {
-    load("a: ${b}\nb: 1", Map.empty, Map.empty).isRight shouldBe true
-    Psi.load(Right(Source("s", "a: ${b}\nb: 1")) :: Nil, () => fail("read"), () => fail("read")).isRight shouldBe true
   }
 
   they should "lose a value that is also a prefix to the map" in {
@@ -220,13 +216,15 @@ class ResolveTest extends AnyFlatSpec with Matchers {
       )
   }
 
-  "The environment" should "be looked up last, not split" in {
-    val env = Map("HOME" -> "/h", "a.b" -> "v")
-    val root = loaded("h: ${HOME}\nq: ${`a.b`}", env = env)
+  "The environment" should "be looked up last, by the name made of the path" in {
+    val env = Map("HOME" -> "/h", "A_B" -> "v", "DB_MAX_SIZE" -> "9", "a.b" -> "dotted")
+    val root = loaded("h: ${HOME}\ni: ${home}\nq: ${a.b}\nm: ${db.max-size}", env = env)
     root("h") shouldBe Node.IScalar(keyed("h"), NoTags, "/h", ref(1, 4, "HOME", EnvLocation("HOME")))
-    root("q") shouldBe Node.IScalar(keyed("q"), NoTags, "v", ref(2, 4, "`a.b`", EnvLocation("a.b")))
-    errors("x: ${a.b}\ny: ${HOME[0]}", env = env) shouldBe
-      List(UnresolvedSubstitution(at(1, 4), "a.b"), UnresolvedSubstitution(at(2, 4), "HOME[0]"))
+    root("i") shouldBe Node.IScalar(keyed("i"), NoTags, "/h", ref(2, 4, "home", EnvLocation("HOME")))
+    root("q") shouldBe Node.IScalar(keyed("q"), NoTags, "v", ref(3, 4, "a.b", EnvLocation("A_B")))
+    root("m") shouldBe Node.IScalar(keyed("m"), NoTags, "9", ref(4, 4, "db.max-size", EnvLocation("DB_MAX_SIZE")))
+    errors("x: ${`a.b`}\ny: ${HOME[0]}", env = env) shouldBe
+      List(UnresolvedSubstitution(at(1, 4), "`a.b`"), UnresolvedSubstitution(at(2, 4), "HOME[0]"))
   }
 
   "A graft" should "not take a substitution left unresolved, which is a bug of the loader" in {
