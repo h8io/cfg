@@ -75,7 +75,7 @@ at the phase gate.
 | 9 | Substitutions | done |
 | 10a | Directive framework | done |
 | 10b | Markers as handlers | done |
-| 11 | `#include` | in progress |
+| 11 | `#include` | done |
 | 12 | Error messages and hints | todo |
 | 13 | Hardening | todo |
 | 14 | Docs and release | todo |
