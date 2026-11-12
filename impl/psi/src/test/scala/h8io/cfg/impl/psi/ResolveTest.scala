@@ -10,23 +10,14 @@ class ResolveTest extends AnyFlatSpec with Matchers {
   private def ref(line: Int, column: Int, path: String, origin: PsiLocation): ReferenceLocation =
     ReferenceLocation(at(line, column), path, origin)
 
-  private def load(
-      text: String,
-      properties: Map[String, String],
-      env: Map[String, String]): Either[PsiErrors, Node.IMap[Id.Root]] =
-    Psi.load(Right(Source("s", text)) :: Nil, properties, env)
+  private def load(text: String, properties: Map[String, String]): Either[PsiErrors, Node.IMap[Id.Root]] =
+    Psi.load(Right(Source("s", text)) :: Nil, properties)
 
-  private def loaded(
-      text: String,
-      properties: Map[String, String] = Map.empty,
-      env: Map[String, String] = Map.empty): Node.IMap[Id.Root] =
-    load(text, properties, env).fold(errors => fail(errors.toString), identity)
+  private def loaded(text: String, properties: Map[String, String] = Map.empty): Node.IMap[Id.Root] =
+    load(text, properties).fold(errors => fail(errors.toString), identity)
 
-  private def errors(
-      text: String,
-      properties: Map[String, String] = Map.empty,
-      env: Map[String, String] = Map.empty): List[PsiError] =
-    load(text, properties, env).fold(_.errors, root => fail(root.toString))
+  private def errors(text: String, properties: Map[String, String] = Map.empty): List[PsiError] =
+    load(text, properties).fold(_.errors, root => fail(root.toString))
 
   private def keyed(names: String*): Id.Key =
     names.tail.foldLeft(Id.Key(names.head, Id.Root))((parent, name) => Id.Key(name, parent))
@@ -96,9 +87,9 @@ class ResolveTest extends AnyFlatSpec with Matchers {
   }
 
   it should "count in a sequence when it grafts something" in {
-    val root = loaded("s: [${?x}, 1]\nt: ${s[1]}\nu: ${s[0]}", env = Map("X" -> "0"))
+    val root = loaded("s: [${?x}, 1]\nt: ${s[1]}\nu: ${s[0]}\nx: 0")
     root("t") shouldBe Node.IScalar(keyed("t"), NoTags, "1", ref(2, 4, "s[1]", at(1, 12)))
-    root("u") shouldBe Node.IScalar(keyed("u"), NoTags, "0", ref(3, 4, "s[0]", ref(1, 5, "x", EnvLocation("X"))))
+    root("u") shouldBe Node.IScalar(keyed("u"), NoTags, "0", ref(3, 4, "s[0]", ref(1, 5, "x", at(4, 4))))
   }
 
   it should "read as empty in a concatenation" in {
@@ -162,69 +153,12 @@ class ResolveTest extends AnyFlatSpec with Matchers {
       List(UnresolvedSubstitution(at(1, 8), "x"), SubstitutionCycle(at(1, 17), "b"))
   }
 
-  "System properties" should "be looked up after the tree overridden by them, split at the dots" in {
-    val properties = Map("java.home" -> "/j", "java.version" -> "9", "a" -> "tree")
-    val root = loaded("a: x\nh: ${java.home}\nj: ${java}\nt: ${a}", properties)
-    root("h") shouldBe
-      Node.IScalar(keyed("h"), NoTags, "/j", ref(2, 4, "java.home", SystemPropertyLocation("java.home")))
-    root("j") match {
-      case map: Node.IMap[?] =>
-        map.location shouldBe ref(3, 4, "java", SystemPropertyLocation("java"))
-        map.toList shouldBe
-          List(
-            Node.IScalar(keyed("j", "home"), NoTags, "/j", ref(3, 4, "java.home", SystemPropertyLocation("java.home"))),
-            Node.IScalar(
-              keyed("j", "version"),
-              NoTags,
-              "9",
-              ref(3, 4, "java.version", SystemPropertyLocation("java.version")))
-          )
-      case other => fail(other.toString)
-    }
-    root("t") shouldBe Node.IScalar(keyed("t"), NoTags, "tree", ref(4, 4, "a", SystemPropertyLocation("a")))
-  }
-
-  they should "come before the environment" in {
-    loaded("h: ${HOME}", Map("HOME" -> "p"), Map("HOME" -> "e"))("h") shouldBe
-      Node.IScalar(keyed("h"), NoTags, "p", ref(1, 4, "HOME", SystemPropertyLocation("HOME")))
-  }
-
-  they should "lose a value that is also a prefix to the map" in {
-    Resolve.properties(Map("a" -> "1", "a.b" -> "2", "c..d" -> "3")) shouldBe
-      Tree.Map(
-        Vector("a", "c"),
-        Map(
-          "a" -> Tree.Map(
-            Vector("b"),
-            Map("b" -> Tree.Scalar("2", NoTags, SystemPropertyLocation("a.b"))),
-            NoTags,
-            SystemPropertyLocation("a")),
-          "c" -> Tree.Map(
-            Vector(""),
-            Map(
-              "" -> Tree.Map(
-                Vector("d"),
-                Map("d" -> Tree.Scalar("3", NoTags, SystemPropertyLocation("c..d"))),
-                NoTags,
-                SystemPropertyLocation("c."))),
-            NoTags,
-            SystemPropertyLocation("c")
-          )
-        ),
-        NoTags,
-        NoSourceLocation
-      )
-  }
-
-  "The environment" should "be looked up last, by the name made of the path" in {
-    val env = Map("HOME" -> "/h", "A_B" -> "v", "DB_MAX_SIZE" -> "9", "a.b" -> "dotted")
-    val root = loaded("h: ${HOME}\ni: ${home}\nq: ${a.b}\nm: ${db.max-size}", env = env)
-    root("h") shouldBe Node.IScalar(keyed("h"), NoTags, "/h", ref(1, 4, "HOME", EnvLocation("HOME")))
-    root("i") shouldBe Node.IScalar(keyed("i"), NoTags, "/h", ref(2, 4, "home", EnvLocation("HOME")))
-    root("q") shouldBe Node.IScalar(keyed("q"), NoTags, "v", ref(3, 4, "a.b", EnvLocation("A_B")))
-    root("m") shouldBe Node.IScalar(keyed("m"), NoTags, "9", ref(4, 4, "db.max-size", EnvLocation("DB_MAX_SIZE")))
-    errors("x: ${`a.b`}\ny: ${HOME[0]}", env = env) shouldBe
-      List(UnresolvedSubstitution(at(1, 4), "`a.b`"), UnresolvedSubstitution(at(2, 4), "HOME[0]"))
+  "A path" should "be looked up in the tree alone, overridden by the system properties" in {
+    val properties = Map("java.home" -> "/j", "a" -> "launched")
+    loaded("a: x\nt: ${a}", properties)("t") shouldBe
+      Node.IScalar(keyed("t"), NoTags, "launched", ref(2, 4, "a", SystemPropertyLocation("a")))
+    errors("h: ${java.home}\ni: ${HOME}", properties) shouldBe
+      List(UnresolvedSubstitution(at(1, 4), "java.home"), UnresolvedSubstitution(at(2, 4), "HOME"))
   }
 
   "A graft" should "not take a substitution left unresolved, which is a bug of the loader" in {

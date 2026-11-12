@@ -35,9 +35,9 @@ class PsiLocationTest extends AnyFlatSpec with Matchers {
       SourceLocation("app.psi", 12, 9),
       ::(
         ReferenceLocation(SourceLocation("app.psi", 12, 17), "host", base),
-        ReferenceLocation(SourceLocation("app.psi", 12, 25), "port", EnvLocation("DB_PORT")) :: Nil
+        ReferenceLocation(SourceLocation("app.psi", 12, 25), "port", SystemPropertyLocation("db.port")) :: Nil
       )
-    ).description shouldBe "app.psi:12:9 (${host} from base.psi:3:7, ${port} from env DB_PORT)"
+    ).description shouldBe "app.psi:12:9 (${host} from base.psi:3:7, ${port} from system property db.port)"
   }
 
   it should "render a single part" in {
@@ -65,14 +65,10 @@ class PsiLocationTest extends AnyFlatSpec with Matchers {
     MergedLocation(a, ::(SourceLocation("b.psi", 1, 1), Nil)).order(sources) shouldBe ((0, 4, 5))
     NoSourceLocation.order(sources) shouldBe ((2, 0, 0))
     SystemPropertyLocation("p").order(sources) shouldBe ((2, 0, 0))
-    EnvLocation("E").order(sources) shouldBe ((2, 0, 0))
   }
 
   "SystemPropertyLocation" should "name the property" in {
     SystemPropertyLocation("db.url").description shouldBe "system property db.url"
   }
 
-  "EnvLocation" should "name the variable" in {
-    EnvLocation("DB_PORT").description shouldBe "env DB_PORT"
-  }
 }

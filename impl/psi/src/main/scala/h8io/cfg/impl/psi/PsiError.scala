@@ -232,8 +232,8 @@ final case class UnclosedBracket(location: SourceLocation) extends PsiError
   */
 final case class MergeWithSubstitution(location: SourceLocation, earlier: PsiLocation) extends PsiError
 
-/** `\${path}`, alone or in a concatenation, at `location`, the `\${`, with nothing at `path` in the tree, the system
-  * properties or the environment (`format.md` §9).
+/** `\${path}`, alone or in a concatenation, at `location`, the `\${`, with nothing at `path` in the tree (`format.md`
+  * §9).
   */
 final case class UnresolvedSubstitution(location: SourceLocation, path: String) extends PsiError
 
