@@ -74,7 +74,7 @@ at the phase gate.
 | 8 | Renderer and round-trip property tests | done |
 | 9 | Substitutions | done |
 | 10a | Directive framework | done |
-| 10b | Markers as handlers | todo |
+| 10b | Markers as handlers | in progress |
 | 11 | `#include` | todo |
 | 12 | Error messages and hints | todo |
 | 13 | Hardening | todo |
