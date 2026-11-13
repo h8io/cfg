@@ -10,9 +10,11 @@ class SyntaxMessageTest extends AnyFlatSpec with Matchers {
 
   "Keys" should "say what was found instead, and how a key is written" in {
     text(ExpectedKey(at, "':'")) shouldBe (("expected a key, found ':'", None))
-    text(QuotedKey(at, "a b")) shouldBe (("a key in quotes", Some("write a quoted key in backticks: `a b`")))
-    text(QuotedKey(at, "k" * 30)) shouldBe
-      (("a key in quotes", Some("write a quoted key in backticks: `" + "k" * 19 + "…")))
+    val quoted = "write a key bare, or in backticks when it has to be quoted: "
+    text(QuotedKey(at, "ab")) shouldBe (("a key in quotes", Some(quoted + "ab")))
+    text(QuotedKey(at, "a b")) shouldBe (("a key in quotes", Some(quoted + "`a b`")))
+    text(QuotedKey(at, "a`\\\b")) shouldBe (("a key in quotes", Some(quoted + "`a\\`\\\\\\b`")))
+    text(QuotedKey(at, "k" * 30)) shouldBe (("a key in quotes", Some(quoted + "k" * 20 + "…")))
     text(SpaceAroundDot(at)) shouldBe
       (("whitespace around a dot of a key", Some("write the keys and the dots touching, as in 'a.b'")))
     text(TagBeforeKey(at)) shouldBe (("a tag before a key", Some("put it after the ':', as in 'key: @tag value'")))

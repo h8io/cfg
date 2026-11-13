@@ -10,6 +10,7 @@ class MessageTest extends AnyFlatSpec with Matchers {
     Message.cut("a" * 20) shouldBe "a" * 20
     Message.cut("a" * 21) shouldBe "a" * 20 + "…"
     Message.cut("😀" * 21) shouldBe "😀" * 20 + "…"
+    Message.cut("\n" * 11) shouldBe "\\n" * 10 + "…"
     Message.quote("x" * 25) shouldBe "'" + "x" * 20 + "…'"
   }
 
@@ -17,6 +18,18 @@ class MessageTest extends AnyFlatSpec with Matchers {
     Message.char(' ') shouldBe "U+00A0 NO-BREAK SPACE"
     Message.char('͸') shouldBe "U+0378"
     Message.escape('​') shouldBe "\\u200B"
+  }
+
+  "Found text" should "keep to one line and show what would not show" in {
+    Message.visible("a b\b\f\n\r\tc") shouldBe "a b\\b\\f\\n\\r\\tc"
+    Message.visible("\u0000\u007F\u0085\u00A0\u200B\u2028\u2029\u3000") shouldBe
+      "\\u0000\\u007F\\u0085\\u00A0\\u200B\\u2028\\u2029\\u3000"
+    Message.visible("é😀\\`") shouldBe "é😀\\`"
+  }
+
+  "A key" should "be written as a key is, bare or in backticks with its escapes" in {
+    Message.key("ab") shouldBe "ab"
+    Message.key("a\nb") shouldBe "`a\\nb`"
   }
 
   "A directive's name" should "be written after '#' as a key is" in {

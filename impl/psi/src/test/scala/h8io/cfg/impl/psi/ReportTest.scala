@@ -19,6 +19,14 @@ class ReportTest extends AnyFlatSpec with Matchers {
     errors.toString shouldBe errors.message
   }
 
+  it should "keep every error on its lines, whatever the text found or the name of the source" in {
+    Psi.parse("s\n2", "a: [] \"x\\ny\"").fold(_.message, root => fail(root.toString)) shouldBe
+      """1 error in 1 source
+        |s\n2
+        |  1:7: expected ',' or a line break, found a quoted string "x\ny"
+        |       hint: separate items with ',' or a line break; whitespace never separates""".stripMargin
+  }
+
   it should "say one error in one source in the singular, and show an error with no hint on one line" in {
     PsiErrors(::(UnknownDirective(SourceLocation("s", 1, 1), "x"), Nil)).message shouldBe
       "1 error in 1 source\ns\n  1:1: unknown directive '#x'"

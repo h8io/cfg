@@ -862,7 +862,10 @@ mistake is worse than stopping.
   unless a handler gives one; a handler's hint is shown under its directive's or marker's.
 - **A message names what was found.** An error that does not carry the text it is about gets it as
   a field. Text longer than about 20 characters is cut with `…`; an invisible or control character
-  is shown by its code point and name, `U+00A0 NO-BREAK SPACE`.
+  is shown by its code point and name, `U+00A0 NO-BREAK SPACE`. Found text, and a source's name,
+  are made visible first, as `Id.path` writes a key: a control, format or line-breaking character
+  and any space but U+0020 as an escape, so an error stays on its lines. A key a hint offers is
+  written as `Id.path` writes it, bare or in backticks with its escapes.
 - **The report groups errors by source**, in the order above: a line with the source's name, then
   one line per error, `<line>:<column>: <message>`. It opens with a count, `5 errors in 2 sources`.
   An error at a composite location (§10) is grouped by its `at`, its origin written after the

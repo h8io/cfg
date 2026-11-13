@@ -6,10 +6,35 @@ private[psi] object Message {
   /** How many code points of found text a message shows before cutting it. */
   def Limit: Int = 20
 
-  /** `text`, cut with `…` past [[Limit]] code points. */
-  def cut(text: String): String =
-    if (text.codePointCount(0, text.length) <= Limit) text
-    else text.substring(0, text.offsetByCodePoints(0, Limit)) + "…"
+  /** `text` made visible and kept on one line, then cut with `…` past [[Limit]] code points. */
+  def cut(text: String): String = {
+    val shown = visible(text)
+    if (shown.codePointCount(0, shown.length) <= Limit) shown
+    else shown.substring(0, shown.offsetByCodePoints(0, Limit)) + "…"
+  }
+
+  /** `text` with every character that would break a line or not show written as an escape, as `Id.path` writes one in a
+    * key: a control, format or line-breaking character, and any space but U+0020.
+    */
+  def visible(text: String): String =
+    text.iterator.map {
+      case '\b' => "\\b"
+      case '\f' => "\\f"
+      case '\n' => "\\n"
+      case '\r' => "\\r"
+      case '\t' => "\\t"
+      case ' ' => " "
+      case c =>
+        Character.getType(c) match {
+          case Character.CONTROL | Character.FORMAT | Character.LINE_SEPARATOR | Character.PARAGRAPH_SEPARATOR |
+              Character.SPACE_SEPARATOR =>
+            escape(c)
+          case _ => c.toString
+        }
+    }.mkString
+
+  /** A key as it is written: bare, or in backticks with its escapes. */
+  def key(name: String): String = cut(h8io.cfg.Id.Key(name, h8io.cfg.Id.Root).path)
 
   /** `text` in single quotes, cut. */
   def quote(text: String): String = "'" + cut(text) + "'"
