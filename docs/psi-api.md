@@ -90,6 +90,7 @@ import h8io.cfg.{Id, Node}
 import h8io.cfg.impl.psi.*
 import h8io.cfg.impl.yaml.YAML
 
+import java.net.URI
 import java.nio.file.Paths
 
 final class YamlUnreadable(file: String, cause: Exception) extends DirectiveError {
@@ -104,16 +105,18 @@ object Yaml extends Directive {
   def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Option[Fragment]] =
     arguments("file") match {
       case Node.IScalar(_, _, file, _) =>
-        val url = context.url.fold(Paths.get(file).toUri.toURL)(_.toURI.resolve(file).toURL)
-        try Right(Some(Fragment(YAML(url))))
-        catch { case e: Exception => Left(new YamlUnreadable(file, e)) }
+        // the path is encoded before it is resolved, and one no URL can be made of fails the call too
+        try {
+          val url = context.url.fold(Paths.get(file).toUri)(_.toURI.resolve(new URI(null, null, file, null))).toURL
+          Right(Some(Fragment(YAML(url))))
+        } catch { case e: Exception => Left(new YamlUnreadable(file, e)) }
       // a required argument is always given, and as a scalar
       case _ => Right(None)
     }
 }
 ```
 
-What the handler fails with is reported at the call, its `message` and `hint` under the directive's name, and the call
+Nothing a source holds should make a handler throw: what it fails with is reported at the call, its `message` and `hint` under the directive's name, and the call
 gives nothing; loading goes on. A node a fragment brings keeps its own location behind the call's.
 
 ## Markers
@@ -155,16 +158,16 @@ val loader = Psi.builder.withDirectives(Yaml).withMarkers(Base64Marker).build.fo
 val app = {
   val dir = java.nio.file.Files.createTempDirectory("psi")
   def write(name: String, text: String) = java.nio.file.Files.write(dir.resolve(name), text.getBytes("UTF-8"))
-  write("db.yaml", "host: localhost\nport: 5432\n")
-  write("app.psi", "database: #yaml(file: \"db.yaml\")\ngreeting: \"\"\"base64\n  aGVsbG8sIHdvcmxk\n  \"\"\"\n")
+  write("db config.yaml", "host: localhost\nport: 5432\n")
+  write("app.psi", "database: #yaml(file: \"db config.yaml\")\ngreeting: \"\"\"base64\n  aGVsbG8sIHdvcmxk\n  \"\"\"\n")
   dir.resolve("app.psi").toUri.toURL
 }
 ```
 
-With `db.yaml` holding `host: localhost` and `port: 5432`, and `app.psi` next to it:
+With `db config.yaml` holding `host: localhost` and `port: 5432`, and `app.psi` next to it:
 
 ```
-database: #yaml(file: "db.yaml")
+database: #yaml(file: "db config.yaml")
 greeting: """base64
   aGVsbG8sIHdvcmxk
   """
