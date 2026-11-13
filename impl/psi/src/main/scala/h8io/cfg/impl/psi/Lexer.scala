@@ -359,7 +359,7 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
     else if (at(offset, '"')) {
       offset += 1
       Scalar(parts.result(), quoted = true)
-    } else fail(UnterminatedString.apply, start)
+    } else fail(UnterminatedString(_, "\""), start)
   }
 
   /** An unquoted scalar: everything up to whitespace, `,`, `}` or `]`, comment openers and backslashes included. */
@@ -394,7 +394,7 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
     if (at(offset, '\'')) {
       offset += 1
       Scalar(if (value.isEmpty) Vector.empty else Vector(Text(value.result())), quoted = true)
-    } else fail(UnterminatedString.apply, start)
+    } else fail(UnterminatedString(_, "'"), start)
   }
 
   /** `\'` or `\\` here, read; any other backslash is an ordinary character in a raw string. */
@@ -413,7 +413,7 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
     if (has(offset)) {
       offset += (if (at(offset, '\r')) 2 else 1)
       content(start, quote).fold[Kind](End)(lines => scalar(arrange(lines, stages, start), calls))
-    } else fail(UnterminatedString.apply, start)
+    } else fail(UnterminatedString(_, quote.toString * 3), start)
   }
 
   /** The layout stages the markers on the rest of this line pick; a forbidden character there is reported and left out.
@@ -469,7 +469,7 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
     }
     if (closed) Some(lines.result() :+ Line(lineStart, line.result()))
     else {
-      if (!ended) stop(UnterminatedString.apply, start)
+      if (!ended) stop(UnterminatedString(_, quote.toString * 3), start)
       None
     }
   }

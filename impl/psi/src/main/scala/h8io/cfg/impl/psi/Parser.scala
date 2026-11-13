@@ -133,13 +133,13 @@ private[psi] final class Parser(lexer: Lexer) {
             advance()
           case End =>
             closing match {
-              case Some(Closing(_, opening)) => halt(token, UnclosedBracket(opening), reportedAfter)
+              case Some(closing) => halt(token, unclosed(closing), reportedAfter)
               case None => done = true
             }
           case RightBrace | RightBracket | RightParen =>
             if (closing.exists(_.kind == token.kind)) done = true
             else if (open.isEmpty) {
-              record(UnmatchedBracket(token.location))
+              record(UnmatchedBracket(token.location, bracket(token), fatal = false))
               advance()
             } else closedElsewhere(token, reportedAfter)
           case DocComment(text) if documented && separated =>
@@ -167,8 +167,26 @@ private[psi] final class Parser(lexer: Lexer) {
     * bracket closing nothing otherwise, either ending the source.
     */
   private def closedElsewhere(token: Token, reported: Int): Nothing =
-    if (open.exists(_.kind == token.kind)) halt(token, UnclosedBracket(open.head.opening), reported)
-    else halt(token, UnmatchedBracket(token.location), reported)
+    if (open.exists(_.kind == token.kind)) halt(token, unclosed(open.head), reported)
+    else halt(token, UnmatchedBracket(token.location, bracket(token), fatal = true), reported)
+
+  /** The bracket `closing` closes, never closed. */
+  private def unclosed(closing: Closing): UnclosedBracket =
+    UnclosedBracket(
+      closing.opening,
+      closing.kind match {
+        case RightBrace => '{'
+        case RightBracket => '['
+        case _ => '('
+      })
+
+  /** A closing bracket as written. */
+  private def bracket(token: Token): Char =
+    token.kind match {
+      case RightBrace => '}'
+      case RightBracket => ']'
+      case _ => ')'
+    }
 
   /** Skips a broken item from `token`, which is part of it, to the separator, closing bracket or end after it at the
     * same bracket depth, and answers that. The item is in a container whose items start in `context` and goes on in the
@@ -228,7 +246,7 @@ private[psi] final class Parser(lexer: Lexer) {
       val token = lexer.next(mode)
       token.kind match {
         case kind if kind == closing.kind => ()
-        case End => halt(token, UnclosedBracket(closing.opening), reported)
+        case End => halt(token, unclosed(closing), reported)
         case RightBrace | RightBracket | RightParen => closedElsewhere(token, reported)
         case _ => loop(skipOver(token, context, mode, reported))
       }
@@ -264,10 +282,11 @@ private[psi] final class Parser(lexer: Lexer) {
         val word = next(ValueMode)
         // a word with a substitution in it starts no field, keys being never computed
         val error =
-          if (field && !substitutes(word)) MissingSeparator(word.location) else wordError(word, inBlock = true)
+          if (field && !substitutes(word)) MissingSeparator(word.location, describe(word.kind))
+          else wordError(word, inBlock = true)
         fail(word, error)
       case ValueMode => fail(token, wordError(token, inBlock = false))
-      case ArgumentMode => fail(token, MissingSeparator(token.location))
+      case ArgumentMode => fail(token, MissingSeparator(token.location, describe(token.kind)))
     }
 
   /** A second value after one: joined, as HOCON joins them, when either holds a substitution; a second word of an
@@ -276,8 +295,8 @@ private[psi] final class Parser(lexer: Lexer) {
   private def wordError(word: Token, inBlock: Boolean): PsiError =
     word.kind match {
       case Scalar(_, _, _) if substituted || substitutes(word) => JoinedValues(word.location)
-      case Scalar(_, _, _) if inBlock && unquoted => SpaceInValue(word.location)
-      case _ => MissingSeparator(word.location)
+      case Scalar(parts, _, _) if inBlock && unquoted => SpaceInValue(word.location, written(parts))
+      case _ => MissingSeparator(word.location, describe(word.kind))
     }
 
   private def substitutes(token: Token): Boolean =
@@ -301,8 +320,8 @@ private[psi] final class Parser(lexer: Lexer) {
       case Name(name, _) => keys(Ast.Key(name, first.location), Nil, doc)
       case Directive(name) => Ast.DirectiveStatement(call(first, name), doc)
       case Tag(_) => fail(first, TagBeforeKey(first.location))
-      case Scalar(_, _, _) => fail(first, QuotedKey(first.location))
-      case _ => fail(first, ExpectedKey(first.location))
+      case Scalar(parts, _, _) => fail(first, QuotedKey(first.location, written(parts)))
+      case _ => fail(first, ExpectedKey(first.location, describe(first.kind)))
     }
 
   /** The rest of a field after its first key; `rest` holds the keys after the first, last first. */
@@ -320,9 +339,9 @@ private[psi] final class Parser(lexer: Lexer) {
         val after = skipNewlines(KeyMode)
         if (after.kind == LeftBrace) fail(after, BraceOnNextLine(after.location))
         lexer.reset(mark)
-        fail(next(KeyMode), ExpectedColon(token.location))
+        fail(next(KeyMode), ExpectedColon(token.location, describe(token.kind)))
       case DocComment(_) => fail(token, MisplacedDocComment(token.location))
-      case _ => fail(token, ExpectedColon(token.location))
+      case _ => fail(token, ExpectedColon(token.location, describe(token.kind)))
     }
   }
 
@@ -334,8 +353,8 @@ private[psi] final class Parser(lexer: Lexer) {
       case Name(name, _) =>
         if (token.spaced) fail(token, SpaceAroundDot(dot.location))
         Ast.Key(name, token.location)
-      case Scalar(_, _, _) => fail(token, QuotedKey(token.location))
-      case _ => fail(token, ExpectedKey(token.location))
+      case Scalar(parts, _, _) => fail(token, QuotedKey(token.location, written(parts)))
+      case _ => fail(token, ExpectedKey(token.location, describe(token.kind)))
     }
   }
 
@@ -359,10 +378,10 @@ private[psi] final class Parser(lexer: Lexer) {
           case Scalar(_, _, _) | LeftBrace | LeftBracket | Tag(_) | Directive(_) | Name(_, _) =>
             fail(after, ValueOnNextLine(after.location))
           // a separator, a closing bracket, the end or a doc comment, where skipping stops or which it drops
-          case _ => fail(after, MissingValue(token.location))
+          case _ => fail(after, MissingValue(token.location, describe(token.kind)))
         }
       case DocComment(_) => fail(token, MisplacedDocComment(token.location))
-      case _ => fail(token, MissingValue(token.location))
+      case _ => fail(token, MissingValue(token.location, describe(token.kind)))
     }
 
   /** A scalar: a substitution when it is one unquoted `${…}` and nothing else, a concatenation when it holds any other,
@@ -454,7 +473,7 @@ private[psi] final class Parser(lexer: Lexer) {
             Ast.Argument(None, literal(first), first.location, first.location)
         }
       case Integer(_) | Scalar(_, _, _) => Ast.Argument(None, literal(first), first.location, first.location)
-      case _ => fail(first, ExpectedArgument(first.location))
+      case _ => fail(first, ExpectedArgument(first.location, describe(first.kind)))
     }
 
   /** An argument's value, as the string the handler gets (§6): a bare name, an integer as written, a quoted string. */
@@ -468,7 +487,7 @@ private[psi] final class Parser(lexer: Lexer) {
           case Some(reference) => fail(token, SubstitutionInArgument(reference.location))
           case None => text(parts)
         }
-      case _ => fail(token, MissingValue(token.location))
+      case _ => fail(token, MissingValue(token.location, describe(token.kind)))
     }
 
   private def text(parts: Vector[Part]): String = parts.collect { case Text(value) => value }.mkString

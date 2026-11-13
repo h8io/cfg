@@ -72,4 +72,37 @@ private[psi] object Token {
     * which the parser explains.
     */
   case object ArgumentMode extends Mode
+
+  /** What a token is, for a message saying what was found where something else was expected. */
+  def describe(kind: Kind): String =
+    kind match {
+      case LeftBrace => "'{'"
+      case RightBrace => "'}'"
+      case LeftBracket => "'['"
+      case RightBracket => "']'"
+      case LeftParen => "'('"
+      case RightParen => "')'"
+      case Comma => "','"
+      case Dot => "'.'"
+      case Colon => "':'"
+      case Replace => "':='"
+      case Equals => "'='"
+      case Newline => "a line break"
+      case End => "the end of the source"
+      case DocComment(_) => "a doc comment"
+      case Name(value, quoted) => Message.quote(if (quoted) Id.Key(value, Id.Root).path else value)
+      case Tag(name) => Message.quote("@" + name)
+      case Integer(value) => Message.quote(value)
+      case Directive(name) => Message.quote("#" + Id.Key(name, Id.Root).path)
+      case Scalar(parts, quoted, _) =>
+        val text = written(parts)
+        if (quoted) "a quoted string " + Message.cut("\"" + text + "\"") else Message.quote(text)
+    }
+
+  /** A scalar's parts as text, a substitution as `${path}`. */
+  def written(parts: Vector[Part]): String =
+    parts.iterator.map {
+      case Text(value) => value
+      case Reference(path, optional, _) => "${" + (if (optional) "?" else "") + path.path + "}"
+    }.mkString
 }

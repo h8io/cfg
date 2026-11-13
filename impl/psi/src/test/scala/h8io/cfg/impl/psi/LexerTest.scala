@@ -344,9 +344,9 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   }
 
   it should "end the source when it is not closed on its line" in {
-    lex("a \"b\nc\"") shouldBe Lexed(List(plain("a")), List(UnterminatedString(loc(1, 3))))
-    lex("\"b") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1))))
-    lex("\"b\r\n\"") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1))))
+    lex("a \"b\nc\"") shouldBe Lexed(List(plain("a")), List(UnterminatedString(loc(1, 3), "\"")))
+    lex("\"b") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1), "\"")))
+    lex("\"b\r\n\"") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1), "\"")))
   }
 
   "A raw string" should "take \\' and \\\\ as its only escapes, and ${ as text" in {
@@ -366,8 +366,8 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   }
 
   it should "end the source when it is not closed on its line" in {
-    lex("a 'b\nc'") shouldBe Lexed(List(plain("a")), List(UnterminatedString(loc(1, 3))))
-    lex("'b\\'") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1))))
+    lex("a 'b\nc'") shouldBe Lexed(List(plain("a")), List(UnterminatedString(loc(1, 3), "'")))
+    lex("'b\\'") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1), "'")))
   }
 
   /** `text` with each "```" standing for a triple quote, which a Scala string cannot hold unescaped. */
@@ -383,7 +383,8 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
     block("x ```a b\nc```") shouldBe
       Lexed(List(plain("x"), quoted(Text("c"))), List(UnknownMarker(loc(1, 6), "a"), UnknownMarker(loc(1, 8), "b")))
     block("```a b") shouldBe
-      Lexed(Nil, List(UnknownMarker(loc(1, 4), "a"), UnknownMarker(loc(1, 6), "b"), UnterminatedString(loc(1, 1))))
+      Lexed(Nil,
+        List(UnknownMarker(loc(1, 4), "a"), UnknownMarker(loc(1, 6), "b"), UnterminatedString(loc(1, 1), "\"\"\"")))
     value("```a\\\n  b\n  ```", "b", InvalidMarker(loc(1, 5)))
   }
 
@@ -467,8 +468,8 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   }
 
   it should "report a second marker that sets the indent, and read the block as with no marker" in {
-    value("```< >\n    a\n  ```", "  a", ConflictingIndent(loc(1, 6)))
-    value("```width(n: 2) <\n    a\n  ```", "  a", ConflictingIndent(loc(1, 16)))
+    value("```< >\n    a\n  ```", "  a", ConflictingIndent(loc(1, 6), ">"))
+    value("```width(n: 2) <\n    a\n  ```", "  a", ConflictingIndent(loc(1, 16), "<"))
   }
 
   it should "report an unknown marker, and read the block as with none" in
@@ -583,9 +584,9 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   }
 
   it should "end the source when it is not closed" in {
-    block("x ```\n  a\n") shouldBe Lexed(List(plain("x")), List(UnterminatedString(loc(1, 3))))
-    block("```") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1))))
-    block("```<") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1))))
+    block("x ```\n  a\n") shouldBe Lexed(List(plain("x")), List(UnterminatedString(loc(1, 3), "\"\"\"")))
+    block("```") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1), "\"\"\"")))
+    block("```<") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1), "\"\"\"")))
     block("```\n  ${`a\n```") shouldBe Lexed(Nil, List(UnterminatedName(loc(2, 5))))
   }
 
@@ -598,8 +599,9 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
 
   it should "end the source when it is not closed" in {
     lex("'''a b") shouldBe
-      Lexed(Nil, List(UnknownMarker(loc(1, 4), "a"), UnknownMarker(loc(1, 6), "b"), UnterminatedString(loc(1, 1))))
-    lex("'''\n  a") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1))))
+      Lexed(
+        Nil, List(UnknownMarker(loc(1, 4), "a"), UnknownMarker(loc(1, 6), "b"), UnterminatedString(loc(1, 1), "'''")))
+    lex("'''\n  a") shouldBe Lexed(Nil, List(UnterminatedString(loc(1, 1), "'''")))
   }
 
   "An unquoted scalar" should "run to whitespace, a comma, a closing brace or bracket" in {
@@ -741,7 +743,7 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
     lexer.next(KeyMode).kind shouldBe Newline
     lexer.next(KeyMode).kind shouldBe End
     lexer.halted shouldBe true
-    lexer.errors shouldBe List(InvalidKey(loc(1, 3), "1b"), UnterminatedString(loc(2, 1)))
+    lexer.errors shouldBe List(InvalidKey(loc(1, 3), "1b"), UnterminatedString(loc(2, 1), "\""))
     lexer.reset(mark)
     lexer.halted shouldBe false
     lexer.errors shouldBe Nil
@@ -751,10 +753,10 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   "settle" should "keep the first errors and add one after them, going on from where the lexer stands" in {
     val lexer = new Lexer(Source("s", "1a 2b 3c d"))
     (1 to 3).foreach(_ => lexer.next(KeyMode))
-    lexer.settle(1, Some(ExpectedColon(loc(1, 1))))
-    lexer.errors shouldBe List(InvalidKey(loc(1, 1), "1a"), ExpectedColon(loc(1, 1)))
+    lexer.settle(1, Some(ExpectedColon(loc(1, 1), "'x'")))
+    lexer.errors shouldBe List(InvalidKey(loc(1, 1), "1a"), ExpectedColon(loc(1, 1), "'x'"))
     lexer.settle(5, None)
-    lexer.errors shouldBe List(InvalidKey(loc(1, 1), "1a"), ExpectedColon(loc(1, 1)))
+    lexer.errors shouldBe List(InvalidKey(loc(1, 1), "1a"), ExpectedColon(loc(1, 1), "'x'"))
     lexer.next(KeyMode).kind shouldBe bare("d")
   }
 
@@ -762,10 +764,11 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
     val lexer = new Lexer(Source("s", "1a 2b \"x"))
     (1 to 3).foreach(_ => lexer.next(KeyMode))
     lexer.halted shouldBe true
-    lexer.settle(1, Some(ExpectedColon(loc(1, 4))))
-    lexer.errors shouldBe List(InvalidKey(loc(1, 1), "1a"), ExpectedColon(loc(1, 4)), UnterminatedString(loc(1, 7)))
+    lexer.settle(1, Some(ExpectedColon(loc(1, 4), "'x'")))
+    lexer.errors shouldBe
+      List(InvalidKey(loc(1, 1), "1a"), ExpectedColon(loc(1, 4), "'x'"), UnterminatedString(loc(1, 7), "\""))
     lexer.settle(0, None)
-    lexer.errors shouldBe List(UnterminatedString(loc(1, 7)))
+    lexer.errors shouldBe List(UnterminatedString(loc(1, 7), "\""))
     lexer.halted shouldBe true
   }
 

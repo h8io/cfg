@@ -14,6 +14,11 @@ sealed trait PsiLocation extends Location {
     * line and column; a location in no source given, last.
     */
   private[psi] def order(sources: Seq[String]): (Int, Int, Int)
+
+  /** The position in a source this location starts with, which an error report groups it under; none for a location in
+    * no source.
+    */
+  private[psi] def anchor: Option[SourceLocation]
 }
 
 /** A position in a source: the source's name, a 1-based line and a 1-based column counted in code points.
@@ -29,6 +34,8 @@ final case class SourceLocation(source: String, line: Int, column: Int) extends 
     val index = sources.indexOf(source)
     (if (index < 0) sources.size else index, line, column)
   }
+
+  private[psi] def anchor: Option[SourceLocation] = Some(this)
 }
 
 /** A node grafted at `at` by `\${path}`.
@@ -41,6 +48,8 @@ final case class ReferenceLocation(at: SourceLocation, path: String, origin: Loc
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
 
+  private[psi] def anchor: Option[SourceLocation] = Some(at)
+
   /** The reference without its own site, as a part of a concatenation renders it. */
   private[psi] def reference: String = "${" + path + "} from " + origin.description
 }
@@ -50,6 +59,8 @@ final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLo
   def description: String = parts.iterator.map(_.reference).mkString(at.description + " (", ", ", ")")
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
+
+  private[psi] def anchor: Option[SourceLocation] = Some(at)
 }
 
 /** A map defined in more places than one, merged (`format.md` §7, §10): `at` is where it was defined last, `earlier`
@@ -59,6 +70,8 @@ final case class MergedLocation(at: PsiLocation, earlier: ::[PsiLocation]) exten
   def description: String = earlier.iterator.map(_.description).mkString(at.description + " (also ", ", ", ")")
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
+
+  private[psi] def anchor: Option[SourceLocation] = at.anchor
 }
 
 /** The root of a load given no source at all, an empty map that was written nowhere. */
@@ -66,6 +79,8 @@ case object NoSourceLocation extends PsiLocation {
   def description: String = "no source"
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = (sources.size, 0, 0)
+
+  private[psi] def anchor: Option[SourceLocation] = None
 }
 
 /** A node a directive built from a `Node` of its own and placed at `at`, the call (`format.md` §6, §10).
@@ -80,6 +95,8 @@ final case class DirectiveLocation(at: SourceLocation, directive: String, origin
     at.description + " (#" + Id.Key(directive, Id.Root).path + " from " + origin.description + ')'
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
+
+  private[psi] def anchor: Option[SourceLocation] = Some(at)
 }
 
 /** A value overridden at launch by the system property `name`. */
@@ -87,4 +104,6 @@ final case class SystemPropertyLocation(name: String) extends PsiLocation {
   def description: String = "system property " + name
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = (sources.size, 0, 0)
+
+  private[psi] def anchor: Option[SourceLocation] = None
 }

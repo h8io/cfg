@@ -277,7 +277,7 @@ private[psi] final class MarkerParser(
           stage(call, bind(call, parameters.map(Parameter(_, required = false)))).foreach { stage =>
             stage match {
               case _: Indent =>
-                if (indented) error(ConflictingIndent.apply, call.at)
+                if (indented) error(ConflictingIndent(_, call.name), call.at)
                 indented = true
               case Fold => ()
             }

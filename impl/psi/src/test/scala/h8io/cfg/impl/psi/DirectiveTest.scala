@@ -193,7 +193,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
 
   it should "report the errors in it with every source's" in {
     val bad = directive("bad")((_, context) => Right(Some(context.parse("t", "a b"))))
-    errors(loader(bad), "#bad\nc: ${d}") shouldBe List(ExpectedColon(at(1, 3, "t")))
+    errors(loader(bad), "#bad\nc: ${d}") shouldBe List(ExpectedColon(at(1, 3, "t"), "'b'"))
   }
 
   it should "carry its errors, reported wherever it is used, once per load, and not where it is not" in {
@@ -205,8 +205,8 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
         fragment
       }))
     }
-    errors(loader(cache), "#cache") shouldBe List(ExpectedColon(at(2, 8, "child")))
-    errors(loader(cache), "#cache\na: #cache") shouldBe List(ExpectedColon(at(2, 8, "child")))
+    errors(loader(cache), "#cache") shouldBe List(ExpectedColon(at(2, 8, "child"), "'value'"))
+    errors(loader(cache), "#cache\na: #cache") shouldBe List(ExpectedColon(at(2, 8, "child"), "'value'"))
     val dropped = directive("dropped") { (_, context) =>
       val _ = context.parse("child", "broken value")
       Right(None)

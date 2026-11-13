@@ -55,11 +55,17 @@ trait Marker {
 /** Why a [[Marker]] could not give a new value; a handler's own errors extend it. */
 trait MarkerError {
   def message: String
+
+  /** What to do about it, shown under the message; none unless the handler gives one. */
+  def hint: Option[String] = None
 }
 
 /** Why a [[Directive]] could not be expanded; a handler's own errors extend it. */
 trait DirectiveError {
   def message: String
+
+  /** What to do about it, shown under the message; none unless the handler gives one. */
+  def hint: Option[String] = None
 }
 
 /** A parameter of a [[Directive]] or a [[Marker]]: an argument for a required one must be given. */
