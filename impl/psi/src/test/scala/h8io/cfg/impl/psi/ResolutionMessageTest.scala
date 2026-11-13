@@ -8,6 +8,18 @@ class ResolutionMessageTest extends AnyFlatSpec with Matchers {
 
   private def text(error: PsiError): (String, Option[String]) = (error.message, error.hint)
 
+  "Depth" should "say the limit, whether the source ends there, and how to raise it" in {
+    val hint = Some("nest it less, or build the loader with a higher withDepthLimit")
+    text(DepthExceeded(at(1), 256, fatal = true)) shouldBe
+      (("nested deeper than 256 levels; the rest of this source is not read", hint))
+    text(DepthExceeded(at(1), 256, fatal = false)) shouldBe (("nested deeper than 256 levels", hint))
+    text(ResolutionTooDeep(at(1), "a.b", 256)) shouldBe
+      (
+        (
+          "resolving '$" + "{a.b}' goes more than 256 steps deep, levels and substitutions together",
+          Some("shorten the chain of substitutions, or build the loader with a higher withDepthLimit")))
+  }
+
   "A merge with a substitution" should "name the earlier value and offer ':='" in {
     text(MergeWithSubstitution(at(2), at(1))) shouldBe
       ((
