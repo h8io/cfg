@@ -849,6 +849,22 @@ mistake is worse than stopping.
 - **Substitution errors report root causes only.** Every unresolved reference, cycle and
   concatenation of a non-scalar is reported, but a node that depends on an already failed node is
   dropped silently: with `a: ${missing}` and `b: ${a}`, only `missing` is named.
+- **Depth is limited, to 256 unless the loader is built with another**, `withDepthLimit(n)`, `n` at
+  least 1 (session 22), so that no input overflows the stack: a
+  `StackOverflowError` thrown while a class is being initialised leaves that class broken for the
+  rest of the JVM, and every later load, of any config, fails. The limit counts:
+  - **nesting**, the depth of the tree as written: each `{`, `[` and `(` and each key after a dot
+    of a dotted key is a level. Going past it ends the source, as an unbalanced bracket does: what
+    follows cannot be read without the levels it stands in;
+  - **a chain of substitutions**, a `${…}` whose value is another one's, and so on. Going past it
+    is reported at the reference that went past, once, as a cycle is, and the node is dropped.
+
+  256 holds with a margin of three and more on a thread with the JVM's default stack, 1 MB on
+  HotSpot, which virtual threads share as their limit (measured in session 22: past 800 levels for
+  the deepest path, `{ … }`, and 2 000 links of a chain). On a thread with a smaller stack the real
+  limit is lower: about 280 levels and 160 links at 512 KB, 100 and 60 at 256 KB. What a thread's
+  stack holds only the application knows, hence the builder's setting: lower for a small stack,
+  higher for a large one. The limit of 64 sources deep (§6) stays fixed.
 
 **Messages and the report** (session 21):
 
@@ -892,6 +908,13 @@ mistake is worse than stopping.
   `scala-collection-compat` is already wired in for 2.12.
 - Warnings are fatal on every version (`-Xfatal-warnings` on 2.x, `-Werror` on 3), so exhaustiveness
   in the parser's pattern matches is enforced rather than merely intended.
+- **Compatibility, while the version is 0.x** (session 22). The errors are case classes, for
+  pattern matching: a field added to one breaks its `apply`, `unapply` and `copy`, and an error
+  added to the sealed `PsiError` breaks an exhaustive match. Both are accepted until 1.0; the texts
+  are no contract at any version (§11). The traits a user implements, `Directive`, `Marker`,
+  `DirectiveContext` and the handlers' errors, get new members only with an implementation, which
+  breaks no one. MiMa comes with the first release, plan step 14, there being nothing to compare
+  against before it; plan step 13 makes private what is public by accident.
 
 ## 13. Open questions
 
@@ -1912,3 +1935,28 @@ Spec gaps of plan step 12, error messages, settled with the user before coding i
 - **A source a directive reads from a URL is named by that URL, whatever the directive**: the
   context's `parse(url)` takes no name, so no handler can name a source otherwise. Follows from the
   rule for `#include`; a source given as text keeps the name its handler gives it.
+
+### Session 22 — 2026-11-13
+
+Spec gaps of plan step 13, hardening, settled with the user before coding it; all proposed by me
+and taken by the user.
+
+- **Depth limited to 256, nesting and chains of substitutions** (§11). Measured first: with the
+  default 1 MB stack, nesting overflowed past 850 levels of `{ … }`, 3 000 of `[ … ]` or of a dotted
+  key, and chains past 2 000 links; and a `StackOverflowError` in a class's initialisation made every
+  later load in the JVM fail with `NoClassDefFoundError`. Rejected: phases without recursion, a
+  rewrite of the whole module for depths no config has; catching `StackOverflowError`, which cannot
+  undo a class left broken. 256 over Jackson's 1 000 and snakeyaml's 50: a margin of three on the
+  default stack, and a config has no use for more.
+- **Past the nesting limit the source ends; past the chain limit the reference fails, once** (§11).
+- **The limit is the builder's, `withDepthLimit(n)`, 256 by default**: one setting for both, both
+  running on the same stack; `n < 1` a `PsiBuildError`. Asked by the user; my proposal had it fixed,
+  as 64 sources deep is, which stays so.
+- **Realistic configs**: `impl/hocon`'s test resources, nine files and 47 lines that exercise HOCON
+  rather than look like a config, ported as their Psi equivalents, and two or three realistic
+  configs written for the module. Rejected: a third party's `reference.conf`, for its licence.
+- **Large files: a test that one loads, with no assertion on time**, which would make it flaky.
+- **Compatibility while 0.x** (§12): errors stay case classes, their fields and the set of them may
+  change; traits users implement grow only by members with an implementation; MiMa with the first
+  release.
+

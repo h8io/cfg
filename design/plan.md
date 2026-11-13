@@ -330,6 +330,10 @@ below are settled when it starts. The rest of this section is the step as first 
   pathological inputs (unterminated constructs at end of file, deeply nested brackets — no stack
   overflow on reasonable depth).
 - Review all public types for binary-compatibility hazards before the first release.
+- **Spec gaps:** settled in session 22 (`format.md` §11, §12): depth limited to 256 by default,
+  `withDepthLimit(n)`, nesting ending the source and a chain of substitutions failing its
+  reference; `impl/hocon`'s resources ported and realistic configs written; large files tested
+  with no timing; compatibility policy while 0.x.
 
 ### 14. Docs and release
 
