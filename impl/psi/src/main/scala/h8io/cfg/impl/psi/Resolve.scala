@@ -15,11 +15,23 @@ import scala.collection.mutable
   *
   * Errors are root causes only (§11): a node that depends on a failed one fails silently, and so does every container
   * holding it — the result is then discarded anyway.
+  *
+  * Resolution goes at most `limit` steps deep, each a level descended or a substitution followed, and a value is
+  * grafted only where it fits under `limit` levels (§11).
   */
-private[psi] final class Resolve(root: Tree.Map) {
+private[psi] final class Resolve(root: Tree.Map, limit: Int) {
   import Resolve.*
 
   private val errors = mutable.ListBuffer.empty[PsiError]
+
+  /** How many steps deep resolution is: levels descended below the root and substitutions followed. */
+  private var steps = 0
+
+  /** The substitutions being followed, innermost first: where each is written, and its path. */
+  private var following: List[(SourceLocation, String)] = Nil
+
+  /** The substitutions already reported for taking resolution too deep, each reported once. */
+  private val tooDeep = mutable.Set.empty[SourceLocation]
 
   /** By position, a substitution resolved, or `None` while it is being resolved. */
   private val resolved = mutable.Map.empty[Id, Option[Resolution]]
@@ -30,10 +42,14 @@ private[psi] final class Resolve(root: Tree.Map) {
   private def resolve(id: Id, value: Tree.Value): Resolution =
     value match {
       case _: Tree.Scalar | _: Tree.Null => Right(Some(value))
-      case map: Tree.Map => this.map(id, map).map(Some(_))
-      case sequence: Tree.Sequence => this.sequence(id, sequence).map(Some(_))
+      case map: Tree.Map => step(this.map(id, map).map(Some(_)))
+      case sequence: Tree.Sequence => step(this.sequence(id, sequence).map(Some(_)))
       case Tree.Substitution(path, optional, tags, at) =>
-        once(id)(reference(path, optional, at).map(_.map(graft(_, at, path, tags))))
+        once(id)(reference(path, optional, at).flatMap(_.fold[Resolution](Right(None)) { value =>
+          // the levels around the substitution, and those its value opens
+          if (segments(id).size - 1 + height(value) <= limit) Right(Some(graft(value, at, path, tags)))
+          else failed(DepthExceeded(at, limit, fatal = false))
+        }))
       case concatenation: Tree.Concatenation => once(id)(this.concatenation(concatenation).map(Some(_)))
       case Tree.Marked(value, markers) =>
         // resolved inside `once`, so that a cycle through the block is caught and the block resolved only once
@@ -84,13 +100,31 @@ private[psi] final class Resolve(root: Tree.Map) {
         done
     }
 
-  /** `\${path}` or `\${?path}` at `at`: the node it refers to, resolved, or `None` for an optional one with none. */
-  private def reference(path: Id.Branch, optional: Boolean, at: SourceLocation): Resolution =
-    lookup(path) match {
-      case Left(Cycle) => failed(SubstitutionCycle(at, path.path))
-      case Right(None) if !optional => failed(UnresolvedSubstitution(at, path.path))
-      case other => other
+  /** `resolution`, a step deeper; past the limit the innermost substitution being followed fails, reported once. The
+    * tree's own levels being within the limit, there is one whenever it is gone past.
+    */
+  private def step(resolution: => Resolution): Resolution =
+    if (steps >= limit) {
+      val (at, path) = following.head
+      if (tooDeep.add(at)) errors += ResolutionTooDeep(at, path, limit)
+      Left(Failed)
+    } else {
+      steps += 1
+      try resolution
+      finally steps -= 1
     }
+
+  /** `\${path}` or `\${?path}` at `at`: the node it refers to, resolved, or `None` for an optional one with none. */
+  private def reference(path: Id.Branch, optional: Boolean, at: SourceLocation): Resolution = {
+    following = (at, path.path) :: following
+    try
+      step(lookup(path)) match {
+        case Left(Cycle) => failed(SubstitutionCycle(at, path.path))
+        case Right(None) if !optional => failed(UnresolvedSubstitution(at, path.path))
+        case other => other
+      }
+    finally following = following.tail
+  }
 
   private def failed[A](error: PsiError): Either[Failure, A] = {
     errors += error
@@ -99,8 +133,8 @@ private[psi] final class Resolve(root: Tree.Map) {
 
   private def lookup(path: Id.Branch): Resolution = find(Id.Root, root, Resolve.segments(path))
 
-  /** The node at `segments` below `value` at `id`, resolved. */
-  private def find(id: Id, value: Tree.Value, segments: List[Id.Branch]): Resolution =
+  /** The node at `segments` below `value` at `id`, resolved; looked up a segment at a time, not by recursion. */
+  @tailrec private def find(id: Id, value: Tree.Value, segments: List[Id.Branch]): Resolution =
     segments match {
       case Nil => resolve(id, value)
       case next :: rest =>
@@ -108,11 +142,11 @@ private[psi] final class Resolve(root: Tree.Map) {
           case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Marked => resolve(id, value)
           case _ => Right(Some(value))
         }
-        here.flatMap(_.fold[Resolution](Right(None)) { container =>
-          child(id, container, next).flatMap(_.fold[Resolution](Right(None)) { case (childId, child) =>
-            find(childId, child, rest)
-          })
-        })
+        here.flatMap(_.fold[Either[Failure, Option[(Id, Tree.Value)]]](Right(None))(child(id, _, next))) match {
+          case Right(Some((childId, child))) => find(childId, child, rest)
+          case Right(None) => Right(None)
+          case Left(failure) => Left(failure)
+        }
     }
 
   /** The child of `container` at `id` that `segment` names, with its position in the tree. An optional substitution
@@ -177,7 +211,15 @@ private[psi] object Resolve {
 
   type Resolution = Either[Failure, Option[Tree.Value]]
 
-  def apply(root: Tree.Map): Result[Tree.Map] = new Resolve(root).tree
+  def apply(root: Tree.Map, limit: Int = PsiLoader.DefaultDepthLimit): Result[Tree.Map] = new Resolve(root, limit).tree
+
+  /** How many levels `value` opens. */
+  private def height(value: Tree.Value): Int =
+    value match {
+      case map: Tree.Map => 1 + map.entries.valuesIterator.map(height).foldLeft(0)(math.max)
+      case sequence: Tree.Sequence => 1 + sequence.elements.iterator.map(height).foldLeft(0)(math.max)
+      case _ => 0
+    }
 
   /** The failure of a container: a cycle if any of its children is in one, to be reported by the reference closing it.
     */

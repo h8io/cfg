@@ -5,6 +5,7 @@ import h8io.cfg.{Id, Node}
 import java.io.IOException
 import java.net.URL
 import scala.collection.{immutable, mutable}
+import scala.util.control.ControlThrowable
 
 /** Parses a source and expands its directives (`format.md` §6, §8), the sources they parse included, depth-first.
   *
@@ -18,7 +19,8 @@ import scala.collection.{immutable, mutable}
 private[psi] final class Expand private (
     directives: Map[String, Directive],
     disabled: Set[String],
-    markers: Map[String, Marker]) {
+    markers: Map[String, Marker],
+    limit: Int) {
   import Expand.*
 
   private val errors = mutable.ListBuffer.empty[PsiError]
@@ -31,72 +33,105 @@ private[psi] final class Expand private (
     ()
   }
 
-  /** `source` parsed and expanded, standing on `stack`, the sources that parsed it, the latest first. */
-  private def document(source: Source, stack: List[Source]): Ast.Document = {
-    val parsed = Parser.parse(source, markers)
+  /** `source` parsed and expanded `base` levels deep, standing on `stack`, the sources that parsed it, the latest
+    * first.
+    */
+  private def document(source: Source, stack: List[Source], base: Int): Ast.Document = {
+    val parsed = Parser.parse(source, markers, base, limit)
     errors ++= parsed.errors
-    Ast.Document(statements(parsed.value.statements, source :: stack))
+    Ast.Document(statements(parsed.value.statements, source :: stack, base))
   }
 
-  private def statements(statements: Vector[Ast.Statement], stack: List[Source]): Vector[Ast.Statement] =
+  /** `statements` expanded, standing `depth` levels deep. */
+  private def statements(statements: Vector[Ast.Statement], stack: List[Source], depth: Int): Vector[Ast.Statement] =
     statements.flatMap {
-      case field: Ast.Field => value(field.value, stack).map(value => field.copy(value = value))
-      case Ast.DirectiveStatement(call, _) => run(call, stack).fold(Vector.empty[Ast.Statement])(fields(call, _))
+      case field: Ast.Field =>
+        value(field.value, stack, depth + field.keys.size - 1).map(value => field.copy(value = value))
+      case Ast.DirectiveStatement(call, _) =>
+        run(call, stack, depth).fold(Vector.empty[Ast.Statement])(fields(call, _, depth))
     }
 
-  private def value(value: Ast.Value, stack: List[Source]): Option[Ast.Value] =
+  /** `value` expanded, with `depth` levels around it. */
+  private def value(value: Ast.Value, stack: List[Source], depth: Int): Option[Ast.Value] =
     value match {
-      case block: Ast.Block => Some(block.copy(statements = statements(block.statements, stack)))
+      case block: Ast.Block => Some(block.copy(statements = statements(block.statements, stack, depth + 1)))
       case sequence: Ast.Sequence =>
-        val elements = sequence.elements.flatMap(e => this.value(e.value, stack).map(v => e.copy(value = v)))
+        val elements =
+          sequence.elements.flatMap(e => this.value(e.value, stack, depth + 1).map(v => e.copy(value = v)))
         Some(sequence.copy(elements = elements))
-      case Ast.DirectiveValue(call, tags) => run(call, stack).map(placed(call, tags, _))
+      case Ast.DirectiveValue(call, tags) => run(call, stack, depth + 1).flatMap(placed(call, tags, _, depth))
       case _ => Some(value)
     }
 
-  /** The fields of a fragment in statement position, which must be a map. */
-  private def fields(call: Ast.Call, fragment: Fragment): Vector[Ast.Statement] =
+  /** The fields of a fragment in statement position `depth` levels deep, which must be a map and fit there. */
+  private def fields(call: Ast.Call, fragment: Fragment, depth: Int): Vector[Ast.Statement] =
     fragment match {
       case Fragment.Parsed(document, _, errors, sources) =>
         this.errors ++= errors
         included ++= sources
-        document.statements
-      case Fragment.Built(map: Node.IMap[?]) => statements(call, map)
+        if (fits(call, depth + levels(document.statements))) document.statements else Vector.empty
+      case Fragment.Built(map: Node.IMap[?]) => fitting(call)(statements(call, map, depth)).getOrElse(Vector.empty)
       case Fragment.Built(_) =>
         report(DirectiveNotMap(call.location, call.name))
         Vector.empty
     }
 
-  /** A fragment in value position, with the tags written before the call added to its own. */
-  private def placed(call: Ast.Call, tags: Set[String], fragment: Fragment): Ast.Value =
+  /** A fragment in value position with `depth` levels around it, with the tags written before the call added to its
+    * own; none when it does not fit there.
+    */
+  private def placed(call: Ast.Call, tags: Set[String], fragment: Fragment, depth: Int): Option[Ast.Value] =
     fragment match {
       case Fragment.Parsed(document, root, errors, sources) =>
         this.errors ++= errors
         included ++= sources
-        Ast.Block(document.statements, tags, root)
-      case Fragment.Built(node) => built(call, node, tags)
+        if (fits(call, depth + 1 + levels(document.statements))) Some(Ast.Block(document.statements, tags, root))
+        else None
+      case Fragment.Built(node) => fitting(call)(built(call, node, tags, depth))
     }
 
-  private def statements(call: Ast.Call, map: Node.IMap[?]): Vector[Ast.Statement] =
+  /** Whether a fragment reaching `depth` levels fits under the limit; reported at the call when it does not. */
+  private def fits(call: Ast.Call, depth: Int): Boolean =
+    depth <= limit || {
+      report(DepthExceeded(call.location, limit, fatal = false))
+      false
+    }
+
+  /** `build`, or none when what it builds goes past the limit, which is reported at the call. */
+  private def fitting[A](call: Ast.Call)(build: => A): Option[A] =
+    try Some(build)
+    catch {
+      case TooDeep =>
+        report(DepthExceeded(call.location, limit, fatal = false))
+        None
+    }
+
+  /** The fields of `map` standing `depth` levels deep. */
+  private def statements(call: Ast.Call, map: Node.IMap[?], depth: Int): Vector[Ast.Statement] =
     map.iterator.map { child =>
-      Ast.Field(::(Ast.Key(child.id.key, call.location), Nil), Ast.Operator.Merge, built(call, child, Set.empty), None)
+      val value = built(call, child, Set.empty, depth)
+      Ast.Field(::(Ast.Key(child.id.key, call.location), Nil), Ast.Operator.Merge, value, None)
     }.toVector
 
-  /** `node` as a value of the syntax tree, its location kept as an origin behind the call. */
-  private def built(call: Ast.Call, node: Node.ISome[Id], tags: Set[String]): Ast.Value = {
+  /** `node` as a value of the syntax tree with `depth` levels around it, its location kept as an origin behind the
+    * call; a container past the limit throws [[TooDeep]].
+    */
+  private def built(call: Ast.Call, node: Node.ISome[Id], tags: Set[String], depth: Int): Ast.Value = {
     val location = DirectiveLocation(call.location, call.name, node.location)
     node match {
       case Node.IScalar(_, own, value, _) => Ast.Scalar(value, own ++ tags, location)
       case Node.INull(_, own, _) => Ast.Null(own ++ tags, location)
-      case map: Node.IMap[?] => Ast.Block(statements(call, map), map.tags ++ tags, location)
+      case map: Node.IMap[?] =>
+        if (depth >= limit) throw TooDeep
+        Ast.Block(statements(call, map, depth + 1), map.tags ++ tags, location)
       case seq: Node.ISeq[?] =>
-        Ast.Sequence(
-          seq.iterator.map(e => Ast.Element(built(call, e, Set.empty), None)).toVector, seq.tags ++ tags, location)
+        if (depth >= limit) throw TooDeep
+        val elements = seq.iterator.map(e => Ast.Element(built(call, e, Set.empty, depth + 1), None)).toVector
+        Ast.Sequence(elements, seq.tags ++ tags, location)
     }
   }
 
-  /** The fragment a call gives, none when it gives nothing or fails. */
-  private def run(call: Ast.Call, stack: List[Source]): Option[Fragment] =
+  /** The fragment a call gives, none when it gives nothing or fails; a source it parses stands `base` levels deep. */
+  private def run(call: Ast.Call, stack: List[Source], base: Int): Option[Fragment] =
     if (disabled(call.name)) {
       report(DisabledDirective(call.location, call.name))
       None
@@ -104,7 +139,7 @@ private[psi] final class Expand private (
       directives.get(call.name) match {
         case Some(directive) =>
           arguments(call, directive.parameters).flatMap { arguments =>
-            directive(arguments, new Context(call, stack)) match {
+            directive(arguments, new Context(call, stack, base)) match {
               case Left(error) =>
                 report(DirectiveFailed(call.location, call.name, error))
                 None
@@ -153,7 +188,7 @@ private[psi] final class Expand private (
     false
   }
 
-  private final class Context(call: Ast.Call, stack: List[Source]) extends DirectiveContext {
+  private final class Context(call: Ast.Call, stack: List[Source], base: Int) extends DirectiveContext {
     def location: SourceLocation = call.location
 
     def source: String = stack.head.name
@@ -179,8 +214,8 @@ private[psi] final class Expand private (
       } else if (stack.length >= MaxDepth)
         Fragment.Parsed(Ast.Document(Vector.empty), root, DirectiveTooDeep(call.location, MaxDepth) :: Nil, Nil)
       else {
-        val expand = new Expand(directives, disabled, markers)
-        val document = expand.document(source, stack)
+        val expand = new Expand(directives, disabled, markers, limit)
+        val document = expand.document(source, stack, base)
         Fragment.Parsed(document, root, expand.errors.toList, source.name :: expand.included.toList)
       }
     }
@@ -192,6 +227,23 @@ private[psi] object Expand {
   /** How many sources deep directives may parse, a backstop for a key that changes on every step (§6). */
   def MaxDepth: Int = 64
 
+  /** A node a handler built that goes past the depth limit. */
+  private case object TooDeep extends ControlThrowable
+
+  /** How many levels `statements` open below where they stand, a dotted key's keys after the first counted. */
+  private def levels(statements: Vector[Ast.Statement]): Int =
+    // an expanded document holds no directive
+    statements.iterator.collect { case field: Ast.Field => field.keys.size - 1 + height(field.value) }.foldLeft(0)(
+      math.max)
+
+  /** How many levels `value` opens. */
+  private def height(value: Ast.Value): Int =
+    value match {
+      case Ast.Block(statements, _, _) => 1 + levels(statements)
+      case Ast.Sequence(elements, _, _) => 1 + elements.iterator.map(e => height(e.value)).foldLeft(0)(math.max)
+      case _ => 0
+    }
+
   /** `source` parsed and its directives expanded, with every error found in it and in the sources it parsed, and the
     * names of those sources, in the order parsed.
     */
@@ -199,9 +251,10 @@ private[psi] object Expand {
       source: Source,
       directives: Map[String, Directive],
       disabled: Set[String],
-      markers: Map[String, Marker]): Result[(Ast.Document, List[String])] = {
-    val expand = new Expand(directives, disabled, markers)
-    val document = expand.document(source, Nil)
+      markers: Map[String, Marker],
+      limit: Int): Result[(Ast.Document, List[String])] = {
+    val expand = new Expand(directives, disabled, markers, limit)
+    val document = expand.document(source, Nil, 0)
     // a fragment used more than once, or two of one source, report the same errors: each is reported once
     Result((document, expand.included.toList), expand.errors.toList.distinct)
   }

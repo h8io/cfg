@@ -14,7 +14,7 @@ import scala.util.control.ControlThrowable
   * it is left out whole. An unbalanced bracket ends the source, as a fatal error of the lexer does; one that closes
   * nothing at the top level is skipped.
   */
-private[psi] final class Parser(lexer: Lexer) {
+private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
 
   /** How many errors had been reported before the last token taken through [[next]] was read. */
   private var reportedBefore = 0
@@ -33,6 +33,23 @@ private[psi] final class Parser(lexer: Lexer) {
 
   /** The brackets open around the token being read, innermost first. */
   private var open: List[Closing] = Nil
+
+  /** The keys after a dot of the dotted keys around the token being read, each a level (`format.md` §11). */
+  private var dots = 0
+
+  /** The levels open around the token being read: those around the source, its brackets and its dotted keys. */
+  private def depth: Int = base + open.size + dots
+
+  /** Before `token` opens a level: past the limit, the source ends there (§11). */
+  private def enter(token: Token, reported: Int = reportedAfter): Unit =
+    if (depth >= limit) halt(token, DepthExceeded(token.location, limit, fatal = true), reported)
+
+  /** `read`, with `levels` more dotted keys around it. */
+  private def within[A](levels: Int)(read: => A): A = {
+    dots += levels
+    try read
+    finally dots -= levels
+  }
 
   def document(): Result[Ast.Document] = {
     val statements = items(KeyMode, None, documented = true)(statement)
@@ -217,20 +234,25 @@ private[psi] final class Parser(lexer: Lexer) {
   private def skipOver(token: Token, context: Mode, mode: Mode, reported: Int): Mode =
     token.kind match {
       case LeftBrace =>
+        enter(token, reported)
         skipNested(Closing(RightBrace, token.location), KeyMode, reported)
         mode
       case LeftBracket =>
+        enter(token, reported)
         skipNested(Closing(RightBracket, token.location), ValueMode, reported)
         mode
       case LeftParen =>
+        enter(token, reported)
         skipNested(Closing(RightParen, token.location), ArgumentMode, reported)
         mode
       case Directive(_) =>
         // arguments apart from the name on its line are its still, or their separators would end the skipping
         val mark = lexer.mark()
         val paren = lexer.next(KeyMode)
-        if (paren.kind == LeftParen) skipNested(Closing(RightParen, paren.location), ArgumentMode, reported)
-        else lexer.reset(mark)
+        if (paren.kind == LeftParen) {
+          enter(paren, reported)
+          skipNested(Closing(RightParen, paren.location), ArgumentMode, reported)
+        } else lexer.reset(mark)
         mode
       case Newline | Comma => context
       case Colon | Replace | Equals if context == KeyMode => ValueMode
@@ -330,10 +352,12 @@ private[psi] final class Parser(lexer: Lexer) {
     val mark = lexer.mark()
     val token = next(KeyMode)
     token.kind match {
-      case Dot => keys(head, dotted(token) :: rest, doc)
-      case Colon => Ast.Field(path, Ast.Operator.Merge, value(next(ValueMode), Set.empty), doc)
-      case Replace => Ast.Field(path, Ast.Operator.Replace, value(next(ValueMode), Set.empty), doc)
-      case LeftBrace => Ast.Field(path, Ast.Operator.Merge, block(token, Set.empty), doc)
+      case Dot =>
+        within(rest.size)(enter(token))
+        keys(head, dotted(token) :: rest, doc)
+      case Colon => Ast.Field(path, Ast.Operator.Merge, within(rest.size)(value(next(ValueMode), Set.empty)), doc)
+      case Replace => Ast.Field(path, Ast.Operator.Replace, within(rest.size)(value(next(ValueMode), Set.empty)), doc)
+      case LeftBrace => Ast.Field(path, Ast.Operator.Merge, within(rest.size)(block(token, Set.empty)), doc)
       case Tag(_) => fail(token, TagAfterKey(token.location))
       case Newline =>
         val after = skipNewlines(KeyMode)
@@ -367,6 +391,7 @@ private[psi] final class Parser(lexer: Lexer) {
         if (markers.isEmpty) value else Ast.Marked(value, markers)
       case LeftBrace => block(token, tags)
       case LeftBracket =>
+        enter(token)
         val elements = items(ValueMode, Some(Closing(RightBracket, token.location)), documented = true)(element)
         ended()
         Ast.Sequence(elements, tags, token.location)
@@ -400,6 +425,7 @@ private[psi] final class Parser(lexer: Lexer) {
   }
 
   private def block(open: Token, tags: Set[String]): Ast.Block = {
+    enter(open)
     val statements = items(KeyMode, Some(Closing(RightBrace, open.location)), documented = true)(statement)
     ended()
     Ast.Block(statements, tags, open.location)
@@ -424,7 +450,9 @@ private[psi] final class Parser(lexer: Lexer) {
     val mark = lexer.mark()
     val token = next(KeyMode)
     val read = token.kind match {
-      case LeftParen if !token.spaced => arguments(token)
+      case LeftParen if !token.spaced =>
+        enter(token)
+        arguments(token)
       case LeftParen => fail(token, DetachedArguments(token.location))
       case Newline =>
         val after = skipNewlines(KeyMode)
@@ -494,8 +522,16 @@ private[psi] final class Parser(lexer: Lexer) {
 }
 
 private[psi] object Parser {
-  def parse(source: Source, markers: Map[String, Marker] = Map.empty): Result[Ast.Document] =
-    new Parser(new Lexer(source, markers)).document()
+
+  /** `source` parsed, standing `base` levels deep, where a directive placed it, its tree limited to `limit` levels in
+    * all (`format.md` §11).
+    */
+  def parse(
+      source: Source,
+      markers: Map[String, Marker] = Map.empty,
+      base: Int = 0,
+      limit: Int = PsiLoader.DefaultDepthLimit): Result[Ast.Document] =
+    new Parser(new Lexer(source, markers), base, limit).document()
 
   /** The bracket that closes a container, and where the one that opened it stands. */
   private final case class Closing(kind: Kind, opening: SourceLocation)

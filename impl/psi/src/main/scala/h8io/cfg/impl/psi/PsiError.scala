@@ -444,6 +444,28 @@ final case class UnclosedBracket(location: SourceLocation, bracket: Char) extend
   def message: String = Message.quote(bracket.toString) + " is never closed" + Message.Fatal
 }
 
+/** A level past the depth limit, `limit` (`format.md` §11), where it was crossed: in a source's text, which ends the
+  * source (`fatal`); at a directive's call, whose fragment does not fit where it lands; at a substitution, whose value
+  * does not fit where it is grafted.
+  */
+final case class DepthExceeded(location: SourceLocation, limit: Int, fatal: Boolean) extends PsiError {
+  def message: String = "nested deeper than " + limit.toString + " levels" + (if (fatal) Message.Fatal else "")
+
+  override def hint: Option[String] = Some("nest it less, or build the loader with a higher withDepthLimit")
+}
+
+/** `\${path}` at `location`, the innermost substitution being resolved when resolution went more than `limit` steps
+  * deep, each a level descended or a substitution followed (`format.md` §11).
+  */
+final case class ResolutionTooDeep(location: SourceLocation, path: String, limit: Int) extends PsiError {
+  def message: String =
+    "resolving '$" + "{" + Message.cut(path) + "}' goes more than " + limit.toString +
+      " steps deep, levels and substitutions together"
+
+  override def hint: Option[String] =
+    Some("shorten the chain of substitutions, or build the loader with a higher withDepthLimit")
+}
+
 /** A `:` merge of a map or a substitution, written at `location`, with an earlier value of its key where either is a
   * whole-value substitution, which may turn out a map or not (`format.md` §7); `:=` replaces instead.
   *
