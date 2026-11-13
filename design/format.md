@@ -852,10 +852,19 @@ mistake is worse than stopping.
 - **Depth is limited, to 256 unless the loader is built with another**, `withDepthLimit(n)`, `n` at
   least 1 (session 22), so that no input overflows the stack: a
   `StackOverflowError` thrown while a class is being initialised leaves that class broken for the
-  rest of the JVM, and every later load, of any config, fails. The limit counts:
-  - **nesting**, the depth of the tree as written: each `{`, `[` and `(` and each key after a dot
-    of a dotted key is a level. Going past it ends the source, as an unbalanced bracket does: what
-    follows cannot be read without the levels it stands in;
+  rest of the JVM, and every later load, of any config, fails. The limit is on:
+  - **the depth of the tree as loaded**, not only as written: each `{`, `[` and `(` and each key
+    after a dot of a dotted key is a level, and so is every level of what a directive places or a
+    substitution grafts, counted from where it lands. It is reported, as `DepthExceeded`, where it
+    is crossed:
+    - in a source's text, which ends the source, as an unbalanced bracket does: what follows
+      cannot be read without the levels it stands in. A source a directive parses is read from the
+      depth of the call, so expanding includes inside blocks stays within the limit too;
+    - where a directive places a fragment that does not fit there, a failure of the call, which
+      contributes nothing: a fragment is a value, and a handler may give one back elsewhere, and
+      one built from a `Node` has no depth but the handler's;
+    - where a substitution grafts a value that does not fit there, a failure of the reference,
+      whose node is dropped;
   - **a chain of substitutions**, a `${…}` whose value is another one's, and so on. Going past it
     is reported at the reference that went past, once, as a cycle is, and the node is dropped.
 
@@ -1949,6 +1958,12 @@ and taken by the user.
   undo a class left broken. 256 over Jackson's 1 000 and snakeyaml's 50: a margin of three on the
   default stack, and a config has no use for more.
 - **Past the nesting limit the source ends; past the chain limit the reference fails, once** (§11).
+- **The limit is on the tree as loaded, not as written** (§11), found by me while starting the code
+  and taken by the user: an include inside a block lands at the depth of its call, 64 sources deep
+  at most, and a substitution grafts a subtree at the depth of its reference, chains multiplying
+  it, so a limit on each source's text alone bounds neither. Each place crossing it reports one
+  `DepthExceeded`: the source's text ends the source, a fragment placed fails its call, a value
+  grafted fails its reference.
 - **The limit is the builder's, `withDepthLimit(n)`, 256 by default**: one setting for both, both
   running on the same stack; `n < 1` a `PsiBuildError`. Asked by the user; my proposal had it fixed,
   as 64 sources deep is, which stays so.
