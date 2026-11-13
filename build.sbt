@@ -111,9 +111,9 @@ val yaml = (project in file("impl/yaml"))
   .settings(name := "cfg-yaml", libraryDependencies += SnakeYaml)
   .dependsOn(cfg)
 
-// Psi, the format of our own (design/plan.md); not published until the plan's last step
+// Psi, the format of our own (design/format.md)
 val psi = (project in file("impl/psi"))
-  .settings(name := "cfg-psi", publish / skip := true)
+  .settings(name := "cfg-psi")
   .dependsOn(cfg)
 
 val root = (project in file("."))
@@ -127,6 +127,13 @@ val pages = (project in file("pages"))
     publish / skip := true,
     publishLocal / skip := true,
     scalacOptions ++= lenientScalacOptions(scalaVersion.value),
+    // the docs hold Psi sources in Scala strings, and a `${…}` in Psi is no forgotten interpolator
+    scalacOptions ++=
+      (CrossVersion.partialVersion(scalaVersion.value) match {
+        case Some((2, 13)) | Some((2, 12)) => Seq("-Wconf:cat=lint-missing-interpolator:s")
+        case Some((3, 9)) => Seq("-Wconf:msg=missing interpolator:s")
+        case _ => unsupportedScala(scalaVersion.value)
+      }),
     // sbt 2 moves every target under the root's target/out; npm and release.sh expect the site's inputs here
     cleanFiles += baseDirectory.value / "target",
     ScalaUnidoc / unidoc / target := baseDirectory.value / "target" / s"scala-${scalaBinaryVersion.value}" / "unidoc",
@@ -139,5 +146,5 @@ val pages = (project in file("pages"))
     mdocVariables :=
       Map("VERSION" -> (if (isSnapshot.value) previousStableVersion.value else None).getOrElse(version.value))
   )
-  .dependsOn(cfg, hocon, yaml)
+  .dependsOn(cfg, hocon, psi, yaml)
   .enablePlugins(ScalaUnidocPlugin, MdocPlugin)

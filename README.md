@@ -2,5 +2,6 @@
 
 # Configuration
 
-A Scala library that loads configuration files — YAML, HOCON, JSON, `.properties` — into one tree, the same whatever
-the format, each node knowing its path and where in the source it came from. Documentation: https://cfg.h8.io
+A Scala library that loads configuration files — YAML, HOCON, JSON, `.properties`, and Psi, a format of its own —
+into one tree, the same whatever the format, each node knowing its path and where in the source it came from.
+Documentation: https://cfg.h8.io
