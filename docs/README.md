@@ -10,8 +10,9 @@ scalars and explicit nulls, each node knowing its path in the tree and where in 
 | `cfg` | The tree itself — `Node`, `Id`, `Location` and the error traits. No dependencies. |
 | `cfg-yaml` | A YAML loader on `snakeyaml-engine`. Keeps the tags written in the source. |
 | `cfg-hocon` | A loader on Typesafe Config for HOCON, JSON, `.properties` and YAML, with HOCON's substitutions. |
+| `cfg-psi` | A loader for [Psi](psi.md), `cfg`'s own format: merging, substitutions and includes, errors collected rather than thrown, and no dependencies. |
 
-Both loaders depend on `cfg`, so one of them is all a project needs:
+Every loader depends on `cfg`, so one of them is all a project needs:
 
 ```scala
 libraryDependencies += "io.h8" %% "cfg-yaml" % "@VERSION@"

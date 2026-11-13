@@ -45,15 +45,17 @@ sbt pages/mdoc
 Run commands from the repository root.
 
 - Start with the affected module, then `sbt +testFull` for anything shared across Scala versions.
-- Every PR implementing a Psi step is green on `./test.sh`.
+- Every PR changing `impl/psi` is green on `./test.sh`, which holds it to 100% statement and branch coverage.
 - A change to agent instructions alone needs its links and diff checked, not the Scala tests.
 - Report what was checked, and any check that could not be run.
 
 ## Working on Ψ (Psi)
 
-Before changing `impl/psi`, read `design/plan.md` and the relevant sections of `design/format.md`: the plan tracks
-progress and sets the workflow for a step (branch, PR, coverage, spec gaps), the format document defines the semantics.
-Find the current step from the plan and the state of branches and PRs each time; it is not recorded here.
+Before changing `impl/psi`, read the relevant sections of `design/format.md`, the design notes: it defines the
+semantics, lists what is open (§13), and logs how each decision was reached (§14), so a question already argued
+through is not reopened. A change to the format is decided with the user before it is coded, and recorded there, in
+its section and in §14. The user's guide, `docs/psi.md`, and the programmer's, `docs/psi-extending.md`, follow every
+change they describe. `design/plan.md` is how the module was built, step by step; every step is done.
 
 ## Architecture
 
@@ -65,9 +67,8 @@ Find the current step from the plan and the state of branches and PRs each time;
 - **`impl/hocon`** (artifact `cfg-hocon`) — loads HOCON and YAML into the `cfg` AST using `typesafe-config` + `typesafe-config-yaml`.
 - **`impl/yaml`** (artifact `cfg-yaml`) — loads YAML into the `cfg` AST using `snakeyaml-engine` directly, propagating tags.
 - **`impl/psi`** (sbt project `psi`, artifact `cfg-psi`, package `h8io.cfg.impl.psi`) — Ψ (Psi), the project's own
-  format, with a hand-written parser and no dependencies beyond `cfg`; files `.Ψ`, `.ψ` or `.psi`. Being built step by
-  step: the spec is `design/format.md`, the plan with each step's status is `design/plan.md`. `publish / skip` until
-  the plan's last step.
+  format, with a hand-written parser and no dependencies beyond `cfg`; files `.Ψ`, `.ψ` or `.psi`. Published from
+  v0.1.0; its design notes are `design/format.md`.
 - **root** (artifact `cfg-all`) — aggregate; not published.
 - **pages** — documentation site (sources in `docs/`); not aggregated in root. Two halves: sbt runs mdoc and unidoc,
   then Docusaurus (`pages/package.json`, Node ≥ 20) renders mdoc's output. The navigation is `pages/sidebars.js` — a new
@@ -105,6 +106,23 @@ give `x`), empty when none was written. `Id.path` renders a key that is not bare
 `YAML.apply(urls: URL*)` composes each URL with `snakeyaml-engine` (YAML 1.2 core schema, so `~`/`Null`/`NULL` are nulls and `<<` merge keys work), overlays them in order, and wraps the result as `Node.IMap[Id.Root]`. Mappings merge recursively; scalars and sequences are replaced outright. No substitution step. Each file is checked on its own before any overlaying: a root that is not a mapping is an error, and so is a node that an alias makes contain itself (an anchor reused elsewhere is fine); keys that are not scalars snakeyaml-engine refuses itself. Duplicate keys in a mapping collapse onto the last one.
 
 Unlike the HOCON loader this one sets `tags` — but only when the tag was *written* in the source, expanded through the tag handles in effect and without its leading `!` (`!!int` → `tag:yaml.org,2002:int`, `!postgres` and `!<postgres>` → `postgres`); at most one, YAML allowing one per node. A tag the resolver inferred, and the non-specific `!`, both give the empty set. `tagOf` reads this off `Node.isResolved` (public since snakeyaml-engine 3.2); `copyOf` must carry the flag over when it rebuilds a merged mapping.
+
+### Psi loader (`h8io.cfg.impl.psi`)
+
+`Psi.apply(urls: URL*)` and `Psi.parse(name, text)` load Psi sources into `Either[PsiErrors, Node.IMap[Id.Root]]`;
+`Psi.builder` builds a `PsiLoader` with directives and markers of its own, `#include` disabled, system properties
+from a map rather than `sys.props`, or another depth limit, and `build` reports every error of that configuration at
+once. A load runs in phases (`format.md` §8): each source is lexed and parsed (`Lexer`, `Parser` → `Ast`) and its
+directives expanded (`Expand`), then the sources are merged (`Merge` → `Tree`), overridden from system properties
+(`Override`) and their substitutions resolved (`Resolve`); `MapImpl` and `SeqImpl` are the `Node` views over the
+result, and `Render` writes a tree back as Psi, which is their `toString`.
+
+Errors are collected, never thrown: every `PsiError` carries a `PsiLocation`, a `message` and a `hint`, computed from
+its fields; `PsiErrors.message` is the report, grouped by source. Errors of the syntax and of directives come as one
+batch, and substitutions are resolved only when it is empty. A scalar is the text written, a tag is there only when
+written, and nothing is typed. Depth is limited (256 by default, `withDepthLimit`) in the tree loaded and in
+resolution, so that no input overflows the stack; nothing on a path from the input recurses past the limit, and a
+path is written with `Message.path`, never `Id.path`, which recurses.
 
 ## sbt 2
 

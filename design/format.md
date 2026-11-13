@@ -14,9 +14,11 @@ configuration. Until session 10 it was DEF, *Declarative Extensible Format* (§1
 | Loader object | `Psi` |
 | File extensions | `.Ψ`, `.ψ` and `.psi`, searched in that order — one extension where file names ignore case |
 
-**Status:** under discussion, expected to span several sessions. §2 lists what is settled, §13 what
-is still open, and §14 logs how each decision was reached so a later session does not reopen a
-question that was already argued through. Add to §14 rather than silently editing §2.
+**Status:** implemented in `impl/psi` and published as `cfg-psi` from v0.1.0; the user's guide is
+on the docs site, `docs/psi.md` and `docs/psi-extending.md`. This document stays the design notes:
+§2 lists what is settled, §13 what is still open, and §14 logs how each decision was reached so a
+later session does not reopen a question that was already argued through. Add to §14 rather than
+silently editing §2.
 
 The implementation is tracked step by step in [`plan.md`](plan.md).
 
@@ -31,9 +33,10 @@ business. No third-party format we wrap actually honours that:
   `1e5` comes back as `"100000.0"`, so `IScalar.value` is not what the file said. Tags are always
   `None` because HOCON has no concept of them. `Location` is whatever `ConfigOrigin.description`
   returns.
-- `impl/yaml` (branch `yaml-impl`) — closer, but it takes a `Composer` subclass reading
-  `parser.peekEvent` to recover *explicit* tags, because snakeyaml-engine exposes no
-  `Node.isResolved`.
+- `impl/yaml` — closer: scalars as written, and explicit tags read through `Node.isResolved`, public
+  since snakeyaml-engine 3.2 (when this was written, a `Composer` subclass reading
+  `parser.peekEvent` recovered them). What YAML has no place for is the rest of §2: substitutions,
+  directives, `:=`, and errors collected rather than thrown.
 
 Writing the parser removes the impedance mismatch by construction: the scalar is the exact substring
 of the source, the tag is present iff written, and `Location` can carry source, line and column
@@ -928,8 +931,9 @@ mistake is worse than stopping.
   added to the sealed `PsiError` breaks an exhaustive match. Both are accepted until 1.0; the texts
   are no contract at any version (§11). The traits a user implements, `Directive`, `Marker`,
   `DirectiveContext` and the handlers' errors, get new members only with an implementation, which
-  breaks no one. MiMa comes with the first release, plan step 14, there being nothing to compare
-  against before it; plan step 13 makes private what is public by accident.
+  breaks no one. MiMa comes with 1.0, not before (session 23): while 0.x promises no compatibility,
+  a check that has to fail on every break the policy allows only gets in the way. Plan step 13
+  made private what was public by accident.
 
 ## 13. Open questions
 
@@ -1993,4 +1997,18 @@ and taken by the user.
 - **Compatibility while 0.x** (§12): errors stay case classes, their fields and the set of them may
   change; traits users implement grow only by members with an implementation; MiMa with the first
   release.
+
+### Session 23 — 2026-11-13
+
+Spec gaps of plan step 14, docs and release, settled with the user; proposed by me and taken.
+
+- **Two pages on the docs site**: `Psi`, the user's guide to writing configs and loading them, and
+  `Psi: extending`, directives and markers of one's own. Whoever only writes configs has no use for
+  the handlers' API. Every example a `scala mdoc` block, so the build checks it loads. Rejected:
+  one long page; this document, design notes with their log, as the guide.
+- **MiMa with 1.0, not with the first release** (§12), reversing session 22: while 0.x promises
+  no compatibility, the check would fail on every break the policy allows. Rejected: MiMa now,
+  reporting without failing.
+- **The release is v0.1.0**, the user's call: Psi is the first format of the project's own. The
+  user tags it.
 
