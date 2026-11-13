@@ -16,10 +16,11 @@ sealed trait PsiLocation extends Location {
   private[psi] def order(sources: Seq[String]): (Int, Int, Int)
 }
 
-/** A position in a source: the source as it was named, a 1-based line and a 1-based column counted in code points.
+/** A position in a source: the source's name, a 1-based line and a 1-based column counted in code points.
   *
   * @param source
-  *   the URL passed to the loader, or an include argument as written in the directive
+  *   the source's full URL — as passed to the loader, or as a directive's target resolves — or, for a source given as
+  *   text, the name it was given
   */
 final case class SourceLocation(source: String, line: Int, column: Int) extends PsiLocation {
   def description: String = source + ':' + line.toString + ':' + column.toString

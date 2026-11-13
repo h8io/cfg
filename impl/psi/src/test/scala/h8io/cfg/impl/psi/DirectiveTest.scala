@@ -255,7 +255,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     val include = directive("inc", Parameter("file", required = true)) { (arguments, context) =>
       arguments("file") match {
         case Node.IScalar(_, _, file, _) =>
-          context.parse(file, context.url.getOrElse(dir.toUri.toURL).toURI.resolve(file).toURL) match {
+          context.parse(context.url.getOrElse(dir.toUri.toURL).toURI.resolve(file).toURL) match {
             case Right(fragment) => Right(Some(fragment))
             case Left(e: IOException) =>
               if (file.startsWith("optional")) Right(None) else Left(Problem(e.getClass.getSimpleName))
@@ -265,14 +265,14 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     }
     val main = write(dir, "main.psi", "#inc(\"ok.psi\")\n#inc(\"optional.psi\")")
     loader(include)(main.toUri.toURL).map(_("x")) shouldBe
-      Right(Node.IScalar(keyed("x"), NoTags, "1", SourceLocation("ok.psi", 1, 4)))
+      Right(Node.IScalar(keyed("x"), NoTags, "1", SourceLocation(dir.resolve("ok.psi").toUri.toURL.toString, 1, 4)))
     val broken = write(dir, "broken.psi", "#inc(\"missing.psi\")\n#inc(\"bytes.psi\")")
     val url = broken.toUri.toURL.toString
     loader(include)(broken.toUri.toURL).left.map(_.errors) shouldBe
       Left(
         List(
           DirectiveFailed(SourceLocation(url, 1, 1), "inc", Problem("FileNotFoundException")),
-          InvalidEncoding(SourceLocation("bytes.psi", 1, 4))))
+          InvalidEncoding(SourceLocation(bytes.toUri.toURL.toString, 1, 4))))
   }
 
   it should "know a file by its real path, so a link does not hide a cycle" in {
@@ -283,15 +283,18 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     val include = directive("inc", Parameter("file", required = true)) { (arguments, context) =>
       arguments("file") match {
         case Node.IScalar(_, _, file, _) =>
-          context.parse(file, context.url.getOrElse(fail("no URL")).toURI.resolve(file).toURL).left.map(e =>
-            Problem(e.toString)).map(
-            Some(_))
+          context.parse(context.url.getOrElse(fail("no URL")).toURI.resolve(file).toURL).left.map(e =>
+            Problem(e.toString)).map(Some(_))
         case other => Left(Problem(other.toString))
       }
     }
     loader(include)(a.toUri.toURL).left.map(_.errors) shouldBe
-      Left(List(
-        DirectiveCycle(SourceLocation("link/b.psi", 1, 1), ::(a.toUri.toURL.toString, List("link/b.psi", "a.psi")))))
+      Left(
+        List(
+          DirectiveCycle(
+            SourceLocation(dir.resolve("link/b.psi").toUri.toURL.toString, 1, 1),
+            ::(a.toUri.toURL.toString, List("link/b.psi", "link/a.psi").map(dir.resolve(_).toUri.toURL.toString))
+          )))
   }
 
   "A source's key" should "be its URI normalized, a file's real path, or the URL as written" in {

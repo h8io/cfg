@@ -77,11 +77,11 @@ trait DirectiveContext {
   /** The URL of the source the call stands in, none for a source given as text. */
   def url: Option[URL]
 
-  /** Reads and parses the source at `url`, named `name` in locations, its own directives expanded. A source that cannot
-    * be read is handed back; every other error in it, and a cycle — parsing a source already being expanded — goes with
-    * the fragment, which holds what was read, and is reported where the fragment is used.
+  /** Reads and parses the source at `url`, named by the URL in locations, its own directives expanded. A source that
+    * cannot be read is handed back; every other error in it, and a cycle — parsing a source already being expanded —
+    * goes with the fragment, which holds what was read, and is reported where the fragment is used.
     */
-  def parse(name: String, url: URL): Either[IOException, Fragment]
+  def parse(url: URL): Either[IOException, Fragment]
 
   /** Parses a source held as `text`, named `name` in locations and known by its name for cycles. */
   def parse(name: String, text: String): Fragment

@@ -117,7 +117,7 @@ private[psi] object Include extends Directive {
         present(target, url).flatMap { there =>
           if (there.contains(false)) read(target, rest, optional, context)
           else
-            context.parse(target, url) match {
+            context.parse(url) match {
               case Right(fragment) => Right(Some(fragment))
               // a target known to be there only once read is not there when reading it finds nothing: a page not found
               case Left(_: FileNotFoundException) if there.isEmpty => read(target, rest, optional, context)
