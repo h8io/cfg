@@ -1,0 +1,62 @@
+/** The orders service: an HTTP API in front of PostgreSQL, publishing to Kafka. */
+
+service {
+  name: orders
+  version: "2.14.0"
+  environment: ${?deploy.environment}
+}
+
+http {
+  host: 0.0.0.0
+  port: 8080
+  base-path: /api/v2
+  timeouts { read: 30s, write: 30s, idle: 2m }
+  cors {
+    allowed-origins: ["https://shop.example.com", "https://admin.example.com"]
+    allowed-methods: [GET, POST, PUT, DELETE]
+    max-age: 1h
+  }
+}
+
+database {
+  /** Where the orders live. */
+  host: db.internal
+  port: 5432
+  name: orders
+  url: "jdbc:postgresql://${database.host}:${database.port}/${database.name}"
+  user: orders_app
+  password: @secret ${?secrets.orders-db}
+  pool { min: 2, max: 16, idle-timeout: 10m }
+  migrations.locations: [classpath:db/migration, classpath:db/seed]
+  health-query: """<
+    SELECT 1
+    FROM pg_catalog.pg_tables
+    LIMIT 1
+    """
+}
+
+kafka {
+  bootstrap-servers: ["kafka-1.internal:9092", "kafka-2.internal:9092", "kafka-3.internal:9092"]
+  topics {
+    created: orders.created.v1
+    cancelled: orders.cancelled.v1
+  }
+  producer { acks: all, linger: 5ms, compression: zstd }
+}
+
+logging {
+  level: INFO
+  loggers {
+    `org.apache.kafka`: WARN
+    `com.zaxxer.hikari`: WARN
+  }
+  pattern: "%d{ISO8601} %-5level [%thread] %logger{36} - %msg%n"
+}
+
+features: [
+  { name: split-shipments, enabled: true, rollout: 25 }
+  { name: gift-wrap, enabled: false }
+]
+
+// the profile's values win over the defaults above
+#include(file: "profiles/prod", optional: true)

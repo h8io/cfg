@@ -1,0 +1,14 @@
+map {
+  a: x
+  b: y
+  c: z
+  d: null
+}
+seq: [
+  1
+  2
+  3
+  null
+]
+scalar: 42
+`null`: null

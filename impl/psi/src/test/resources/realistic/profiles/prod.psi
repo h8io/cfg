@@ -1,0 +1,14 @@
+service.environment: production
+
+http.port: 443
+
+database {
+  host: orders-db.prod.internal
+  pool.max: 64
+}
+
+logging.level: WARN
+
+features := [
+  { name: split-shipments, enabled: true, rollout: 100 }
+]

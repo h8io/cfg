@@ -130,7 +130,7 @@ final class PsiBuilder private (
   }
 }
 
-object PsiBuilder {
+private[psi] object PsiBuilder {
   private def Include: String = "include"
 
   private def BuiltInMarkers: Seq[String] = Seq("<", ">", "width", "+")

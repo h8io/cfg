@@ -30,9 +30,6 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int) {
   /** The substitutions being followed, innermost first: where each is written, and its path. */
   private var following: List[(SourceLocation, String)] = Nil
 
-  /** The substitutions already reported for taking resolution too deep, each reported once. */
-  private val tooDeep = mutable.Set.empty[SourceLocation]
-
   /** By position, a substitution resolved, or `None` while it is being resolved. */
   private val resolved = mutable.Map.empty[Id, Option[Resolution]]
 
@@ -100,14 +97,14 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int) {
         done
     }
 
-  /** `resolution`, a step deeper; past the limit the innermost substitution being followed fails, reported once. The
-    * tree's own levels being within the limit, there is one whenever it is gone past.
+  /** `resolution`, a step deeper; past the limit the innermost substitution being followed fails. The tree's own levels
+    * being within the limit, there is one whenever it is gone past; and it is reported once, a substitution failed
+    * being resolved no more.
     */
   private def step(resolution: => Resolution): Resolution =
     if (steps >= limit) {
       val (at, path) = following.head
-      if (tooDeep.add(at)) errors += ResolutionTooDeep(at, path, limit)
-      Left(Failed)
+      failed(ResolutionTooDeep(at, path, limit))
     } else {
       steps += 1
       try resolution

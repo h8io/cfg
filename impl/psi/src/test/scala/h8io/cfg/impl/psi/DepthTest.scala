@@ -89,6 +89,7 @@ class DepthTest extends AnyFlatSpec with Matchers {
     val node = Psi.parse("n", "p { q { r { } } }").fold(e => fail(e.toString), identity)
     val built = directive("built")(_ => Some(Fragment(node)))
     loads("#built", built) shouldBe true
+    errors("a { b { #built } }", built) shouldBe List(DepthExceeded(at(1, 9), 3, fatal = false))
     errors("v: #built", built) shouldBe List(DepthExceeded(at(1, 4), 3, fatal = false))
     val list = Psi.parse("n", "l: [[[]]]").fold(e => fail(e.toString), identity)("l") match {
       case seq: Node.ISeq[?] => seq

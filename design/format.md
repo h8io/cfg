@@ -1057,6 +1057,15 @@ mistake is worse than stopping.
    was written, two files that two sources each include as `common.psi` gave errors located alike,
    and the second batch (§11), ordered by the name, put both after the first includer.
 
+10. **`impl/hocon` and `impl/yaml` have no depth limit.** Found in session 22, on the default 1 MB
+    stack: typesafe-config parses and resolves by recursion with no limit of its own, and overflows
+    past about 6 000 levels of `{ … }`, 1 000 of `[ … ]`, 3 000 keys of a dotted key or 6 700 links
+    of a chain; snakeyaml-engine 3.2 has no nesting limit either, unlike SnakeYAML's
+    `nestingDepthLimit`, and overflows somewhere past 3 000 levels of `[ … ]` and before 1 000
+    of block mappings. The `StackOverflowError` reaches the caller as it is, and may leave a class
+    broken for the JVM (§11). Not Psi's, and not plan step 13's: open whether the two loaders
+    should guard their input.
+
 ## 14. Decision log
 
 Each entry records what was chosen, and — where it matters — what was rejected and why. A rejected
@@ -1960,7 +1969,7 @@ and taken by the user.
   key, and chains past 2 000 links; and a `StackOverflowError` in a class's initialisation made every
   later load in the JVM fail with `NoClassDefFoundError`. Rejected: phases without recursion, a
   rewrite of the whole module for depths no config has; catching `StackOverflowError`, which cannot
-  undo a class left broken. 256 over Jackson's 1 000 and snakeyaml's 50: a margin of three on the
+  undo a class left broken. 256 over Jackson's 1 000 and SnakeYAML's 50: a margin of three on the
   default stack, and a config has no use for more.
 - **Resolution is limited by its depth, levels and substitutions together, not by the links of a
   chain** (§11), found by me while reading `Resolve` and taken by the user: each link resolves what
