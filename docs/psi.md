@@ -115,6 +115,20 @@ cache := { size: 10 }
 """)
 ```
 
+A [substitution](#substitutions) standing alone as a value is not merged. What it refers to is known only once every
+source is merged, so whether it is a block, which would merge, or anything else, which would be replaced, is not known
+yet: a `:` meeting an earlier value of its key is an error when one side is a whole `${…}` and the other a block or
+another substitution. `:=` replaces instead, and a value that is no block, such as `a: 5`, replaces whatever the
+substitution turns out to be. So a block copied with `${…}` cannot have one of its fields changed:
+
+```scala mdoc:passthrough
+example("""
+base { port: 1 }
+a: ${base}
+a { port: 2 }
+""")
+```
+
 ## Substitutions
 
 `${path}` is replaced by the node at `path`, written as keys joined by dots, in backticks when they are not bare, with
@@ -125,7 +139,8 @@ to its final state, whichever source set it.
 - Inside a value, `jdbc:${host}/db` or `"jdbc:${host}/db"`, it builds a string, and the node has to be a value.
 - `${?path}` is optional: with nothing at `path`, the field is left out, an element of a sequence is dropped, and a
   part of a string is empty.
-- `\${` is a literal `${`.
+- Inside `"…"` and `"""…"""`, `\${` is a literal `${`. A raw string, `'…'` or `'''…'''`, has no substitutions at
+  all, `${` being text. An unquoted value has no escapes, so a value holding a literal `${` is quoted.
 
 ```scala mdoc:passthrough
 example("""
@@ -135,6 +150,8 @@ db {
 }
 replica: ${db}
 user: ${?env.user}
+escaped: "\${not.a.path}"
+raw: '${not.a.path}'
 """)
 ```
 
