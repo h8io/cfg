@@ -103,6 +103,6 @@ private[psi] object Token {
   def written(parts: Vector[Part]): String =
     parts.iterator.map {
       case Text(value) => value
-      case Reference(path, optional, _) => "${" + (if (optional) "?" else "") + path.path + "}"
+      case Reference(path, optional, _) => "${" + (if (optional) "?" else "") + Message.path(path) + "}"
     }.mkString
 }

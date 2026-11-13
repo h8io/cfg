@@ -33,6 +33,22 @@ private[psi] object Message {
         }
     }.mkString
 
+  /** A path as `Id.path` writes it, built a segment at a time: `Id.path` recurses, and a path written in a source may
+    * have any number of segments.
+    */
+  def path(id: h8io.cfg.Id): String = {
+    @scala.annotation.tailrec
+    def segments(id: h8io.cfg.Id, below: List[h8io.cfg.Id.Branch]): List[h8io.cfg.Id.Branch] =
+      id match {
+        case branch: h8io.cfg.Id.Branch => segments(branch.parent, branch :: below)
+        case _ => below
+      }
+    segments(id, Nil).iterator.zipWithIndex.map {
+      case (h8io.cfg.Id.Key(key, _), i) => (if (i == 0) "" else ".") + h8io.cfg.Id.Key(key, h8io.cfg.Id.Root).path
+      case (h8io.cfg.Id.Index(index, _), _) => "[" + index.toString + "]"
+    }.mkString
+  }
+
   /** A key as it is written: bare, or in backticks with its escapes. */
   def key(name: String): String = cut(h8io.cfg.Id.Key(name, h8io.cfg.Id.Root).path)
 

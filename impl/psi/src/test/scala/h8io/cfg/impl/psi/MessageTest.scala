@@ -27,6 +27,13 @@ class MessageTest extends AnyFlatSpec with Matchers {
     Message.visible("é😀\\`") shouldBe "é😀\\`"
   }
 
+  "A path" should "be written as Id.path writes it" in {
+    val path = Id.Key("d", Id.Index(0, Id.Key("b c", Id.Key("a", Id.Root))))
+    Message.path(path) shouldBe path.path
+    Message.path(Id.Index(0, Id.Root)) shouldBe "[0]"
+    Message.path(Id.Root) shouldBe ""
+  }
+
   "A key" should "be written as a key is, bare or in backticks with its escapes" in {
     Message.key("ab") shouldBe "ab"
     Message.key("a\nb") shouldBe "`a\\nb`"

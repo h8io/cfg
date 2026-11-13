@@ -27,8 +27,8 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int) {
   /** How many steps deep resolution is: levels descended below the root and substitutions followed. */
   private var steps = 0
 
-  /** The substitutions being followed, innermost first: where each is written, and its path. */
-  private var following: List[(SourceLocation, String)] = Nil
+  /** The substitutions being followed, innermost first. */
+  private var following: List[Following] = Nil
 
   /** By position, a substitution resolved, or `None` while it is being resolved. */
   private val resolved = mutable.Map.empty[Id, Option[Resolution]]
@@ -97,14 +97,17 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int) {
         done
     }
 
-  /** `resolution`, a step deeper; past the limit the innermost substitution being followed fails. The tree's own levels
-    * being within the limit, there is one whenever it is gone past; and it is reported once, a substitution failed
-    * being resolved no more.
+  /** `resolution`, a step deeper; past the limit the innermost substitution being followed fails, reported once however
+    * many of its branches go past. The tree's own levels being within the limit, there is one whenever it is gone past.
     */
   private def step(resolution: => Resolution): Resolution =
     if (steps >= limit) {
-      val (at, path) = following.head
-      failed(ResolutionTooDeep(at, path, limit))
+      val innermost = following.head
+      if (!innermost.reported) {
+        innermost.reported = true
+        errors += ResolutionTooDeep(innermost.at, Message.path(innermost.path), limit)
+      }
+      Left(Failed)
     } else {
       steps += 1
       try resolution
@@ -113,11 +116,11 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int) {
 
   /** `\${path}` or `\${?path}` at `at`: the node it refers to, resolved, or `None` for an optional one with none. */
   private def reference(path: Id.Branch, optional: Boolean, at: SourceLocation): Resolution = {
-    following = (at, path.path) :: following
+    following = new Following(at, path) :: following
     try
       step(lookup(path)) match {
-        case Left(Cycle) => failed(SubstitutionCycle(at, path.path))
-        case Right(None) if !optional => failed(UnresolvedSubstitution(at, path.path))
+        case Left(Cycle) => failed(SubstitutionCycle(at, Message.path(path)))
+        case Right(None) if !optional => failed(UnresolvedSubstitution(at, Message.path(path)))
         case other => other
       }
     finally following = following.tail
@@ -181,8 +184,9 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int) {
       case Token.Text(text) => Right(text -> None)
       case Token.Reference(path, optional, at) =>
         reference(path, optional, at).flatMap {
-          case Some(Tree.Scalar(text, _, origin)) => Right(text -> Some(ReferenceLocation(at, path.path, origin)))
-          case Some(other) => failed(NonScalarInConcatenation(at, path.path, other.location))
+          case Some(Tree.Scalar(text, _, origin)) =>
+            Right(text -> Some(ReferenceLocation(at, Message.path(path), origin)))
+          case Some(other) => failed(NonScalarInConcatenation(at, Message.path(path), other.location))
           case None => Right("" -> None)
         }
     }
@@ -207,6 +211,11 @@ private[psi] object Resolve {
   case object Cycle extends Failure
 
   type Resolution = Either[Failure, Option[Tree.Value]]
+
+  /** A substitution being followed, written at `at`, and whether it has been reported for going too deep. */
+  private final class Following(val at: SourceLocation, val path: Id.Branch) {
+    var reported = false
+  }
 
   def apply(root: Tree.Map, limit: Int = PsiLoader.DefaultDepthLimit): Result[Tree.Map] = new Resolve(root, limit).tree
 

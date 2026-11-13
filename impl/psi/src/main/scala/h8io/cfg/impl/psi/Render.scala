@@ -100,7 +100,7 @@ private[psi] object Render {
   private def name(name: String): String = Id.Key(name, Id.Root).path
 
   private def reference(out: StringBuilder, path: Id.Branch, optional: Boolean): Unit = {
-    val _ = out ++= (if (optional) "${?" else "${") ++= path.path += '}'
+    val _ = out ++= (if (optional) "${?" else "${") ++= Message.path(path) += '}'
   }
 
   /** Whether `text` reads back alone, unquoted, as itself: the lexer's own answer, `null` being no string. Half a
