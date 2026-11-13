@@ -119,6 +119,21 @@ class DepthTest extends AnyFlatSpec with Matchers {
     errors("m { n { o: \"${p}\" } }\np: ${r}\nr: 1") shouldBe List(ResolutionTooDeep(at(2, 4), "r", 3))
   }
 
+  it should "report the innermost substitution once, however many of its branches go past the limit" in {
+    errors("a: ${b}\nb { c { d {}, e {}, f {} } }") shouldBe List(ResolutionTooDeep(at(1, 4), "b", 3))
+  }
+
+  "A path of any length" should "be followed, rendered and described with no recursion" in {
+    val path = Seq.fill(100000)("x").mkString(".")
+    Psi.parse("s", "a: $" + "{?" + path + "}").map(_.size) shouldBe Right(0)
+    Psi.parse("s", "a: $" + "{" + path + "}").left.map(_.errors.map(_.message)) shouldBe
+      Left(List("nothing at '" + "x." * 10 + "…' to substitute"))
+    Psi.parse("s", "a: x $" + "{" + path + "}").left.map(_.errors.map(_.message)) shouldBe
+      Left(List("a value right after another; values never join"))
+    Psi.parse("s", "#x(1 \"$" + "{" + path + "}\")").left.map(_.errors.map(_.message)) shouldBe
+      Left(List("expected ',' or a line break, found a quoted string \"$" + "{" + "x." * 8 + "x…"))
+  }
+
   "Input of any depth" should "give errors, never overflow the stack, at the default limit" in {
     val n = 100000
     val inputs = List(

@@ -870,8 +870,9 @@ mistake is worse than stopping.
     the next may stand deep inside it, so a limit on the links of a chain alone bounds nothing:
     each link may descend up to the limit before the next. Going past it is reported at the
     innermost substitution being resolved, which there always is, the tree's own levels being
-    within the limit; once, as a cycle is, and its node is dropped. A path is looked up step by
-    step, not by recursion.
+    within the limit; once, however many branches below it go past, and its node is dropped. A
+    path, which may have any number of segments, is looked up and written step by step, not by
+    recursion.
 
   256 holds with a margin of three and more on a thread with the JVM's default stack, 1 MB on
   HotSpot, which virtual threads share as their limit (measured in session 22: past 800 levels for
