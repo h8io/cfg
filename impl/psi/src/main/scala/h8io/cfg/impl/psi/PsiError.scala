@@ -221,7 +221,7 @@ final case class InvalidEscape(location: SourceLocation, escape: String) extends
 final case class InvalidKey(location: SourceLocation, key: String) extends PsiError {
   def message: String = Message.quote(key) + " cannot be a bare key"
 
-  override def hint: Option[String] = Some("quote it in backticks: " + Message.cut("`" + key + "`"))
+  override def hint: Option[String] = Some("quote it in backticks: " + Message.key(key))
 }
 
 /** A `:` or `:=` after a key, or a `:` after the name of an argument, that is not followed by whitespace or the end of
@@ -288,7 +288,8 @@ final case class ExpectedKey(location: SourceLocation, found: String) extends Ps
 final case class QuotedKey(location: SourceLocation, key: String) extends PsiError {
   def message: String = "a key in quotes"
 
-  override def hint: Option[String] = Some("write a quoted key in backticks: " + Message.cut("`" + key + "`"))
+  override def hint: Option[String] =
+    Some("write a key bare, or in backticks when it has to be quoted: " + Message.key(key))
 }
 
 /** A `"""` or `\'\'\'` string in a directive's arguments, which take `"…"` and `'…'` only; read all the same. */
@@ -549,7 +550,7 @@ final case class PsiErrors(errors: ::[PsiError]) extends CfgError {
   def message: String = {
     val groups = errors.groupBy(error => group(error.location))
     val names = errors.map(error => group(error.location)).distinct
-    val lines = names.flatMap(name => name :: groups(name).flatMap(line))
+    val lines = names.flatMap(name => Message.visible(name) :: groups(name).flatMap(line))
     (count(errors.size, "error") + " in " + count(names.size, "source") :: lines).mkString("\n")
   }
 
