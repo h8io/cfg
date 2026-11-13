@@ -142,7 +142,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
 
   it should "report an error of its own among the lexer's, in the order found" in {
     errors("1a: x\nb = 2\nc d") shouldBe
-      List(InvalidKey(loc(1, 1), "1a"), ExpectedColon(loc(2, 3)), ExpectedColon(loc(3, 3)))
+      List(InvalidKey(loc(1, 1), "1a"), ExpectedColon(loc(2, 3), "'='"), ExpectedColon(loc(3, 3), "'d'"))
   }
 
   "An empty element" should "be reported at the `,` with nothing before it" in {
@@ -155,15 +155,15 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   }
 
   "A bracket" should "be reported where it is opened when the source ends first" in {
-    errors("a { b: 1") shouldBe List(UnclosedBracket(loc(1, 3)))
-    errors("a: [1,\n") shouldBe List(UnclosedBracket(loc(1, 4)))
+    errors("a { b: 1") shouldBe List(UnclosedBracket(loc(1, 3), '{'))
+    errors("a: [1,\n") shouldBe List(UnclosedBracket(loc(1, 4), '['))
   }
 
   it should "be reported where it closes nothing, or the wrong bracket" in {
-    errors("a: 1\n}") shouldBe List(UnmatchedBracket(loc(2, 1)))
-    errors("]") shouldBe List(UnmatchedBracket(loc(1, 1)))
-    errors("a: [1}") shouldBe List(UnmatchedBracket(loc(1, 6)))
-    errors("a { ] }") shouldBe List(UnmatchedBracket(loc(1, 5)))
+    errors("a: 1\n}") shouldBe List(UnmatchedBracket(loc(2, 1), '}', fatal = false))
+    errors("]") shouldBe List(UnmatchedBracket(loc(1, 1), ']', fatal = false))
+    errors("a: [1}") shouldBe List(UnmatchedBracket(loc(1, 6), '}', fatal = true))
+    errors("a { ] }") shouldBe List(UnmatchedBracket(loc(1, 5), ']', fatal = true))
   }
 
   "A doc comment" should "be reported anywhere but before a field or an element" in {
@@ -179,21 +179,21 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   }
 
   "A key" should "be reported missing where a field starts with something else" in {
-    errors(": 1") shouldBe List(ExpectedKey(loc(1, 1)))
-    errors("{ a: 1 }") shouldBe List(ExpectedKey(loc(1, 1)))
-    errors("a: 1\n= 2") shouldBe List(ExpectedKey(loc(2, 1)))
+    errors(": 1") shouldBe List(ExpectedKey(loc(1, 1), "':'"))
+    errors("{ a: 1 }") shouldBe List(ExpectedKey(loc(1, 1), "'{'"))
+    errors("a: 1\n= 2") shouldBe List(ExpectedKey(loc(2, 1), "'='"))
   }
 
   it should "be reported missing after a dot" in {
-    errors("a.: 1") shouldBe List(ExpectedKey(loc(1, 3)))
-    errors("a.\nb: 1") shouldBe List(ExpectedKey(loc(1, 3)))
-    errors("a.@t: 1") shouldBe List(ExpectedKey(loc(1, 3)))
+    errors("a.: 1") shouldBe List(ExpectedKey(loc(1, 3), "':'"))
+    errors("a.\nb: 1") shouldBe List(ExpectedKey(loc(1, 3), "a line break"))
+    errors("a.@t: 1") shouldBe List(ExpectedKey(loc(1, 3), "'@t'"))
   }
 
   it should "be reported in double or single quotes, which are for values" in {
-    errors("\"a\": 1") shouldBe List(QuotedKey(loc(1, 1)))
-    errors("'a': 1") shouldBe List(QuotedKey(loc(1, 1)))
-    errors("a.\"b\": 1") shouldBe List(QuotedKey(loc(1, 3)))
+    errors("\"a\": 1") shouldBe List(QuotedKey(loc(1, 1), "a"))
+    errors("'a': 1") shouldBe List(QuotedKey(loc(1, 1), "a"))
+    errors("a.\"b\": 1") shouldBe List(QuotedKey(loc(1, 3), "b"))
   }
 
   it should "be reported after a tag, which goes after the `:`" in {
@@ -208,10 +208,10 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   }
 
   "A field" should "be reported when its key is followed by neither a dot, `:`, `:=` nor `{`" in {
-    errors("a = 1") shouldBe List(ExpectedColon(loc(1, 3)))
-    errors("a") shouldBe List(ExpectedColon(loc(1, 2)))
-    errors("a\n\nb: 1") shouldBe List(ExpectedColon(loc(1, 2)))
-    errors("a b: 1") shouldBe List(ExpectedColon(loc(1, 3)))
+    errors("a = 1") shouldBe List(ExpectedColon(loc(1, 3), "'='"))
+    errors("a") shouldBe List(ExpectedColon(loc(1, 2), "the end of the source"))
+    errors("a\n\nb: 1") shouldBe List(ExpectedColon(loc(1, 2), "a line break"))
+    errors("a b: 1") shouldBe List(ExpectedColon(loc(1, 3), "'b'"))
   }
 
   it should "be reported with its `{` on a line after the key" in {
@@ -225,18 +225,18 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   }
 
   "A value" should "be reported missing" in {
-    errors("a:") shouldBe List(MissingValue(loc(1, 3)))
-    errors("a: , b: 1") shouldBe List(MissingValue(loc(1, 4)))
-    errors("a { b: }") shouldBe List(MissingValue(loc(1, 8)))
-    errors("a: ]") shouldBe List(MissingValue(loc(1, 4)), UnmatchedBracket(loc(1, 4)))
-    errors("a: @t") shouldBe List(MissingValue(loc(1, 6)))
-    errors("a: [@t]") shouldBe List(MissingValue(loc(1, 7)))
+    errors("a:") shouldBe List(MissingValue(loc(1, 3), "the end of the source"))
+    errors("a: , b: 1") shouldBe List(MissingValue(loc(1, 4), "','"))
+    errors("a { b: }") shouldBe List(MissingValue(loc(1, 8), "'}'"))
+    errors("a: ]") shouldBe List(MissingValue(loc(1, 4), "']'"), UnmatchedBracket(loc(1, 4), ']', fatal = false))
+    errors("a: @t") shouldBe List(MissingValue(loc(1, 6), "the end of the source"))
+    errors("a: [@t]") shouldBe List(MissingValue(loc(1, 7), "']'"))
   }
 
   it should "be reported missing at the end of the line of its `:` or tag when no value follows on a later one" in {
-    errors("a:\n") shouldBe List(MissingValue(loc(1, 3)))
-    errors("a { b:\n\n}") shouldBe List(MissingValue(loc(1, 7)))
-    errors("a: @t\n, b: 1") shouldBe List(MissingValue(loc(1, 6)))
+    errors("a:\n") shouldBe List(MissingValue(loc(1, 3), "a line break"))
+    errors("a { b:\n\n}") shouldBe List(MissingValue(loc(1, 7), "a line break"))
+    errors("a: @t\n, b: 1") shouldBe List(MissingValue(loc(1, 6), "a line break"))
   }
 
   it should "be reported on a line after its `:`, `:=` or tag" in {
@@ -254,54 +254,55 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   }
 
   "A separator" should "be reported missing between two fields on a line" in {
-    errors("a: 1 b: 2") shouldBe List(MissingSeparator(loc(1, 6)))
-    errors("a: 1 b := 2") shouldBe List(MissingSeparator(loc(1, 6)))
-    errors("a: 1 b.c: 2") shouldBe List(MissingSeparator(loc(1, 6)))
-    errors("a: 1 b { }") shouldBe List(MissingSeparator(loc(1, 6)))
-    errors("a { x: 1 } b: 2") shouldBe List(MissingSeparator(loc(1, 12)))
-    errors("a: x `b`: 2") shouldBe List(MissingSeparator(loc(1, 6)))
+    errors("a: 1 b: 2") shouldBe List(MissingSeparator(loc(1, 6), "'b:'"))
+    errors("a: 1 b := 2") shouldBe List(MissingSeparator(loc(1, 6), "'b'"))
+    errors("a: 1 b.c: 2") shouldBe List(MissingSeparator(loc(1, 6), "'b.c:'"))
+    errors("a: 1 b { }") shouldBe List(MissingSeparator(loc(1, 6), "'b'"))
+    errors("a { x: 1 } b: 2") shouldBe List(MissingSeparator(loc(1, 12), "'b:'"))
+    errors("a: x `b`: 2") shouldBe List(MissingSeparator(loc(1, 6), "'b'"))
   }
 
   it should "be reported missing after a value that is not an unquoted scalar" in {
-    errors("a: \"x\" y") shouldBe List(MissingSeparator(loc(1, 8)))
-    errors("a: \"x\" \"y\"") shouldBe List(MissingSeparator(loc(1, 8)))
-    errors("a: {} y") shouldBe List(MissingSeparator(loc(1, 7)))
-    errors("a: [] [") shouldBe List(MissingSeparator(loc(1, 7)), UnclosedBracket(loc(1, 7)))
+    errors("a: \"x\" y") shouldBe List(MissingSeparator(loc(1, 8), "'y'"))
+    errors("a: \"x\" \"y\"") shouldBe List(MissingSeparator(loc(1, 8), "a quoted string \"y\""))
+    errors("a: {} y") shouldBe List(MissingSeparator(loc(1, 7), "'y'"))
+    errors("a: [] [") shouldBe List(MissingSeparator(loc(1, 7), "'['"), UnclosedBracket(loc(1, 7), '['))
   }
 
   it should "be reported missing between two elements, whitespace never separating" in {
-    errors("a: [x y]") shouldBe List(MissingSeparator(loc(1, 7)))
-    errors("a: [x `y`]") shouldBe List(MissingSeparator(loc(1, 7)))
-    errors("a: [{} {}]") shouldBe List(MissingSeparator(loc(1, 8)))
+    errors("a: [x y]") shouldBe List(MissingSeparator(loc(1, 7), "'y'"))
+    errors("a: [x `y`]") shouldBe List(MissingSeparator(loc(1, 7), "'y'"))
+    errors("a: [{} {}]") shouldBe List(MissingSeparator(loc(1, 8), "'{'"))
   }
 
   "A second word after an unquoted scalar" should "be reported as a value to quote" in {
-    errors("a: foo bar") shouldBe List(SpaceInValue(loc(1, 8)))
-    errors("a: foo bar baz") shouldBe List(SpaceInValue(loc(1, 8)))
-    errors("a: foo \"bar\"") shouldBe List(SpaceInValue(loc(1, 8)))
+    errors("a: foo bar") shouldBe List(SpaceInValue(loc(1, 8), "bar"))
+    errors("a: foo bar baz") shouldBe List(SpaceInValue(loc(1, 8), "bar"))
+    errors("a: foo \"bar\"") shouldBe List(SpaceInValue(loc(1, 8), "bar"))
   }
 
   it should "not be reported as a key the lexer cannot read, nor as a `:` with no space after it" in {
-    errors("a: foo bar!") shouldBe List(SpaceInValue(loc(1, 8)))
-    errors("a: foo :x") shouldBe List(SpaceInValue(loc(1, 8)))
+    errors("a: foo bar!") shouldBe List(SpaceInValue(loc(1, 8), "bar!"))
+    errors("a: foo :x") shouldBe List(SpaceInValue(loc(1, 8), ":x"))
   }
 
   it should "keep the lexer's errors before it, and in it when it reads the same in either mode" in {
-    errors("a: foo\u200Bbar") shouldBe List(InvisibleCharacter(loc(1, 7), '\u200B'), SpaceInValue(loc(1, 8)))
-    errors("a: foo */ bar") shouldBe List(StrayCommentEnd(loc(1, 8)), SpaceInValue(loc(1, 11)))
-    errors("a: foo \"b\u200Bc\"") shouldBe List(InvisibleCharacter(loc(1, 10), '\u200B'), SpaceInValue(loc(1, 8)))
+    errors("a: foo\u200Bbar") shouldBe List(InvisibleCharacter(loc(1, 7), '\u200B'), SpaceInValue(loc(1, 8), "bar"))
+    errors("a: foo */ bar") shouldBe List(StrayCommentEnd(loc(1, 8)), SpaceInValue(loc(1, 11), "bar"))
+    errors("a: foo \"b\u200Bc\"") shouldBe List(InvisibleCharacter(loc(1, 10), '\u200B'), SpaceInValue(loc(1, 8), "bc"))
   }
 
   it should "keep the errors of reading it as a value, a fatal one included" in {
     errors("a: x\u200B${b}") shouldBe List(InvisibleCharacter(loc(1, 5), '\u200B'), JoinedValues(loc(1, 6)))
     errors("a: foo bar!\"baz\"") shouldBe
-      List(QuoteInUnquotedScalar(loc(1, 12)), QuoteInUnquotedScalar(loc(1, 16)), SpaceInValue(loc(1, 8)))
+      List(QuoteInUnquotedScalar(loc(1, 12)), QuoteInUnquotedScalar(loc(1, 16)), SpaceInValue(loc(1, 8), "bar!\"baz\""))
     errors("a: x ${foo.`bar}") shouldBe List(UnterminatedName(loc(1, 12)))
   }
 
   "A second element on a line" should "keep the lexer's errors before it and in it" in {
-    errors("a: [foo\u200Bbar]") shouldBe List(InvisibleCharacter(loc(1, 8), '\u200B'), MissingSeparator(loc(1, 9)))
-    errors("a: [x b\"c]") shouldBe List(QuoteInUnquotedScalar(loc(1, 8)), MissingSeparator(loc(1, 7)))
+    errors("a: [foo\u200Bbar]") shouldBe
+      List(InvisibleCharacter(loc(1, 8), '\u200B'), MissingSeparator(loc(1, 9), "'bar'"))
+    errors("a: [x b\"c]") shouldBe List(QuoteInUnquotedScalar(loc(1, 8)), MissingSeparator(loc(1, 7), "'b\"c'"))
   }
 
   private def at(key: String): Id.Key = Id.Key(key, Id.Root)
@@ -373,7 +374,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   }
 
   it should "not be reported for a field after a substitution" in {
-    errors("a: ${x} b: 2") shouldBe List(MissingSeparator(loc(1, 9)))
+    errors("a: ${x} b: 2") shouldBe List(MissingSeparator(loc(1, 9), "'b:'"))
   }
 
   "A directive" should "be read in statement position, with or without arguments" in {
@@ -438,7 +439,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
         directive(Call("y", Vector.empty, loc(3, 1))),
         field(k("b", 3, 5), str("2", 3, 8))
       )
-    errors("#x a: 1") shouldBe List(MissingSeparator(loc(1, 4)))
+    errors("#x a: 1") shouldBe List(MissingSeparator(loc(1, 4), "'a:'"))
   }
 
   it should "be left out with the lexer's errors in it, its name's or its arguments'" in {
@@ -473,22 +474,22 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
 
   it should "be reported empty, unclosed or closed by the wrong bracket" in {
     errors("#x(1,,2)") shouldBe List(EmptyElement(loc(1, 6)))
-    errors("#x(1") shouldBe List(UnclosedBracket(loc(1, 3)))
-    errors("#x(1]") shouldBe List(UnmatchedBracket(loc(1, 5)))
-    errors("a: 1\n)") shouldBe List(UnmatchedBracket(loc(2, 1)))
+    errors("#x(1") shouldBe List(UnclosedBracket(loc(1, 3), '('))
+    errors("#x(1]") shouldBe List(UnmatchedBracket(loc(1, 5), ']', fatal = true))
+    errors("a: 1\n)") shouldBe List(UnmatchedBracket(loc(2, 1), ')', fatal = false))
   }
 
   it should "be reported where something else stands" in {
-    errors("#x(= 1)") shouldBe List(ExpectedArgument(loc(1, 4)))
-    errors("#x(: 1)") shouldBe List(ExpectedArgument(loc(1, 4)))
-    errors("#x(@t)") shouldBe List(ExpectedArgument(loc(1, 4)))
-    errors("#x(a b)") shouldBe List(MissingSeparator(loc(1, 6)))
+    errors("#x(= 1)") shouldBe List(ExpectedArgument(loc(1, 4), "'='"))
+    errors("#x(: 1)") shouldBe List(ExpectedArgument(loc(1, 4), "':'"))
+    errors("#x(@t)") shouldBe List(ExpectedArgument(loc(1, 4), "'@t'"))
+    errors("#x(a b)") shouldBe List(MissingSeparator(loc(1, 6), "'b'"))
     errors("#x(/** d */ a)") shouldBe List(MisplacedDocComment(loc(1, 4)))
   }
 
   it should "be reported with a value missing, in backticks or with a substitution" in {
-    errors("#x(a: )") shouldBe List(MissingValue(loc(1, 7)))
-    errors("#x(a:\n1)") shouldBe List(MissingValue(loc(1, 6)))
+    errors("#x(a: )") shouldBe List(MissingValue(loc(1, 7), "')'"))
+    errors("#x(a:\n1)") shouldBe List(MissingValue(loc(1, 6), "a line break"))
     errors("#x(`a`)") shouldBe List(BacktickedValue(loc(1, 4)))
     errors("#x(a: `b`)") shouldBe List(BacktickedValue(loc(1, 7)))
     errors("#x(\"${a}\")") shouldBe List(SubstitutionInArgument(loc(1, 5)))
@@ -504,7 +505,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
             field(k("c", 3, 1), str("foo", 3, 4)),
             field(k("d", 4, 1), str("3", 4, 4)),
             field(k("e", 5, 1), str("4", 5, 4)))),
-        List(ExpectedColon(loc(1, 3)), SpaceInValue(loc(3, 8)), MisplacedDocComment(loc(4, 6)))
+        List(ExpectedColon(loc(1, 3), "'='"), SpaceInValue(loc(3, 8), "bar"), MisplacedDocComment(loc(4, 6)))
       )
   }
 
@@ -517,7 +518,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
             field(k("x", 2, 1), Block(Vector(field(k("d", 2, 12), str("2", 2, 15))), Set.empty, loc(2, 3))),
             field(k("y", 3, 1), Block(Vector.empty, Set.empty, loc(3, 3)))
           )),
-        List(MissingValue(loc(1, 4)), ExpectedColon(loc(2, 7)), ExpectedColon(loc(3, 7)))
+        List(MissingValue(loc(1, 4), "','"), ExpectedColon(loc(2, 7), "'='"), ExpectedColon(loc(3, 7), "'='"))
       )
   }
 
@@ -525,18 +526,19 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     parse("a = [1, {b: 2}, #x(c: 3)]\nd = {\n  e: 4\n}\nf = #y(\n  5)\ng: 6") shouldBe
       Result(
         Document(Vector(field(k("g", 7, 1), str("6", 7, 4)))),
-        List(ExpectedColon(loc(1, 3)), ExpectedColon(loc(2, 3)), ExpectedColon(loc(5, 3))))
+        List(ExpectedColon(loc(1, 3), "'='"), ExpectedColon(loc(2, 3), "'='"), ExpectedColon(loc(5, 3), "'='")))
     parse("a = #x\nb = #y (1, 2)\nc: 3") shouldBe
       Result(
-        Document(Vector(field(k("c", 3, 1), str("3", 3, 4)))), List(ExpectedColon(loc(1, 3)), ExpectedColon(loc(2, 3))))
+        Document(Vector(field(k("c", 3, 1), str("3", 3, 4)))),
+        List(ExpectedColon(loc(1, 3), "'='"), ExpectedColon(loc(2, 3), "'='")))
   }
 
   it should "read what it skips in the modes the parser would, keys and values in a block told apart" in {
     // `b{c: 1}` is a key and its block; read as a value, `b{c:` would be one word and the first `}` end the block
     parse("a = {b{c: 1}, #run()}\nz: 3") shouldBe
-      Result(Document(Vector(field(k("z", 2, 1), str("3", 2, 4)))), List(ExpectedColon(loc(1, 3))))
+      Result(Document(Vector(field(k("z", 2, 1), str("3", 2, 4)))), List(ExpectedColon(loc(1, 3), "'='")))
     parse("a = {\n  b: x{y\n  c{d: [e{f]}\n}\nz: 3") shouldBe
-      Result(Document(Vector(field(k("z", 5, 1), str("3", 5, 4)))), List(ExpectedColon(loc(1, 3))))
+      Result(Document(Vector(field(k("z", 5, 1), str("3", 5, 4)))), List(ExpectedColon(loc(1, 3), "'='")))
     parse("a: {b{c: 1}, d: x y, e{f: 2}}\nz: 3") shouldBe
       Result(
         Document(
@@ -556,7 +558,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
             ),
             field(k("z", 2, 1), str("3", 2, 4))
           )),
-        List(SpaceInValue(loc(1, 19)))
+        List(SpaceInValue(loc(1, 19), "y"))
       )
   }
 
@@ -571,7 +573,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
                 Vector(Element(str("1", 1, 5), None), Element(str("3", 1, 12), None), Element(str("x", 1, 15), None)),
                 Set.empty,
                 loc(1, 4))))),
-        List(MissingValue(loc(1, 10)), MissingSeparator(loc(1, 17)))
+        List(MissingValue(loc(1, 10), "','"), MissingSeparator(loc(1, 17), "'y'"))
       )
   }
 
@@ -595,7 +597,8 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
             field(k("b", 2, 1), str("1", 2, 4)),
             field(k("e", 5, 1), str("3", 5, 4)),
             field(k("g", 7, 3), str("4", 7, 6)))),
-        List(ExpectedColon(loc(1, 2)), BraceOnNextLine(loc(4, 1)), MissingValue(loc(6, 6)))
+        List(
+          ExpectedColon(loc(1, 2), "a line break"), BraceOnNextLine(loc(4, 1)), MissingValue(loc(6, 6), "a line break"))
       )
   }
 
@@ -606,32 +609,35 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
 
   it should "forget the lexer's errors in what it skips, but a fatal one" in {
     parse("a = 1 */ 1b\nc: 1") shouldBe
-      Result(Document(Vector(field(k("c", 2, 1), str("1", 2, 4)))), List(ExpectedColon(loc(1, 3))))
-    errors("a = [ \"x") shouldBe List(ExpectedColon(loc(1, 3)), UnterminatedString(loc(1, 7)))
+      Result(Document(Vector(field(k("c", 2, 1), str("1", 2, 4)))), List(ExpectedColon(loc(1, 3), "'='")))
+    errors("a = [ \"x") shouldBe List(ExpectedColon(loc(1, 3), "'='"), UnterminatedString(loc(1, 7), "\""))
   }
 
   it should "report and skip a bracket that closes nothing at the top level" in {
     parse("a: 1\n}\nb: 2") shouldBe
       Result(
         Document(Vector(field(k("a", 1, 1), str("1", 1, 4)), field(k("b", 3, 1), str("2", 3, 4)))),
-        List(UnmatchedBracket(loc(2, 1))))
-    errors("a = ] , b: 1") shouldBe List(ExpectedColon(loc(1, 3)), UnmatchedBracket(loc(1, 5)))
-    errors("a: 1 } b: 2") shouldBe List(UnmatchedBracket(loc(1, 6)), MissingSeparator(loc(1, 8)))
+        List(UnmatchedBracket(loc(2, 1), '}', fatal = false)))
+    errors("a = ] , b: 1") shouldBe
+      List(ExpectedColon(loc(1, 3), "'='"), UnmatchedBracket(loc(1, 5), ']', fatal = false))
+    errors("a: 1 } b: 2") shouldBe
+      List(UnmatchedBracket(loc(1, 6), '}', fatal = false), MissingSeparator(loc(1, 8), "'b:'"))
   }
 
   it should "end the source at a bracket that closes one further out, as unclosed, keeping what it read before" in {
     parse("y: 0\nx { a: [1, 2 } b: 3 }\nc: 4") shouldBe
-      Result(Document(Vector(field(k("y", 1, 1), str("0", 1, 4)))), List(UnclosedBracket(loc(2, 8))))
-    errors("a = [ { ] }\nb: 1") shouldBe List(ExpectedColon(loc(1, 3)), UnclosedBracket(loc(1, 7)))
+      Result(Document(Vector(field(k("y", 1, 1), str("0", 1, 4)))), List(UnclosedBracket(loc(2, 8), '[')))
+    errors("a = [ { ] }\nb: 1") shouldBe List(ExpectedColon(loc(1, 3), "'='"), UnclosedBracket(loc(1, 7), '{'))
   }
 
   it should "end the source at a bracket that closes none open, inside a container or skipping" in {
-    errors("a { ] }\nb: 1") shouldBe List(UnmatchedBracket(loc(1, 5)))
-    errors("a = #x( ] )\nb: 1") shouldBe List(ExpectedColon(loc(1, 3)), UnmatchedBracket(loc(1, 9)))
+    errors("a { ] }\nb: 1") shouldBe List(UnmatchedBracket(loc(1, 5), ']', fatal = true))
+    errors("a = #x( ] )\nb: 1") shouldBe
+      List(ExpectedColon(loc(1, 3), "'='"), UnmatchedBracket(loc(1, 9), ']', fatal = true))
   }
 
   it should "end the source unclosed when it ends skipping" in {
-    errors("a = [1,") shouldBe List(ExpectedColon(loc(1, 3)), UnclosedBracket(loc(1, 5)))
+    errors("a = [1,") shouldBe List(ExpectedColon(loc(1, 3), "'='"), UnclosedBracket(loc(1, 5), '['))
   }
 
   "The arguments of a broken directive" should "all be reported, the call left out and what follows it read" in {
@@ -639,25 +645,26 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
       Result(
         Document(Vector(field(k("c", 2, 1), str("1", 2, 4)))),
         List(EqualsInArgument(loc(1, 6)), PositionalAfterNamed(loc(1, 17)), DuplicateArgument(loc(1, 26), "b")))
-    errors("#x(1.5) a: 1") shouldBe List(InvalidLiteral(loc(1, 4), "1.5"), MissingSeparator(loc(1, 9)))
+    errors("#x(1.5) a: 1") shouldBe List(InvalidLiteral(loc(1, 4), "1.5"), MissingSeparator(loc(1, 9), "'a:'"))
   }
 
   it should "be reported as each argument is read, before an error that ends the source" in {
     errors("#x(a: 1, a: 2, \"unfinished") shouldBe
-      List(DuplicateArgument(loc(1, 10), "a"), UnterminatedString(loc(1, 16)))
-    errors("#x(a: 1, 2, ]") shouldBe List(PositionalAfterNamed(loc(1, 10)), UnmatchedBracket(loc(1, 13)))
+      List(DuplicateArgument(loc(1, 10), "a"), UnterminatedString(loc(1, 16), "\""))
+    errors("#x(a: 1, 2, ]") shouldBe
+      List(PositionalAfterNamed(loc(1, 10)), UnmatchedBracket(loc(1, 13), ']', fatal = true))
     errors("#x(a: 1, b = 2, 3)") shouldBe List(EqualsInArgument(loc(1, 12)), PositionalAfterNamed(loc(1, 17)))
   }
 
   "A fatal error of the lexer" should "be the only error at the end it causes" in {
-    errors("a: \"x") shouldBe List(UnterminatedString(loc(1, 4)))
-    errors("a { b: \"x") shouldBe List(UnterminatedString(loc(1, 8)))
-    errors("a:\n\"x") shouldBe List(UnterminatedString(loc(2, 1)))
-    errors("/** d */ \"x") shouldBe List(UnterminatedString(loc(1, 10)))
+    errors("a: \"x") shouldBe List(UnterminatedString(loc(1, 4), "\""))
+    errors("a { b: \"x") shouldBe List(UnterminatedString(loc(1, 8), "\""))
+    errors("a:\n\"x") shouldBe List(UnterminatedString(loc(2, 1), "\""))
+    errors("/** d */ \"x") shouldBe List(UnterminatedString(loc(1, 10), "\""))
   }
 
   it should "be reported after the parser's error when it was found reading ahead" in {
-    errors("a\n`x") shouldBe List(ExpectedColon(loc(1, 2)), UnterminatedName(loc(2, 1)))
-    errors("a: foo bar \"x") shouldBe List(SpaceInValue(loc(1, 8)), UnterminatedString(loc(1, 12)))
+    errors("a\n`x") shouldBe List(ExpectedColon(loc(1, 2), "a line break"), UnterminatedName(loc(2, 1)))
+    errors("a: foo bar \"x") shouldBe List(SpaceInValue(loc(1, 8), "bar"), UnterminatedString(loc(1, 12), "\""))
   }
 }

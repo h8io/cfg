@@ -102,11 +102,11 @@ class PsiTest extends AnyFlatSpec with Matchers {
     val missing = java.nio.file.Files.createTempDirectory("psi").resolve("missing.psi").toUri.toURL
     errors(Psi(broken, missing, unclosed)) match {
       case List(colon, space, SourceUnreadable(name, cause), bracket) =>
-        colon shouldBe ExpectedColon(at(broken, 1, 3))
-        space shouldBe SpaceInValue(at(broken, 3, 8))
+        colon shouldBe ExpectedColon(at(broken, 1, 3), "'='")
+        space shouldBe SpaceInValue(at(broken, 3, 8), "bar")
         name shouldBe missing.toString
         cause shouldBe a[FileNotFoundException]
-        bracket shouldBe UnclosedBracket(at(unclosed, 1, 3))
+        bracket shouldBe UnclosedBracket(at(unclosed, 1, 3), '{')
       case other => fail(other.toString)
     }
   }
@@ -122,7 +122,8 @@ class PsiTest extends AnyFlatSpec with Matchers {
         UnknownDirective(at(directives, 3, 8), "z")
       )
     errors(Psi(resource("broken.psi"), references)) shouldBe
-      List(ExpectedColon(at(resource("broken.psi"), 1, 3)), SpaceInValue(at(resource("broken.psi"), 3, 8)))
+      List(
+        ExpectedColon(at(resource("broken.psi"), 1, 3), "'='"), SpaceInValue(at(resource("broken.psi"), 3, 8), "bar"))
     errors(Psi(references)) shouldBe List(UnresolvedSubstitution(at(references, 4, 4), "psi-test-e"))
     errors(Psi(conflict)) shouldBe
       List(
