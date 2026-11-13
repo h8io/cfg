@@ -57,7 +57,7 @@ loader path.
 | Error model | `Either`, no Cats; as many errors per run as can be reported honestly (§11) |
 | Dotted keys | Sugar for nesting; a quoted key is indivisible, dots included |
 | Substitution location | Reference site, carrying the definition site with it (§10) |
-| Location coordinates | Source as it was named — the URL passed to the loader, or an include argument as written; line and column 1-based, column in code points (§10) |
+| Location coordinates | Source by its full URL — as passed to the loader, or as an include argument resolves; line and column 1-based, column in code points (§10) |
 | `impl/hocon` | Stays, alongside this module |
 | Overriding | `:` merges maps, `:=` replaces whatever was there (§7); no append operator |
 
@@ -566,7 +566,7 @@ when not given (session 20):
 - **Its failures are errors of its own**, carried by the `DirectiveFailed` at the call: the target
   not found, unreadable, or not a path or URL at all, and the arguments not giving exactly one
   target or an `optional` that is neither `true` nor `false`.
-- The source it reads is named in locations by its argument as written (§10), extension or not.
+- The source it reads is named in locations by the URL it resolves to, extension included (§10).
 
 Include cycles are reported as an error rather than looping, as every directive's are (above).
 
@@ -727,17 +727,23 @@ Every node carries its own `Location`, with `description` rendered as `<source>:
 This is the visible win over `impl/hocon`, where the description is whatever typesafe-config
 composed.
 
-**`<source>` is the source as it was named**, so the reader sees the name they wrote and can find
-the file by it:
+**`<source>` is the full URL of the source**, so no two sources share a name and the reader can
+open the file by it (session 21):
 
-- a source passed to `Psi(urls*)` — the full URL, as the caller gave it (`file:/etc/app/app.psi`);
-- a source pulled in by `#include` — the argument as written in the directive (`conf.d/extra`,
-  `reference`, `https://…`), not the URL it resolves to. A `file` argument is therefore relative to
-  the including file, not to the working directory or the top-level source.
+- a source passed to `Psi(urls*)` — its URL, as the caller gave it (`file:/etc/app/app.psi`);
+- a source pulled in by `#include` — the URL its argument resolves to, extension included
+  (`file:/etc/app/conf.d/extra.psi`, `jar:file:/…/lib.jar!/reference.psi`, `https://…`), not the
+  argument as written. Two `common.psi` included from different directories are two names, and a
+  resource found in a jar names the jar. It is the URL as resolved, not the real path a cycle is
+  keyed by (§6): a path through a symbolic link is shown as the reader wrote it. The argument as
+  written is still visible where it was written, at the `#include` call, whose own errors are
+  located in the including source.
 
-The same written name can stand for different files when two files in different directories include
-it; the location does not disambiguate them. Accepted: the including file is one step away, and an
-error inside an include can name the include chain if that turns out to be needed.
+A source given as text has no URL and is named by the name its caller gave it. A `file` it includes
+resolves against the working directory (§6), and is shown by the absolute URL it resolves to.
+
+A source included twice not through itself, a diamond, is parsed twice (§6) and has one name, so its
+errors are reported once per parse at the same locations.
 
 **Line and column are 1-based**, as in the YAML backend. **The column counts code points**, not
 UTF-16 units: `é`, `ж` and `😀` are one column each, so the number matches what an editor shows
@@ -978,16 +984,10 @@ mistake is worse than stopping.
      for Psi; a key that is not bare, written in backticks when rendered.
    - Open as well: where it merges, as a field's value or into the block it stands in, as
      `#include` does; errors of the imported file in Psi's own error list or as one.
-9. **Two included sources named alike.** Raised by Codex's review of plan step 11, recorded as
-   unsolved by the user in session 20. An included source is named as its argument is written
-   (§10), so two files that two sources each include as `common.psi` give errors located alike,
-   `common.psi:3:4`: a reader cannot tell which of them an error is in, and the order of the second
-   batch (§11), which goes by the name, puts both after the first source that included one — `root1`,
-   `common.psi` of `root1`, `common.psi` of `root2`, `root2` — where `root2`'s should follow `root2`.
-   §10 accepted the ambiguity for the reader; the order shows it is not harmless. Open: naming an
-   included source unambiguously (its resolved URL, the include chain, either beside the name as
-   written), or a source's identity kept in its locations apart from the name shown; plan step 12,
-   on error messages, may settle the first.
+9. ~~**Two included sources named alike.**~~ — closed in session 21: an included source is named by
+   the URL it resolves to (§10). Raised by Codex's review of plan step 11: named as its argument
+   was written, two files that two sources each include as `common.psi` gave errors located alike,
+   and the second batch (§11), ordered by the name, put both after the first includer.
 
 ## 14. Decision log
 
@@ -1854,3 +1854,17 @@ proposed by me and taken by the user but one.
   failure to read mean "not found", a page not found.
 - **Two included sources named alike sort as one**, found by the same review: §13 item 9, unsolved.
 
+
+### Session 21 — 2026-11-13
+
+Spec gaps of plan step 12, error messages, settled with the user before coding it.
+
+- **An included source is named by the full URL it resolves to** (§10), the user's proposal; this
+  reverses session 4's "the argument as written". Two files included as `common.psi` from
+  different directories now have different names, so a reader can tell their errors apart and the
+  second batch (§11) puts each after its own includer: §13 item 9, closed. Session 4's objections
+  weigh less than the ambiguity: the URL is long, but it is what a reader needs to open the file;
+  the argument as written is still shown at the `#include` call. Shown is the URL as resolved, not
+  the real path a cycle is keyed by, so a symbolic link stays as the reader wrote it. Rejected: the
+  include chain beside the written name (long, and still ambiguous for a diamond's two parses); a
+  source identity kept apart from the name shown (fixes the order, not what the reader sees).
