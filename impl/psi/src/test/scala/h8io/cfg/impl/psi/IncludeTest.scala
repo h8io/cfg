@@ -36,18 +36,20 @@ class IncludeTest extends AnyFlatSpec with Matchers {
       case other => fail(other.toString)
     }
 
-  "#include(file: …)" should "read a file relative to the including one, named as written" in {
+  "#include(file: …)" should "read a file relative to the including one, named by the URL it resolves to" in {
     val dir = Files.createTempDirectory("psi")
     val main = write(dir, "main.psi", "a: 0\nb: 0\n#include(file: \"conf.d/extra.psi\")\nb: 2")
     write(dir, "conf.d/extra.psi", "a: 1\nb: 1\n#include(\"nested\")\nn: #include(file: 'nested.psi')")
     write(dir, "conf.d/nested.psi", "c: 3")
     val root = loaded(main)
-    root("a") shouldBe Node.IScalar(Id.Key("a", Id.Root), NoTags, "1", SourceLocation("conf.d/extra.psi", 1, 4))
+    root("a") shouldBe
+      Node.IScalar(Id.Key("a", Id.Root), NoTags, "1", SourceLocation(url(dir.resolve("conf.d/extra.psi")), 1, 4))
     root("b") shouldBe Node.IScalar(Id.Key("b", Id.Root), NoTags, "2", SourceLocation(url(main), 4, 4))
-    root("c") shouldBe Node.IScalar(Id.Key("c", Id.Root), NoTags, "3", SourceLocation("nested", 1, 4))
+    root("c") shouldBe
+      Node.IScalar(Id.Key("c", Id.Root), NoTags, "3", SourceLocation(url(dir.resolve("conf.d/nested.psi")), 1, 4))
     root("n") match {
       case map: Node.IMap[?] =>
-        map.location shouldBe SourceLocation("nested.psi", 1, 1)
+        map.location shouldBe SourceLocation(url(dir.resolve("conf.d/nested.psi")), 1, 1)
         map.size shouldBe 1
       case other => fail(other.toString)
     }
@@ -90,7 +92,8 @@ class IncludeTest extends AnyFlatSpec with Matchers {
     finally out.close()
     val entry = java.net.URI.create("jar:" + jar.toUri.toString + "!/conf/a.psi").toURL
     loader(entry).map(scalar(_, "v")) shouldBe
-      Right(Node.IScalar(Id.Key("v", Id.Root), NoTags, "jarred", SourceLocation("b", 1, 4)))
+      Right(Node.IScalar(
+        Id.Key("v", Id.Root), NoTags, "jarred", SourceLocation("jar:" + jar.toUri.toString + "!/conf/b.psi", 1, 4)))
   }
 
   "#include(resource: …)" should "read from the class path, with the context class loader or Psi's own" in {
@@ -143,7 +146,7 @@ class IncludeTest extends AnyFlatSpec with Matchers {
         target shouldBe "jar:" + url(notZip) + "!/x.psi"
         cause shouldBe an[IOException]
         cause should not be a[FileNotFoundException]
-        encoding shouldBe SourceLocation("bytes.psi", 1, 4)
+        encoding shouldBe SourceLocation(url(bytes), 1, 4)
       case other => fail(other.toString)
     }
   }
@@ -240,7 +243,8 @@ class IncludeTest extends AnyFlatSpec with Matchers {
     val dir = Files.createTempDirectory("psi")
     val a = write(dir, "a.psi", "#include(file: \"b\")")
     write(dir, "b.psi", "#include(file: \"a.psi\")")
-    errors(a) shouldBe List(DirectiveCycle(SourceLocation("b", 1, 1), ::(url(a), List("b", "a.psi"))))
+    val b = url(dir.resolve("b.psi"))
+    errors(a) shouldBe List(DirectiveCycle(SourceLocation(b, 1, 1), ::(url(a), List(b, url(a)))))
   }
 
   "Errors in an included source" should "come right after those of the source including it" in {
@@ -252,8 +256,24 @@ class IncludeTest extends AnyFlatSpec with Matchers {
       Left(
         List(
           UnresolvedSubstitution(SourceLocation(url(m), 1, 4), "nope1"),
-          UnresolvedSubstitution(SourceLocation("i", 1, 4), "nope2"),
+          UnresolvedSubstitution(SourceLocation(url(dir.resolve("i.psi")), 1, 4), "nope2"),
           UnresolvedSubstitution(SourceLocation(url(n), 1, 4), "nope3")
+        ))
+  }
+
+  they should "be told apart, and each come after its own includer, when two are included by the same name" in {
+    val dir = Files.createTempDirectory("psi")
+    val m = write(dir, "m/root.psi", "x: ${nope1}\n#include(file: \"common.psi\")")
+    val n = write(dir, "n/root.psi", "y: ${nope3}\n#include(file: \"common.psi\")")
+    write(dir, "m/common.psi", "a: ${nope2}")
+    write(dir, "n/common.psi", "b: ${nope4}")
+    loader(m.toUri.toURL, n.toUri.toURL).left.map(_.errors) shouldBe
+      Left(
+        List(
+          UnresolvedSubstitution(SourceLocation(url(m), 1, 4), "nope1"),
+          UnresolvedSubstitution(SourceLocation(url(dir.resolve("m/common.psi")), 1, 4), "nope2"),
+          UnresolvedSubstitution(SourceLocation(url(n), 1, 4), "nope3"),
+          UnresolvedSubstitution(SourceLocation(url(dir.resolve("n/common.psi")), 1, 4), "nope4")
         ))
   }
 

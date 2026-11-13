@@ -160,12 +160,12 @@ private[psi] final class Expand private (
 
     def url: Option[URL] = stack.head.url
 
-    def parse(name: String, url: URL): Either[IOException, Fragment] =
-      Source.read(name, url) match {
+    def parse(url: URL): Either[IOException, Fragment] =
+      Source.read(url.toString, url) match {
         case Right(source) => Right(nested(source))
         case Left(SourceUnreadable(_, cause)) => Left(cause)
         case Left(error) =>
-          Right(Fragment.Parsed(Ast.Document(Vector.empty), SourceLocation(name, 1, 1), error :: Nil, Nil))
+          Right(Fragment.Parsed(Ast.Document(Vector.empty), SourceLocation(url.toString, 1, 1), error :: Nil, Nil))
       }
 
     def parse(name: String, text: String): Fragment = nested(Source(name, text))

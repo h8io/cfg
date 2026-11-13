@@ -1906,3 +1906,6 @@ Spec gaps of plan step 12, error messages, settled with the user before coding i
 - **A hint is a field of its own, `hint: Option[String]`** (§11), on `PsiError`, `DirectiveError`
   and `MarkerError` alike; proposed by me and taken by the user. Rejected: the hint as part of the
   message, which a tool could not show apart.
+- **A source a directive reads from a URL is named by that URL, whatever the directive**: the
+  context's `parse(url)` takes no name, so no handler can name a source otherwise. Follows from the
+  rule for `#include`; a source given as text keeps the name its handler gives it.
