@@ -865,8 +865,13 @@ mistake is worse than stopping.
       one built from a `Node` has no depth but the handler's;
     - where a substitution grafts a value that does not fit there, a failure of the reference,
       whose node is dropped;
-  - **a chain of substitutions**, a `${…}` whose value is another one's, and so on. Going past it
-    is reported at the reference that went past, once, as a cycle is, and the node is dropped.
+  - **the depth of resolution** (§9): the steps from the root to the node being resolved, each a
+    level descended or a substitution followed. A substitution resolves what it finds whole, and
+    the next may stand deep inside it, so a limit on the links of a chain alone bounds nothing:
+    each link may descend up to the limit before the next. Going past it is reported at the
+    innermost substitution being resolved, which there always is, the tree's own levels being
+    within the limit; once, as a cycle is, and its node is dropped. A path is looked up step by
+    step, not by recursion.
 
   256 holds with a margin of three and more on a thread with the JVM's default stack, 1 MB on
   HotSpot, which virtual threads share as their limit (measured in session 22: past 800 levels for
@@ -1957,6 +1962,10 @@ and taken by the user.
   rewrite of the whole module for depths no config has; catching `StackOverflowError`, which cannot
   undo a class left broken. 256 over Jackson's 1 000 and snakeyaml's 50: a margin of three on the
   default stack, and a config has no use for more.
+- **Resolution is limited by its depth, levels and substitutions together, not by the links of a
+  chain** (§11), found by me while reading `Resolve` and taken by the user: each link resolves what
+  it finds whole, so 128 links each 250 levels deep passed a limit on links and on grafted depth
+  alike and still nested 32 000 calls. A config's resolution is a few dozen steps deep.
 - **Past the nesting limit the source ends; past the chain limit the reference fails, once** (§11).
 - **The limit is on the tree as loaded, not as written** (§11), found by me while starting the code
   and taken by the user: an include inside a block lands at the depth of its call, 64 sources deep
