@@ -15,7 +15,7 @@ configuration. Until session 10 it was DEF, *Declarative Extensible Format* (§1
 | File extensions | `.Ψ`, `.ψ` and `.psi`, searched in that order — one extension where file names ignore case |
 
 **Status:** implemented in `impl/psi` and published as `cfg-psi` from v0.1.0; the user's guide is
-on the docs site, `docs/psi.md` and `docs/psi-extending.md`. This document stays the design notes:
+on the docs site, `docs/psi.md` and `docs/psi-api.md`. This document stays the design notes:
 §2 lists what is settled, §13 what is still open, and §14 logs how each decision was reached so a
 later session does not reopen a question that was already argued through. Add to §14 rather than
 silently editing §2.
@@ -2002,10 +2002,12 @@ and taken by the user.
 
 Spec gaps of plan step 14, docs and release, settled with the user; proposed by me and taken.
 
-- **Two pages on the docs site**: `Psi`, the user's guide to writing configs and loading them, and
-  `Psi: extending`, directives and markers of one's own. Whoever only writes configs has no use for
-  the handlers' API. Every example a `scala mdoc` block, so the build checks it loads. Rejected:
-  one long page; this document, design notes with their log, as the guide.
+- **Two pages on the docs site, by reader**: `Psi`, the user's guide, the format alone, with no
+  Scala; and `Psi: API`, the programmer's guide, loading, errors as types, the builder, and
+  directives and markers of one's own. The user's split, over mine of format-and-loading against
+  extending: whoever only writes configs has no use for the API. Every example is run by mdoc, the
+  guide's shown as Psi through `mdoc:passthrough`. Rejected: one long page; this document, design
+  notes with their log, as the guide.
 - **MiMa with 1.0, not with the first release** (§12), reversing session 22: while 0.x promises
   no compatibility, the check would fail on every break the policy allows. Rejected: MiMa now,
   reporting without failing.

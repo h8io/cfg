@@ -78,7 +78,7 @@ at the phase gate.
 | 11 | `#include` | done |
 | 12 | Error messages and hints | done |
 | 13 | Hardening | done |
-| 14 | Docs and release | todo |
+| 14 | Docs and release | done |
 
 ### 0. This plan
 

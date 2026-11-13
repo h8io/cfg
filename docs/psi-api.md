@@ -1,21 +1,76 @@
-# Psi: extending
+# Psi: API
 
-A [Psi](psi.md) loader is built with the directives and markers it knows. `#include` and the layout markers `<`, `>`,
-`width` and `+` come with every loader; a builder adds others:
+How a program loads [Psi](psi.md), reads what it loaded or what went wrong, and extends the format with directives and
+markers of its own.
 
 ```scala
-Psi.builder
-  .withDirectives(…)
-  .withMarkers(…)
-  .disableDirective("include")
-  .withSystemProperties(Map.empty)
-  .withDepthLimit(256)
-  .build
+libraryDependencies += "io.h8" %% "cfg-psi" % "@VERSION@"
 ```
 
-`build` gives the loader, with `apply(urls*)` and `parse(name, text)` as `Psi` has, or every error of its
-configuration at once: a name registered twice, `include` and the built-in markers included, a disabled name
-registered, a parameter declared twice, a marker named as no marker can be written.
+## Loading
+
+`Psi(urls*)` loads the sources at URLs and merges them in order, and `Psi.parse(name, text)` loads a source held as a
+string, `name` naming it in locations. Either gives the tree, an `h8io.cfg.Node.IMap`, read [as any other
+loader's](README.md), or `PsiErrors`, every error found: nothing is thrown for anything a source holds.
+
+```scala mdoc:silent
+import h8io.cfg.Node
+import h8io.cfg.impl.psi.*
+
+val loaded = Psi.parse("app.psi", "server { host: localhost, port: 8080 }")
+```
+
+A node's `location` is a `PsiLocation`: a source, line and column, or for a value a substitution put somewhere, both
+where it stands and where it came from.
+
+```scala mdoc
+for (root <- loaded)
+  root("server") match {
+    case server: Node.IMap[?] =>
+      server("port") match {
+        case port: Node.IScalar[?] => println(port.value + " at " + port.location.description)
+        case other => println(other)
+      }
+    case other => println(other)
+  }
+```
+
+## Errors
+
+`PsiErrors.errors` holds the errors, each a case class of the sealed `PsiError` with a `location`, a `message` saying
+what is wrong and naming what was found, and a `hint` saying what to do, when there is one. A program reads an error
+by its type and fields; the texts are for people and may change in any release. `PsiErrors.message`, and its
+`toString`, is the report, the errors grouped by source:
+
+```scala mdoc
+Psi.parse("app.psi", "a = 1").left.map(_.errors)
+Psi.parse("app.psi", "a = 1").left.foreach(errors => println(errors.message))
+```
+
+## Building a loader
+
+`Psi` is the loader with nothing added. A builder makes another:
+
+| Method | What it does |
+|---|---|
+| `withSystemProperties(map)` | overrides values from `map` rather than from `sys.props`; an empty map turns overriding off |
+| `disableDirective(name)` | turns a directive off for good, as a loader for input it does not trust turns off `include` |
+| `withDepthLimit(n)` | limits depth to `n` rather than 256: lower for a thread with a smaller stack than the JVM's default |
+| `withDirectives(directives*)` | adds directives of its own (below) |
+| `withMarkers(markers*)` | adds markers of its own (below) |
+
+`build` gives the `PsiLoader`, with `apply(urls*)` and `parse(name, text)` as `Psi` has, or every error of its
+configuration at once: a name registered twice, `include` and the built-in markers `<`, `>`, `width` and `+` included,
+a disabled name registered, a parameter declared twice, a marker named as no marker can be written, a depth limit
+below 1.
+
+```scala mdoc:silent
+val untrusted = Psi.builder.disableDirective("include").withSystemProperties(Map.empty).build
+```
+
+```scala mdoc
+untrusted.map(_.parse("input", "#include(file: \"/etc/passwd\")").left.map(_.message))
+```
 
 ## Directives
 

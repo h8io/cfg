@@ -54,7 +54,7 @@ Run commands from the repository root.
 Before changing `impl/psi`, read the relevant sections of `design/format.md`, the design notes: it defines the
 semantics, lists what is open (§13), and logs how each decision was reached (§14), so a question already argued
 through is not reopened. A change to the format is decided with the user before it is coded, and recorded there, in
-its section and in §14. The user's guide, `docs/psi.md`, and the programmer's, `docs/psi-extending.md`, follow every
+its section and in §14. The user's guide, `docs/psi.md`, and the programmer's, `docs/psi-api.md`, follow every
 change they describe. `design/plan.md` is how the module was built, step by step; every step is done.
 
 ## Architecture

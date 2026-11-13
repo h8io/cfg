@@ -1,3 +1,3 @@
 module.exports = {
-  docs: ['README', 'psi', 'psi-extending'],
+  docs: ['README', 'psi', 'psi-api'],
 };
