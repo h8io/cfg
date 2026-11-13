@@ -742,8 +742,8 @@ open the file by it (session 21):
 A source given as text has no URL and is named by the name its caller gave it. A `file` it includes
 resolves against the working directory (§6), and is shown by the absolute URL it resolves to.
 
-A source included twice not through itself, a diamond, is parsed twice (§6) and has one name, so its
-errors are reported once per parse at the same locations.
+A source included twice not through itself, a diamond, is parsed twice (§6) and has one name; its
+errors, alike in both parses, are reported once, as every error found twice in one load is (§6).
 
 **Line and column are 1-based**, as in the YAML backend. **The column counts code points**, not
 UTF-16 units: `é`, `ж` and `😀` are one column each, so the number matches what an editor shows
@@ -849,6 +849,34 @@ mistake is worse than stopping.
 - **Substitution errors report root causes only.** Every unresolved reference, cycle and
   concatenation of a non-scalar is reported, but a node that depends on an already failed node is
   dropped silently: with `a: ${missing}` and `b: ${a}`, only `missing` is named.
+
+**Messages and the report** (session 21):
+
+- **Every `PsiError` has a `message`**, a `def` each error computes from its fields, never a stored
+  text: errors stay compared, as for being reported once (§6), by their type and fields.
+  `PsiErrors.message` is the report, and so is its `toString`. `cfg`'s `CfgError` stays a marker,
+  with no message: the other loaders report by exceptions and have no error types of their own yet.
+- **A hint is a field of its own**, `hint: Option[String]`, a `def` as `message` is: what to do,
+  apart from what is wrong, so that a tool can show it on its own. The report puts it on the next
+  line, under the message, as `hint: …`. `DirectiveError` and `MarkerError` get one too, `None`
+  unless a handler gives one; a handler's hint is shown under its directive's or marker's.
+- **A message names what was found.** An error that does not carry the text it is about gets it as
+  a field. Text longer than about 20 characters is cut with `…`; an invisible or control character
+  is shown by its code point and name, `U+00A0 NO-BREAK SPACE`.
+- **The report groups errors by source**, in the order above: a line with the source's name, then
+  one line per error, `<line>:<column>: <message>`. It opens with a count, `5 errors in 2 sources`.
+  An error at a composite location (§10) is grouped by its `at`, its origin written after the
+  message as `description` writes it.
+- **No source excerpt in v1**, no line of the source with a caret under the column: the report
+  would need the text of every source kept until it is built, and an error that came with a fragment
+  from an earlier load has none. Line and column are exact; an excerpt can be added later without
+  changing anything else.
+- **An error that ends its source says so**, as `the rest of this source is not read`; otherwise a
+  reader takes the errors listed as all there are.
+- **A handler's error is shown under its directive or marker**, `#include: file:/…/x.psi is not
+  found`: the name, then the handler's message.
+- **Messages are not a contract.** Tests assert their exact texts, but a program reads an error by
+  its type and fields; a text may change in any release.
 
 ## 12. Implementation notes
 
@@ -1868,3 +1896,13 @@ Spec gaps of plan step 12, error messages, settled with the user before coding i
   the real path a cycle is keyed by, so a symbolic link stays as the reader wrote it. Rejected: the
   include chain beside the written name (long, and still ambiguous for a diamond's two parses); a
   source identity kept apart from the name shown (fixes the order, not what the reader sees).
+- **Messages and the report** (§11), proposed by me and taken by the user: what was found is named,
+  carried as a field where an error did not carry it; the report groups by source under a count; no
+  source excerpt in v1, there being no text kept for a fragment from an earlier load; an error that
+  ends its source says so; a handler's error is shown under its directive's or marker's name;
+  messages are no contract, types and fields are.
+- **A message is a `def` of each `PsiError`, computed from its fields** (§11): the user's condition,
+  that the text is not stored but made by each error. `CfgError` stays as it is.
+- **A hint is a field of its own, `hint: Option[String]`** (§11), on `PsiError`, `DirectiveError`
+  and `MarkerError` alike; proposed by me and taken by the user. Rejected: the hint as part of the
+  message, which a tool could not show apart.

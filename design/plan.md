@@ -322,7 +322,7 @@ below are settled when it starts. The rest of this section is the step as first 
 - `PsiErrors` renders as one readable multi-line report.
 - A test file per category asserting the exact texts.
 - **Spec gaps:** an included source is named by its resolved URL (session 21, `format.md` §10,
-  §13 item 9); the rest to be discussed before coding.
+  §13 item 9); messages, hints and the report (session 21, §11).
 
 ### 13. Hardening
 
