@@ -31,6 +31,16 @@ class HardeningTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChe
     Psi.parse("s", "a: \"" + long + "\"").map(_.size) shouldBe Right(1)
   }
 
+  "A long line with a character beyond Latin-1" should "load as fast as one of Latin-1" in {
+    // a column counted from the start of its line for every token took minutes on this line
+    val n = 500000
+    val line = "x: [ψ, 😀" + ", 1" * n + "]"
+    Psi.parse("s", line).map(root => root("x").toString) match {
+      case Right(x) => x.length shouldBe line.length - "x: ".length
+      case Left(errors) => fail(errors.toString)
+    }
+  }
+
   "A source cut off anywhere" should "load or give errors, never throw" in {
     val texts = List("realistic/service.psi", "realistic/spark-job.psi", "ported/wrap-test.psi", "base.psi").map(text)
     val cut = texts.flatMap(text => (0 to text.length).map(text.substring(0, _)))

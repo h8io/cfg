@@ -11,7 +11,8 @@ libraryDependencies += "io.h8" %% "cfg-psi" % "@VERSION@"
 
 `Psi(urls*)` loads the sources at URLs and merges them in order, and `Psi.parse(name, text)` loads a source held as a
 string, `name` naming it in locations. Either gives the tree, an `h8io.cfg.Node.IMap`, read [as any other
-loader's](README.md), or `PsiErrors`, every error found: nothing is thrown for anything a source holds.
+loader's](README.md), or `PsiErrors`, every error found: nothing is thrown for anything a source holds. A URL, given
+or included, that takes more than 10 seconds to connect or 30 to send its next bytes is unreadable, an error.
 
 ```scala mdoc:silent
 import h8io.cfg.Node

@@ -5,6 +5,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import java.io.IOException
+import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
@@ -23,6 +24,15 @@ class SourceTest extends AnyFlatSpec with Matchers with EitherValues with Inside
     source.location(2) shouldBe SourceLocation("s", 1, 2)
     source.location(3) shouldBe SourceLocation("s", 1, 3)
     source.location(4) shouldBe SourceLocation("s", 1, 4)
+  }
+
+  it should "count a surrogate pair as one code point once both its halves stand before, and a lone half as one" in {
+    val text = "😀a\n😀😀\nb\uD83D\n\uDE00c\uD83D"
+    val source = Source("s", text)
+    (0 to text.length).foreach { offset =>
+      val start = text.lastIndexOf('\n', offset - 1) + 1
+      source.location(offset).column shouldBe text.codePointCount(start, offset) + 1
+    }
   }
 
   it should "end a line at a CRLF but not at a lone CR" in {
@@ -64,5 +74,13 @@ class SourceTest extends AnyFlatSpec with Matchers with EitherValues with Inside
     Files.delete(file)
     inside(Source.read("gone.psi", file.toUri.toURL).left.value) { case SourceUnreadable("gone.psi", _: IOException) =>
     }
+  }
+
+  "connect" should "wait for a connection and for the bytes read no longer than the timeouts" in {
+    val connection = Source.connect(URI.create("http://127.0.0.1/app.psi").toURL)
+    connection.getConnectTimeout shouldBe Source.ConnectTimeout
+    connection.getReadTimeout shouldBe Source.ReadTimeout
+    Source.ConnectTimeout should be > 0
+    Source.ReadTimeout should be > 0
   }
 }

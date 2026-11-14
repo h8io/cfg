@@ -560,6 +560,10 @@ when not given (session 20):
 - **`resource`** is a name on the class path, read through the thread's context class loader, or
   the one that loaded Psi when the thread has none.
 - **`url`** is an absolute URL, read as it is written.
+- **Reading a URL times out** (session 24), whether `#include` reads it or the loader is given it:
+  10 seconds to connect, 30 for each wait for the next bytes. A target that goes past either is
+  unreadable, an error, optional or not; with no timeout, a server that never answers held the load
+  forever. The read timeout bounds a wait, not the whole read.
 - **A `file` or a `resource` with no extension** — no `.` in its last segment — is looked for as
   `.Ψ`, `.ψ` and `.psi` in that order, and the first found is read; they are one format under
   three names, so nothing is merged. A `url` is never extended.
@@ -2014,3 +2018,13 @@ Spec gaps of plan step 14, docs and release, settled with the user; proposed by 
 - **The release is v0.1.0**, the user's call: Psi is the first format of the project's own. The
   user tags it.
 
+### Session 24 — 2026-11-14
+
+From a review of the module, two fixes the user asked for; the rest of the review is to be
+discussed.
+
+- **Reading a URL times out** (§6): 10 seconds to connect, 30 for each wait for the next bytes,
+  fixed: the user's call to add them, the values mine, no builder setting yet. Not done: a limit on the whole read, and on the size of a source.
+- Not a change to the format: a column is counted from the surrogate pairs of the source, found
+  once, and no longer from its line's code points for every token, which took time quadratic in
+  the length of a line holding any character beyond Latin-1 — 9 seconds for a line of 400 KB.
