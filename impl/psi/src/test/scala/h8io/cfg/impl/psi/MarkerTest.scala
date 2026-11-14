@@ -100,6 +100,13 @@ class MarkerTest extends AnyFlatSpec with Matchers {
     runs shouldBe 0
   }
 
+  they should "get an integer argument as written, -0 included" in {
+    val echo = marker("echo", Parameter("n", required = true))((arguments, _) => Right(value(arguments("n"))))
+    val root = loaded(loader(echo), "a: \"\"\"echo(-0)\n  x\n  \"\"\"\nb: '''echo(n: 12)\n  x\n  '''")
+    value(root("a")) shouldBe "-0"
+    value(root("b")) shouldBe "12"
+  }
+
   "A built-in marker" should "not follow one of the loader's" in {
     errors(loader(upper), "a: \"\"\"upper <\n  v\n  \"\"\"") shouldBe List(BuiltInMarkerAfterLoaders(at(1, 13), "<"))
   }

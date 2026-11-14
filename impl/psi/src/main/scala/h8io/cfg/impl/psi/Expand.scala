@@ -255,7 +255,6 @@ private[psi] object Expand {
       limit: Int): Result[(Ast.Document, List[String])] = {
     val expand = new Expand(directives, disabled, markers, limit)
     val document = expand.document(source, Nil, 0)
-    // a fragment used more than once, or two of one source, report the same errors: each is reported once
-    Result((document, expand.included.toList), expand.errors.toList.distinct)
+    Result((document, expand.included.toList), expand.errors.toList)
   }
 }

@@ -9,6 +9,7 @@ import java.io.{FileNotFoundException, IOException}
 import java.nio.charset.StandardCharsets
 import java.net.{InetAddress, InetSocketAddress}
 import java.nio.file.{Files, Path, Paths}
+import java.nio.file.attribute.PosixFilePermissions
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
 class IncludeTest extends AnyFlatSpec with Matchers {
@@ -129,7 +130,7 @@ class IncludeTest extends AnyFlatSpec with Matchers {
       "#include(file: \"missing\", optional: true)\n#include(file: \"missing\")\n" +
         "#include(url: \"jar:" + url(notZip) + "!/x.psi\", optional: true)\n" +
         "#include(file: \"bytes.psi\", optional: true)\n#include(file: \"x\", optional: yes)\n" +
-        "#include(file: \"x\", url: \"y\")\n#include\n#include(file: \"a:b\")"
+        "#include(file: \"x\", url: \"y\")\n#include\n#include(url: \"a b\")"
     )
     val location = SourceLocation(url(main), _: Int, 1)
     errors(main) match {
@@ -140,7 +141,7 @@ class IncludeTest extends AnyFlatSpec with Matchers {
             DirectiveFailed(l5, "include", IncludeOptional("yes")),
             DirectiveFailed(l6, "include", IncludeTargets(List("file", "url"))),
             DirectiveFailed(l7, "include", IncludeTargets(Nil)),
-            DirectiveFailed(l8, "include", IncludeInvalidTarget("a:b"))
+            DirectiveFailed(l8, "include", IncludeInvalidTarget("a b"))
           ) =>
         List(l2, l3, l5, l6, l7, l8) shouldBe List(2, 3, 5, 6, 7, 8).map(location)
         target shouldBe "jar:" + url(notZip) + "!/x.psi"
@@ -284,5 +285,47 @@ class IncludeTest extends AnyFlatSpec with Matchers {
     IncludeInvalidTarget("a b").message shouldBe "a b is no path or URL"
     IncludeNotFound("x").message shouldBe "x is not found"
     IncludeUnreadable("x", new IOException("boom")).message shouldBe "x cannot be read: java.io.IOException: boom"
+  }
+
+  "#include(file: …)" should "read a relative path with a colon in its first segment, which is no scheme" in {
+    val dir = Files.createTempDirectory("psi")
+    write(dir, "part:one.psi", "a: 1")
+    write(dir, "sub/b:c.psi", "b: 2")
+    val root = loaded(write(dir, "main.psi", "#include(file: \"part:one.psi\")\n#include(file: \"sub/b:c.psi\")"))
+    root.iterator.map {
+      case Node.IScalar(_, _, value, location) => value -> location
+      case other => fail(other.toString)
+    }.toList shouldBe
+      List("1" -> SourceLocation(url(dir.resolve("part:one.psi")), 1, 4),
+        "2" -> SourceLocation(url(dir.resolve("sub/b:c.psi")), 1, 4))
+  }
+
+  "#include(…, optional: true)" should "fail on a target it cannot tell is there, its directory denying access" in {
+    val dir = Files.createTempDirectory("psi")
+    write(dir, "locked/x.psi", "a: 1")
+    write(dir, "locked/x.jar", "not a jar")
+    val jar = "jar:" + url(dir.resolve("locked/x.jar")) + "!/x.psi"
+    val main = write(
+      dir,
+      "main.psi",
+      "#include(file: \"locked/x.psi\", optional: true)\n#include(url: \"" + jar + "\", optional: true)")
+    val locked = dir.resolve("locked")
+    Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("---------"))
+    try {
+      assume(!Files.exists(locked.resolve("x.psi")), "access is not denied: running as root")
+      errors(main).map {
+        case DirectiveFailed(_, "include", IncludeUnreadable(target, _)) => target
+        case other => fail(other.toString)
+      } shouldBe List("locked/x.psi", jar)
+    } finally Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("rwx------"))
+  }
+
+  "An error in a source two sources include" should "be reported once" in {
+    val dir = Files.createTempDirectory("psi")
+    write(dir, "common.psi", "a: [")
+    val a = write(dir, "a.psi", "#include(file: \"common.psi\")")
+    val b = write(dir, "b.psi", "#include(file: \"common.psi\")")
+    loader(a.toUri.toURL, b.toUri.toURL).left.map(_.errors) shouldBe
+      Left(List(UnclosedBracket(SourceLocation(url(dir.resolve("common.psi")), 1, 4), '[')))
   }
 }
