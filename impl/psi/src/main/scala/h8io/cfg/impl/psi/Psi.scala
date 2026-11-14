@@ -21,7 +21,8 @@ import java.net.URL
   *
   * ==Launch overrides==
   * A value the sources define that is not a container, at a path of keys, is replaced by the system property of that
-  * path, `db.url`, if there is one (§9). The environment is not read.
+  * path as `Id.path` writes it, `db.url`, a key that is not bare in backticks, if there is one (§9). The environment is
+  * not read.
   *
   * ==Substitutions==
   * `\${path}` grafts the node at `path` whole, looked up in the overridden tree; `\${?path}` with nothing there drops

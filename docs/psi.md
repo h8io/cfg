@@ -156,8 +156,10 @@ raw: '${not.a.path}'
 ```
 
 **System properties override the sources**: before substitutions are resolved, a value the sources define at
-`db.host` is replaced by the system property `db.host`, if the application was started with one. Only values the
-sources define are overridden, never a block or a sequence. With `-Ddb.host=db.prod`:
+`db.host` is replaced by the system property `db.host`, if the application was started with one. The property names
+the path as `${…}` does, a key that is not bare in backticks: a key `db.host` is overridden by ``-D'`db.host`=…'``,
+never by `-Ddb.host=…`. Only values the sources define are overridden, never a block or a sequence. With
+`-Ddb.host=db.prod`:
 
 ```scala mdoc:passthrough
 example(
