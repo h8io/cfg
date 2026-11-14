@@ -261,7 +261,7 @@ private[psi] final class MarkerParser(
     else if (i - digits > 1 && line.charAt(digits) == '0') {
       i = digits + 1
       invalid
-    } else Some(IntegerLiteral(BigInt(line.substring(start, i))))
+    } else Some(IntegerLiteral(line.substring(start, i)))
   }
 
   /** The stages the markers pick; every unknown marker, bad argument and second indent is reported. */
@@ -303,7 +303,7 @@ private[psi] final class MarkerParser(
     val entries = bound.toVector.map { case (name, argument) =>
       val text = argument.value match {
         case StringLiteral(value) => value
-        case IntegerLiteral(value) => value.toString
+        case IntegerLiteral(text) => text
         case NameLiteral(value) => value
       }
       name -> (Tree.Scalar(text, Set.empty, locate(offsets(argument.valueAt))): Tree.Value)
@@ -323,11 +323,15 @@ private[psi] final class MarkerParser(
   private def width(call: Call, arguments: Map[String, Argument]): Option[Stage] = {
     val n = arguments.get("n")
     if (n.isEmpty) error(MissingArgument(_, "n"), call.at)
-    n.map {
-      case Argument(_, _, IntegerLiteral(width), _) if width >= 1 && width <= Int.MaxValue => WidthIndent(width.toInt)
-      case argument =>
+    n.map { argument =>
+      val width = argument.value match {
+        case IntegerLiteral(text) => Some(BigInt(text)).filter(w => w >= 1 && w <= Int.MaxValue)
+        case _ => None
+      }
+      width.fold {
         error(InvalidArgument(_, "n"), argument.valueAt)
         WidthIndent(1)
+      }(w => WidthIndent(w.toInt))
     }
   }
 
@@ -378,7 +382,9 @@ private object MarkerParser {
 
   sealed trait Literal
   final case class StringLiteral(value: String) extends Literal
-  final case class IntegerLiteral(value: BigInt) extends Literal
+
+  /** An integer as written, `-0` included (§5, §6): a handler gets it as text, as it gets a directive's. */
+  final case class IntegerLiteral(text: String) extends Literal
 
   /** A bare name, `true` and `false` included: a literal has no type until a handler reads it. */
   final case class NameLiteral(value: String) extends Literal

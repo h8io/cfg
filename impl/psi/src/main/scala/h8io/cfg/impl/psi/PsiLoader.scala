@@ -33,7 +33,8 @@ final class PsiLoader private[psi] (
       case Left(error) => Result.failed(None, error)
     })
     for {
-      documents <- parsed.toEither
+      // a fragment used more than once, or one source parsed by two, reports the same errors: each is reported once
+      documents <- parsed.copy(errors = parsed.errors.distinct).toEither
       root <- (documents.flatten.toList match {
         case (document, name, included) :: rest =>
           val located = rest.map { case (document, name, _) => (document, SourceLocation(name, 1, 1)) }

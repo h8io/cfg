@@ -93,10 +93,11 @@ private[psi] object Include extends Directive {
     else base.fold(Paths.get(path).toAbsolutePath.toUri.toURL)(resolve(_, path))
 
   /** `path` against `base`, an entry of a jar against the entry's path: a `jar:` URI is opaque, and `URI.resolve`
-    * cannot look into it.
+    * cannot look into it. A colon in the first segment would read as a scheme's end, `part:one.psi` as the scheme
+    * `part`, so such a path is read from `./`.
     */
   private def resolve(base: URL, path: String): URL = {
-    val relative = new URI(null, null, path, null)
+    val relative = new URI(null, null, if (path.takeWhile(_ != '/').contains(':')) "./" + path else path, null)
     val text = base.toString
     val entry = text.indexOf("!/")
     (if (entry < 0) base.toURI.resolve(relative)
@@ -128,12 +129,13 @@ private[psi] object Include extends Directive {
     }
 
   /** Whether `url` is there, as the file system says for a file and for an entry of a jar that is a file; none for any
-    * other URL, which is known only once read.
+    * other URL, which is known only once read. A file is missing only when the file system says it is not there: one it
+    * cannot tell about, its directory denying access, is taken as there, and reading it fails as unreadable.
     */
   private def present(target: String, url: URL): Either[IncludeError, Option[Boolean]] =
     try
       url.getProtocol match {
-        case "file" => Right(Some(Files.exists(Paths.get(url.toURI))))
+        case "file" => Right(Some(!Files.notExists(Paths.get(url.toURI))))
         case "jar" =>
           // opening no connection: a connection to a missing entry fails as one the jar cannot give
           val connection = url.openConnection().asInstanceOf[JarURLConnection]
@@ -141,7 +143,7 @@ private[psi] object Include extends Directive {
           if (archive.getProtocol != "file") Right(None)
           else {
             val path = Paths.get(archive.toURI)
-            if (!Files.exists(path)) Right(Some(false))
+            if (Files.notExists(path)) Right(Some(false))
             else {
               val jar = new JarFile(path.toFile)
               try Right(Some(jar.getEntry(connection.getEntryName) != null))
