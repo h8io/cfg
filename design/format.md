@@ -710,8 +710,10 @@ from a substitution.
 - **System properties override the sources**, as they are meant to: they are what is easiest to
   change at launch. Before any substitution is resolved, every value of the merged tree that is not
   a container — a scalar, `null`, a `${…}` or a concatenation — standing at a path of keys only, no
-  index on the way, is replaced by the system property named by the path's keys joined by dots,
-  `db.url`, if there is one. Only keys the sources define are overridden: a property naming no such
+  index on the way, is replaced by the system property named by the path as `Id.path` writes it
+  and a `${…}` does, if there is one: its keys joined by dots, a key that is not bare in backticks
+  with its escapes (session 24). `db.url` is the key `url` in the block `db`, and
+  ``-D'`db.url`=…'`` the key `db.url`, so that neither can override the other. Only keys the sources define are overridden: a property naming no such
   value adds nothing, and a map or a sequence is never replaced. The value is a string, with the
   tags written in the source kept and the location of the property (§10). Declaring a key with no
   value, to be given at launch, is §13 item 7.
@@ -2020,11 +2022,19 @@ Spec gaps of plan step 14, docs and release, settled with the user; proposed by 
 
 ### Session 24 — 2026-11-14
 
-From a review of the module, two fixes the user asked for; the rest of the review is to be
-discussed.
+From a review of the module: two fixes the user asked for, and two of its findings settled with
+the user; the last, the growth of a tree by substitutions, is still to be discussed.
 
 - **Reading a URL times out** (§6): 10 seconds to connect, 30 for each wait for the next bytes,
-  fixed: the user's call to add them, the values mine, no builder setting yet. Not done: a limit on the whole read, and on the size of a source.
+  fixed: the user's call to add them, the values mine, no builder setting yet. Not done: a limit
+  on the whole read, and on the size of a source.
 - Not a change to the format: a column is counted from the surrogate pairs of the source, found
   once, and no longer from its line's code points for every token, which took time quadratic in
   the length of a line holding any character beyond Latin-1 — 9 seconds for a line of 400 KB.
+- **A system property names its path as `Id.path` writes it** (§9), a key that is not bare in
+  backticks: the user's call, on a finding of the module's review that `` `a.b`: 1 `` and
+  `a { b: 2 }` were both overridden by `-Da.b=…`, and a key with a dot could not be overridden on
+  its own. Rejected: keys joined by dots as they are, which was the rule.
+- **Any key the sources define may be overridden**, confirmed by the user on the same review: the
+  properties of the JVM itself, `user.name` and the like, overriding keys of the same path is a
+  consequence accepted, not a bug.

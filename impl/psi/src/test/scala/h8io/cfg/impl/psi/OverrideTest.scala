@@ -46,6 +46,22 @@ class OverrideTest extends AnyFlatSpec with Matchers {
     }
   }
 
+  it should "name the path as Id.path writes it, telling a key with a dot from a dotted path" in {
+    val root =
+      loaded("`a.b`: 1\na { b: 2 }\n`x\\`y`: 3\nc.`d e`: 4", "`a.b`" -> "p", "`x\\`y`" -> "q", "c.`d e`" -> "r")
+    root("a.b") shouldBe scalar(keyed("a.b"), "p", SystemPropertyLocation("`a.b`"))
+    root("a") match {
+      case map: Node.IMap[?] => map("b") shouldBe scalar(keyed("a", "b"), "2", at(2, 8))
+      case other => fail(other.toString)
+    }
+    root("x`y") shouldBe scalar(keyed("x`y"), "q", SystemPropertyLocation("`x\\`y`"))
+    root("c") match {
+      case map: Node.IMap[?] => map("d e") shouldBe scalar(keyed("c", "d e"), "r", SystemPropertyLocation("c.`d e`"))
+      case other => fail(other.toString)
+    }
+    loaded("`a.b`: 1", "a.b" -> "p")("a.b") shouldBe scalar(keyed("a.b"), "1", at(1, 8))
+  }
+
   it should "be what a substitution reads" in {
     loaded("db.url: x\nu: ${db.url}", "db.url" -> "p")("u") shouldBe
       scalar(keyed("u"), "p", ReferenceLocation(at(2, 4), "db.url", SystemPropertyLocation("db.url")))
