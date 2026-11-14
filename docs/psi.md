@@ -182,7 +182,8 @@ the fields after it override them; as a value it makes the source a block.
 | `url: "https://…"` | a URL |
 | `optional: true` | nothing when the target is not there, rather than an error |
 
-A `file` or `resource` with no extension is looked for as `.Ψ`, `.ψ` and `.psi`, in that order.
+A `file` or `resource` with no extension is looked for as `.Ψ`, `.ψ` and `.psi`, in that order. A URL that takes
+more than 10 seconds to connect, or 30 to send its next bytes, is an error.
 
 ```scala mdoc:invisible
 // Writes the two files of the example below, and loads the second
