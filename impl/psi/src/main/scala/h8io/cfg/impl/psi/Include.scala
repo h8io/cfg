@@ -5,7 +5,6 @@ import h8io.cfg.{Id, Node}
 import java.io.{FileNotFoundException, IOException}
 import java.net.{JarURLConnection, MalformedURLException, URI, URISyntaxException, URL}
 import java.nio.file.{Files, Paths}
-import java.util.jar.JarFile
 
 /** Why `#include` failed (`format.md` §6), carried by the [[DirectiveFailed]] at the call. */
 sealed trait IncludeError extends DirectiveError
@@ -142,12 +141,12 @@ private[psi] object Include extends Directive {
           val archive = connection.getJarFileURL
           if (archive.getProtocol != "file") Right(None)
           else {
-            val path = Paths.get(archive.toURI)
+            val path = Source.path(archive)
             if (Files.notExists(path)) Right(Some(false))
             // the jar itself, which is there and is no source: reading it fails as unreadable
             else if (connection.getEntryName == null) Right(Some(true))
             else {
-              val jar = new JarFile(path.toFile)
+              val jar = Source.open(path.toFile, url)
               try Right(Some(jar.getEntry(connection.getEntryName) != null))
               finally jar.close()
             }

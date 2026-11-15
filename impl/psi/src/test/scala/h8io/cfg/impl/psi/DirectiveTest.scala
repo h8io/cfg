@@ -114,6 +114,13 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     runs shouldBe 0
   }
 
+  it should "report each required argument missing, their names told apart only past what a message quotes" in {
+    val (primary, secondary) = ("connection_configuration_primary", "connection_configuration_secondary")
+    val d = directive("d", Parameter(primary, required = true), Parameter(secondary, required = true))((_, _) =>
+      Right(None))
+    errors(loader(d), "#d") shouldBe List(MissingArgument(at(1, 1), primary), MissingArgument(at(1, 1), secondary))
+  }
+
   it should "fail with its handler's message, contributing nothing" in {
     errors(loader(directive("d")((_, _) => Left(Problem("no")))), "a: #d\nb: 1") shouldBe
       List(DirectiveFailed(at(1, 4), "d", Problem("no")))

@@ -57,13 +57,27 @@ private[psi] object PsiLoader {
   def DefaultDepthLimit: Int = 256
 
   /** `errors` with each reported once: a fragment used more than once, or one source parsed by two, reports the same
-    * errors. They are told apart by what the report says of them, not by `equals`: an error carrying an exception
-    * equals none but itself, and each parse of a source that cannot be read throws an exception of its own.
+    * errors.
     */
   def distinct(errors: List[PsiError]): List[PsiError] = {
-    val reported = mutable.HashSet.empty[(PsiLocation, String, Option[String])]
-    errors.filter(error => reported.add((error.location, error.message, error.hint)))
+    val reported = mutable.HashSet.empty[Any]
+    errors.filter(error => reported.add(key(error)))
   }
+
+  /** What tells `error` from another: the error itself, but for the exception one carries, which equals none but itself
+    * while each parse of a source that cannot be read throws one of its own; it is told apart by its class and message.
+    * Not the message of the error: that shortens what it quotes, and two errors told apart only past the cut would be
+    * one.
+    */
+  private def key(error: PsiError): Any =
+    error match {
+      case SourceUnreadable(source, cause) => (Unreadable, source, cause.toString)
+      case DirectiveFailed(at, name, IncludeUnreadable(target, cause)) => (Unreadable, at, name, target, cause.toString)
+      case _ => error
+    }
+
+  /** Marks a key built from an error that cannot be read, so that it equals no error. */
+  private case object Unreadable
 }
 
 /** Builds a [[PsiLoader]] (`format.md` §5, §6): every method gives a new builder. */

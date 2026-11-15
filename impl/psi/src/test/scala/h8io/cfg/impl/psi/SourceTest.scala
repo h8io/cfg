@@ -108,6 +108,17 @@ class SourceTest extends AnyFlatSpec with Matchers with EitherValues with Inside
     Source.read("a", entry(path, "a.psi")).value.text shouldBe "a: newer"
   }
 
+  it should "read a multi-release jar as of the version the JVM runs with #runtime, as of its base without" in {
+    val path = jar(
+      Files.createTempDirectory("psi").resolve("c.jar"),
+      "META-INF/MANIFEST.MF" -> "Manifest-Version: 1.0\r\nMulti-Release: true\r\n",
+      "a.psi" -> "v: base",
+      "META-INF/versions/9/a.psi" -> "v: nine"
+    )
+    Source.read("a", entry(path, "a.psi#runtime")).value.text shouldBe "v: nine"
+    Source.read("a", entry(path, "a.psi")).value.text shouldBe "v: base"
+  }
+
   it should "report an entry its jar does not have as not found, and a jar URL that names no entry as unreadable" in {
     val path = jar(Files.createTempDirectory("psi").resolve("c.jar"), "a.psi" -> "a: 1")
     inside(Source.read("b", entry(path, "b.psi")).left.value) { case SourceUnreadable("b", _: FileNotFoundException) =>
