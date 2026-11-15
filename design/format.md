@@ -881,7 +881,13 @@ mistake is worse than stopping.
     innermost substitution being resolved, which there always is, the tree's own levels being
     within the limit; once, however many branches below it go past, and its node is dropped. A
     path, which may have any number of segments, is looked up and written step by step, not by
-    recursion.
+    recursion. **A substitution already resolved counts as deep as resolving it went** (session
+    25): a node is resolved once and its value used again, and taking it as free let a chain
+    written in order, each link finding the one before resolved, go past the limit unbounded,
+    where the same chain in reverse failed at it. Whether a load goes past the limit does not
+    depend on the order its keys are written in; where it is reported does, at the reference that
+    reaches it first in the order resolved — or, reached where it stands in the tree with no
+    substitution followed, at the node's own first reference.
 
   256 holds with a margin of three and more on a thread with the JVM's default stack, 1 MB on
   HotSpot, which virtual threads share as their limit (measured in session 22: past 800 levels for
@@ -2038,3 +2044,16 @@ the user; the last, the growth of a tree by substitutions, is still to be discus
 - **Any key the sources define may be overridden**, confirmed by the user on the same review: the
   properties of the JVM itself, `user.name` and the like, overriding keys of the same path is a
   consequence accepted, not a bug.
+
+### Session 25 — 2026-11-15
+
+- **A substitution already resolved counts as deep as resolving it went** (§11), the user's choice
+  of the two I put: a node resolved once was used again as free, so a chain written in order, each
+  link finding the one before resolved, loaded at any length — 100 000 links, its location nested
+  as deep, and `hashCode` and `toString` of it overflowing the stack — where the same chain in
+  reverse failed at link 257. Now each resolved substitution keeps how many steps deep resolving it
+  went, and a use of it fails as resolving it again there would. A chain goes 256 links at the
+  default limit in either order, and no location nests deeper than the limit. Rejected: resolution
+  with a stack of its own, so that no chain has a limit, which the user had leaned towards — it
+  rewrites `Resolve` and needs `equals`, `hashCode` and `toString` of locations without recursion,
+  for chains no config has (session 22).
