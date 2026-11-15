@@ -292,7 +292,7 @@ them; with none, Java's rule comes first, so `"""+` folds what that rule left.
 marker handlers it knows (§14, session 19). **A loader's own markers are a pipeline over the
 block's finished value**: the first gets the string the block stands for — its layout applied, its
 escapes read, its substitutions resolved — and each next one what the one before it gave; what the
-last gives is the value. They run with the substitutions (§8, phase 5), so a block refers to a value
+last gives is the value. They run with the substitutions (§8, phase 4), so a block refers to a value
 of the tree and still goes through them, and whatever grafts the block gets what they gave. A
 handler declares its parameters as a directive's does (§6), gets its arguments as a `Node.IMap` and
 the string, and gives back the new string or an error of its own, reported at the marker as its
@@ -513,7 +513,7 @@ What a handler gives back is an error of its own, reported as the directive's fa
 two ways:
 
 - from its context, by parsing another source — what `#include` does. A `${…}` in that source stays
-  unresolved until phase 5, so an included file may still refer to the file that included it (§8).
+  unresolved until phase 4, so an included file may still refer to the file that included it (§8).
   A source that cannot be read is handed back to the handler to decide on, so that an optional
   include can give nothing; every other error in it, and a cycle, goes with the fragment, which
   comes with what was read, and is reported, with the errors of every source, where the fragment is
@@ -578,6 +578,30 @@ when not given (session 20):
 
 Include cycles are reported as an error rather than looping, as every directive's are (above).
 
+**`#prop` and `#env`** (session 25) are built in too: a value set at launch, read where the call
+stands, which is the only way one reaches a source (§9).
+
+- **`#prop(name)`** gives the system property `name`; **`#env(name)`** the environment variable
+  `name`. A name with a dot is quoted, `#prop("app.port")`, as any argument that is not a bare
+  name. The value is a scalar, a string with no tags of its own, located at the call with the
+  property or the variable behind it (§10).
+- **`#prop` gives a map when no property has the name**: every property whose name starts with
+  `name.`, the rest of its name split at its dots into keys, in order of their names —
+  `#prop("java")` gives `java.version` as `version` and `java.vm.name` as `name` in a block `vm`.
+  A property that is the name exactly wins over those under it; under it, one that has a value
+  and properties under it too, so that it would be a scalar and a map at once, is an error. In
+  statement position the map's keys stand in the block, as a fragment's do. `#env` gives only a
+  scalar: an environment variable's name has no structure.
+- **A value not set is an error**, unless the call says otherwise: `optional: true` gives nothing,
+  which drops the field — so that an earlier definition of the key stands, and `port: 80`
+  followed by `port: #prop(port, optional: true)` is a default — and `default: …` gives the
+  default, located where it is written. Both at once are an error, as is an `optional` that is
+  neither `true` nor `false`.
+- The values come from `sys.props`, read at every load, and `sys.env`, or from the maps the builder
+  is given, `withSystemProperties(map)` and `withEnvironment(map)`. A loader for input it does not
+  trust turns `#env` off, or gives it an empty map: the environment often holds secrets, and a
+  value read is one a program may show.
+
 ## 7. Merging
 
 Deep merge, last one wins — maps merge recursively, scalars and sequences are replaced wholesale.
@@ -641,7 +665,7 @@ in practice it matters for maps, and anywhere the author wants the intent to be 
 - With no earlier value `:=` behaves like `:`.
 - `a := ${b}` is always allowed: whatever `${b}` resolves to, nothing before it survives.
 
-**No merging over a substitution in v1.** Merging runs in phase 3 and substitutions resolve in phase 5
+**No merging over a substitution in v1.** Merging runs in phase 3 and substitutions resolve in phase 4
 (§8), so when one side of a `:` merge is a whole-value `${…}`, phase 3 cannot know whether it is
 merging two maps or replacing one value with another. Instead of deferring the merge, v1 rejects it:
 a `:` field meeting an earlier value of the same key is an error when one side is a substitution and
@@ -674,12 +698,14 @@ cannot be expressed any other way.
 2. Expand directives depth-first. `#include` parses the referenced source recursively and merges it
    positionally. Cycle detection lives here.
 3. Merge the input sources, last wins.
-4. Override the merged tree's values from the system properties (§9).
-5. Resolve substitutions over the overridden tree, and run the loader's own markers over the
-   blocks that have them (§5).
-6. Wrap the result as `Node.IMap[Id.Root]`.
+4. Resolve substitutions over the merged tree, and run the loader's own markers over the blocks
+   that have them (§5).
+5. Wrap the result as `Node.IMap[Id.Root]`.
 
-The consequence worth stating out loud: because 2 runs before 5, an included file may reference
+Nothing overrides the merged tree from outside (session 25): a value set at launch comes in where
+a `#prop` or `#env` stands, in phase 2.
+
+The consequence worth stating out loud: because 2 runs before 4, an included file may reference
 values from the file that included it and vice versa — but an include target can never be computed
 from a substitution.
 
@@ -708,21 +734,13 @@ from a substitution.
 - `${?path}` is optional: when it does not resolve, the field is omitted entirely, so a later lookup
   yields `Node.INone` rather than an error. As an element of a sequence, it drops the element, the
   ones after it moving up. As a part of a concatenation, it reads as the empty string.
-- **System properties override the sources**, as they are meant to: they are what is easiest to
-  change at launch. Before any substitution is resolved, every value of the merged tree that is not
-  a container — a scalar, `null`, a `${…}` or a concatenation — standing at a path of keys only, no
-  index on the way, is replaced by the system property named by the path as `Id.path` writes it
-  and a `${…}` does, if there is one: its keys joined by dots, a key that is not bare in backticks
-  with its escapes (session 24). `db.url` is the key `url` in the block `db`, and
-  ``-D'`db.url`=…'`` the key `db.url`, so that neither can override the other. Only keys the sources define are overridden: a property naming no such
-  value adds nothing, and a map or a sequence is never replaced. The value is a string, with the
-  tags written in the source kept and the location of the property (§10). Declaring a key with no
-  value, to be given at launch, is §13 item 7.
-- **The environment is not read**, and a system property is not read but to override a value of
-  the sources.
-- **`${path}` is looked up in the overridden tree only.** A path the sources do not define does not
+- **Nothing set at launch reaches the sources on its own** (session 25): no system property
+  overrides a value, and the environment is not read, but where a `#prop` or an `#env` stands
+  (§6). The config names what it takes from the launch, and nothing it holds is replaced behind
+  its back.
+- **`${path}` is looked up in the merged tree only.** A path the sources do not define does not
   resolve, whatever the system properties or the environment hold; a value from either has to be
-  given a key in the sources first.
+  given a key in the sources first, by `#prop` or `#env`.
 - **A grafted node takes its new position**, the id of the field it is grafted at, not that of the
   node it came from; its location keeps the origin (§10). The graft is made in the merged tree,
   before the nodes are wrapped, so `Node` never hands a container a foreign id.
@@ -779,14 +797,17 @@ final case class MergedLocation(at: PsiLocation, earlier: ::[PsiLocation]) exten
 case object NoSourceLocation extends PsiLocation
 // a node a directive built from a `Node` and placed at `at`; `origin` is the node's own location
 final case class DirectiveLocation(at: SourceLocation, directive: String, origin: Location) extends PsiLocation
-// a value overridden at launch, not from a file
+// a value `#prop` read from a system property, not from a file
 final case class SystemPropertyLocation(name: String) extends PsiLocation
+// a value `#env` read from an environment variable
+final case class EnvironmentLocation(name: String) extends PsiLocation
 ```
 
 `origin` is a `Location`, not a `SourceLocation`, so chains fall out on their own: with
 `a: ${b}`, `b: ${c}`, `c: 1`, the node at `a` is `ReferenceLocation(a-site, "b",
-ReferenceLocation(b-site, "c", SourceLocation(c-site)))`. A system property gets a location of its
-own instead of a fake file position.
+ReferenceLocation(b-site, "c", SourceLocation(c-site)))`. A system property and an environment
+variable get a location of their own instead of a fake file position, behind the `#prop` or the
+`#env` that read it: `app.psi:3:7 (#prop from system property db.port)`.
 
 `description` puts the reference site first, because that is where the reader has to go:
 `file:/etc/app/app.psi:12:9 (${db.url} from base.psi:3:7)`. The other cases follow the same shape:
@@ -801,6 +822,7 @@ own instead of a fake file position.
 | `NoSourceLocation` | `no source` |
 | `DirectiveLocation` | `app.psi:1:4 (#yaml from db.yaml:3:8)` |
 | `SystemPropertyLocation` | `system property db.url` |
+| `EnvironmentLocation` | `environment variable HOME` |
 
 A part of a concatenation is rendered without its own site, which shares the concatenation's line;
 the part's `ReferenceLocation` still holds it.
@@ -1064,7 +1086,7 @@ mistake is worse than stopping.
 
    Nothing is decided. Open: whose `id` — the object the field stands in, or the field's own, and a
    way up to a parent's; when it binds — where the node ends up after merging and grafting, which the
-   template needs and which puts it in phase 5 (§8, §9), or where it is written; the syntax, which no
+   template needs and which puts it in phase 4 (§8, §9), or where it is written; the syntax, which no
    key, tag, directive or `Id.path` may clash with; what it gives at the root, and in a directive's
    arguments, where substitutions are not allowed (§6); which other meta-fields (`path`, `parent`,
    the source, the tags) and whether their set is fixed or open, with handlers like directives.
@@ -1079,11 +1101,9 @@ mistake is worse than stopping.
    - With a path, `id` says little — it is the path's last segment — but other meta-fields do:
      `${workers^size}`, `${db^tags}`, `${db.url^source}`. The user had no use for `${field^id}` yet.
    - With the options of item 4, presumably node, meta-field, then options: `${a^size; …}`.
-7. **`#define`: a key with no value, expected at launch.** Raised by the user in session 18, for the
-   future: a directive declaring a key the sources do not give a value, so that the override from
-   the system properties (§9) has a key to override, the config naming what it
-   expects from the launch instead of writing a placeholder value. Nothing decided: its arguments, a
-   default, whether a key left undefined at launch is an error, its type or tags.
+7. ~~**`#define`: a key with no value, expected at launch.**~~ — closed in session 25: `#prop` and
+   `#env` stand where a value set at launch is expected, which is what `#define` was to name, and
+   their `optional` and `default` say what happens when it is not set (§6).
 8. **Importing YAML and HOCON.** Raised by the user in session 18, for the future: a Psi source
    pulling in a YAML or HOCON file, as `#include` pulls in a Psi one. Nothing decided. Noted so far:
    - Psi depends on nothing but `cfg`, so the readers would come from `cfg-yaml` and `cfg-hocon` as
@@ -1870,7 +1890,8 @@ Spec gaps of plan step 9, substitutions, settled with the user before coding it 
   dropping the whole scalar.
 - **A grafted node's id is its new position**, confirmed; the graft is made in the merged tree and
   the views give it its ids while wrapping.
-- **System properties override the sources**, only the values the sources define (§8, §9): the
+- **System properties override the sources** — superseded in session 25 by `#prop` and `#env` —
+  only the values the sources define (§8, §9): the
   user's call — they exist to change at launch what the file says. **The environment is not read at
   all**, and a `${…}` is looked up in the overridden tree only: the user's call, after rejecting each
   way of naming a variable by a path. The user's reason besides: the environment often holds
@@ -2064,11 +2085,13 @@ the user; the last, the growth of a tree by substitutions, is still to be discus
 - Not a change to the format: a column is counted from the surrogate pairs of the source, found
   once, and no longer from its line's code points for every token, which took time quadratic in
   the length of a line holding any character beyond Latin-1 — 9 seconds for a line of 400 KB.
-- **A system property names its path as `Id.path` writes it** (§9), a key that is not bare in
+- **A system property names its path as `Id.path` writes it** (§9) — superseded in session 25,
+  system properties no longer overriding anything — a key that is not bare in
   backticks: the user's call, on a finding of the module's review that `` `a.b`: 1 `` and
   `a { b: 2 }` were both overridden by `-Da.b=…`, and a key with a dot could not be overridden on
   its own. Rejected: keys joined by dots as they are, which was the rule.
-- **Any key the sources define may be overridden**, confirmed by the user on the same review: the
+- **Any key the sources define may be overridden** — superseded in session 25 — confirmed by the
+  user on the same review: the
   properties of the JVM itself, `user.name` and the like, overriding keys of the same path is a
   consequence accepted, not a bug.
 
@@ -2118,3 +2141,19 @@ the user; the last, the growth of a tree by substitutions, is still to be discus
   large stack, which takes stack in proportion to the input, gigabytes for 10 MB. YAML read
   through `impl/hocon` goes through `typesafe-config-yaml`, which composes alike; its guard
   belongs in that library.
+- **Nothing set at launch reaches the sources on its own; `#prop(name)` and `#env(name)` read it
+  where they stand** (§6, §8, §9), the user's idea, on the question of what the system properties
+  override once a spread, under discussion, brings keys in from elsewhere: "either they override
+  everything or nothing". Everything would have meant overriding every grafted node at its new
+  position, inside the resolution; the user chose nothing, and an explicit read instead. The
+  phase of overrides is gone, and with it the clash of a JVM property, `user.name`, with a key of
+  the same path (session 24), the naming of a property by `Id.path` (session 24), and §13 item 7,
+  `#define`. The environment is read after all, but only where a config says so: the reason
+  session 18 kept it out, secrets a config could hand out, stands, and a loader for input it does
+  not trust turns `#env` off. Settled with the user: `#prop`, my proposal over the user's `#sys`,
+  "system" reading as the operating system's as well; a map of the properties under a name no
+  property has, the user's addition, the property itself winning over those under it, and one
+  both a value and a prefix under it an error; `#env` a scalar only; `optional: true` and
+  `default: …`, not both; a dotted name quoted, as every argument is, for now. Breaks every config
+  that relied on `-D` to override a key: before 1.0, as the user put it, compatibility is not
+  kept.

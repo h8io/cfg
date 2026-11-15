@@ -153,10 +153,9 @@ class ResolveTest extends AnyFlatSpec with Matchers {
       List(UnresolvedSubstitution(at(1, 8), "x"), SubstitutionCycle(at(1, 17), "b"))
   }
 
-  "A path" should "be looked up in the tree alone, overridden by the system properties" in {
+  "A path" should "be looked up in the tree alone, which the system properties do not reach" in {
     val properties = Map("java.home" -> "/j", "a" -> "launched")
-    loaded("a: x\nt: ${a}", properties)("t") shouldBe
-      Node.IScalar(keyed("t"), NoTags, "launched", ref(2, 4, "a", SystemPropertyLocation("a")))
+    loaded("a: x\nt: ${a}", properties)("t") shouldBe Node.IScalar(keyed("t"), NoTags, "x", ref(2, 4, "a", at(1, 4)))
     errors("h: ${java.home}\ni: ${HOME}", properties) shouldBe
       List(UnresolvedSubstitution(at(1, 4), "java.home"), UnresolvedSubstitution(at(2, 4), "HOME"))
   }

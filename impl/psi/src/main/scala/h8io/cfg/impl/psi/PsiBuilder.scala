@@ -4,54 +4,40 @@ import java.time.Duration
 import scala.collection.mutable
 
 /** Builds a [[PsiLoader]] (`format.md` §5, §6): every method gives a new builder. */
-final class PsiBuilder private (
-    directives: Vector[Directive],
-    disabled: Vector[String],
-    markers: Vector[Marker],
-    properties: Option[Map[String, String]],
-    depthLimit: Int,
-    nodeLimit: Int,
-    characterLimit: Int,
-    readBytes: Int,
-    readTime: Duration) {
+final class PsiBuilder private (settings: Settings) {
 
-  /** Adds `directives` to those registered, the built-in `#include` among them. */
+  /** Adds `directives` to those registered, the built-in `#include`, `#prop` and `#env` among them. */
   def withDirectives(directives: Directive*): PsiBuilder =
-    new PsiBuilder(this.directives ++ directives, disabled, markers, properties, depthLimit, nodeLimit, characterLimit,
-      readBytes, readTime)
+    new PsiBuilder(settings.copy(directives = settings.directives ++ directives))
 
   /** Turns the directive `name` off for good, whether a handler for it is registered or not: a call of it is a
     * [[DisabledDirective]].
     */
-  def disableDirective(name: String): PsiBuilder =
-    new PsiBuilder(
-      directives, disabled :+ name, markers, properties, depthLimit, nodeLimit, characterLimit, readBytes, readTime)
+  def disableDirective(name: String): PsiBuilder = new PsiBuilder(settings.copy(disabled = settings.disabled :+ name))
 
   /** Adds `markers` to those registered, the built-in `<`, `>`, `width` and `+` among them. */
-  def withMarkers(markers: Marker*): PsiBuilder =
-    new PsiBuilder(directives, disabled, this.markers ++ markers, properties, depthLimit, nodeLimit, characterLimit,
-      readBytes, readTime)
+  def withMarkers(markers: Marker*): PsiBuilder = new PsiBuilder(settings.copy(markers = settings.markers ++ markers))
 
-  /** Overrides the sources' values from `properties` rather than from `sys.props`, read at every load; an empty map
-    * turns the overrides off (§9).
-    */
+  /** The system properties `#prop` reads, rather than `sys.props` read at every load (§6). */
   def withSystemProperties(properties: Map[String, String]): PsiBuilder =
-    new PsiBuilder(
-      directives, disabled, markers, Some(properties), depthLimit, nodeLimit, characterLimit, readBytes, readTime)
+    new PsiBuilder(settings.copy(properties = Some(properties)))
+
+  /** The environment variables `#env` reads, rather than `sys.env` (§6). */
+  def withEnvironment(environment: Map[String, String]): PsiBuilder =
+    new PsiBuilder(settings.copy(environment = Some(environment)))
 
   /** Limits the depth of the tree loaded, and of the resolution of its substitutions, to `limit`, at least 1, rather
     * than to 256 (`format.md` §11). The default holds on a thread with the JVM's default stack; lower it for a thread
     * with a smaller one.
     */
-  def withDepthLimit(limit: Int): PsiBuilder =
-    new PsiBuilder(directives, disabled, markers, properties, limit, nodeLimit, characterLimit, readBytes, readTime)
+  def withDepthLimit(limit: Int): PsiBuilder = new PsiBuilder(settings.copy(depthLimit = limit))
 
   /** Limits what resolving the substitutions adds to the tree loaded, rather than to 1 000 000 nodes and 10 000 000
     * characters (`format.md` §11): `nodes`, the nodes copied by grafts, and `characters`, those of the scalars built by
     * concatenations, each at least 0. The sources' own nodes and text are not counted.
     */
   def withSizeLimit(nodes: Int, characters: Int): PsiBuilder =
-    new PsiBuilder(directives, disabled, markers, properties, depthLimit, nodes, characters, readBytes, readTime)
+    new PsiBuilder(settings.copy(nodeLimit = nodes, characterLimit = characters))
 
   /** Limits reading the sources of a load, rather than to 10 000 000 bytes and 60 seconds (`format.md` §6, §11):
     * `bytes` in all, every read counted, a source read twice twice, each at least 0; and `time` from the start of the
@@ -59,7 +45,7 @@ final class PsiBuilder private (
     * not counted.
     */
   def withReadLimit(bytes: Int, time: Duration): PsiBuilder =
-    new PsiBuilder(directives, disabled, markers, properties, depthLimit, nodeLimit, characterLimit, bytes, time)
+    new PsiBuilder(settings.copy(readBytes = bytes, readTime = time))
 
   /** The loader, or every error of its configuration: the directives' first, then the markers', then the limits'. */
   def build: Either[PsiBuildErrors, PsiLoader] = {
@@ -72,7 +58,8 @@ final class PsiBuilder private (
       val names = mutable.Set.empty[String]
       parameters.foreach(parameter => if (!names.add(parameter.name)) report(duplicate(parameter.name)))
     }
-    val directiveNames = mutable.Set(PsiBuilder.Include)
+    import settings.*
+    val directiveNames = mutable.Set(PsiLoader.BuiltInDirectives*)
     directives.foreach { directive =>
       if (!directiveNames.add(directive.name)) report(DuplicateDirective(directive.name))
       if (disabled.contains(directive.name)) report(DisabledDirectiveRegistered(directive.name))
@@ -88,26 +75,13 @@ final class PsiBuilder private (
     if (nodeLimit < 0 || characterLimit < 0) report(InvalidSizeLimit(nodeLimit, characterLimit))
     if (readBytes < 0 || readTime.isNegative) report(InvalidReadLimit(readBytes, readTime))
     errors.result().toList match {
-      case Nil =>
-        Right(
-          new PsiLoader(
-            directives.map(d => d.name -> d).toMap,
-            disabled.toSet,
-            markers.map(m => m.name -> m).toMap,
-            properties,
-            depthLimit,
-            nodeLimit,
-            characterLimit,
-            readBytes,
-            readTime))
+      case Nil => Right(new PsiLoader(settings))
       case first :: rest => Left(PsiBuildErrors(::(first, rest)))
     }
   }
 }
 
 private[psi] object PsiBuilder {
-  private def Include: String = "include"
-
   private def BuiltInMarkers: Seq[String] = Seq("<", ">", "width", "+")
 
   /** A run of the marker symbols, or a name by the key rule, as the syntax reads a marker's name (§5). */
@@ -116,24 +90,13 @@ private[psi] object PsiBuilder {
       (name.forall(MarkerParser.isSymbol) ||
         Lexer.isNameStart(name.codePointAt(0)) && name.codePoints.allMatch(cp => Lexer.isNamePart(cp)))
 
-  private[psi] def empty: PsiBuilder =
-    new PsiBuilder(
-      Vector.empty,
-      Vector.empty,
-      Vector.empty,
-      None,
-      PsiLoader.DefaultDepthLimit,
-      PsiLoader.DefaultNodeLimit,
-      PsiLoader.DefaultCharacterLimit,
-      ReadBudget.DefaultBytes,
-      ReadBudget.DefaultTime
-    )
+  private[psi] def empty: PsiBuilder = new PsiBuilder(Settings())
 }
 
 /** An error in the configuration of a [[PsiBuilder]]. */
 sealed trait PsiBuildError
 
-/** A directive registered under a name already taken, `include` included. */
+/** A directive registered under a name already taken, the built-in `include`, `prop` and `env` included. */
 final case class DuplicateDirective(name: String) extends PsiBuildError
 
 /** A directive registered under a name that is disabled. */

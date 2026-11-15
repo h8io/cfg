@@ -3,25 +3,26 @@ package h8io.cfg.impl.psi
 import h8io.cfg.{Id, Node}
 
 import java.net.URL
-import java.time.Duration
 import scala.collection.mutable
 
 /** A Psi loader with the directives and markers it was built with (`format.md` §5, §6); [[Psi]] is the one with nothing
   * added.
   */
-final class PsiLoader private[psi] (
-    directives: Map[String, Directive],
-    disabled: Set[String],
-    markers: Map[String, Marker],
-    properties: Option[Map[String, String]],
-    depthLimit: Int,
-    nodeLimit: Int,
-    characterLimit: Int,
-    readBytes: Int,
-    readTime: Duration) {
+final class PsiLoader private[psi] (settings: Settings) {
+  import settings.{characterLimit, depthLimit, nodeLimit, readBytes, readTime}
 
-  /** The directives with the built-in `#include` among them. */
-  private val handlers: Map[String, Directive] = directives.updated(Include.name, Include)
+  private val directives: Map[String, Directive] = settings.directives.map(d => d.name -> d).toMap
+
+  private val disabled: Set[String] = settings.disabled.toSet
+
+  private val markers: Map[String, Marker] = settings.markers.map(m => m.name -> m).toMap
+
+  /** The directives with the built-in ones among them, `#prop` reading the system properties as they are now. */
+  private def handlers: Map[String, Directive] =
+    directives ++ Seq(
+      Include,
+      new Launch.Prop(settings.properties.getOrElse(sys.props.toMap)),
+      new Launch.Env(settings.environment.getOrElse(sys.env))).map(d => d.name -> d)
 
   /** Loads and merges the sources at `urls`, in order, each named in locations by its URL as given (§10). */
   def apply(urls: URL*): Either[PsiErrors, Node.IMap[Id.Root]] = {
@@ -43,6 +44,7 @@ final class PsiLoader private[psi] (
   private[psi] def load(
       sources: Seq[Either[PsiError, Source]],
       budget: ReadBudget): Either[PsiErrors, Node.IMap[Id.Root]] = {
+    val handlers = this.handlers
     val parsed = Result.sequence(sources.map {
       case Right(source) =>
         Expand(source, handlers, disabled, markers, depthLimit, budget).map { case (document, included) =>
@@ -56,9 +58,8 @@ final class PsiLoader private[psi] (
       root <- (documents.flatten.toList match {
         case (document, name, included) :: rest =>
           val located = rest.map { case (document, name, _) => (document, SourceLocation(name, 1, 1)) }
-          val overrides = properties.getOrElse(sys.props.toMap)
           val merged = Merge(::((document, SourceLocation(name, 1, 1)), located)).flatMap(tree =>
-            Resolve(Override(tree, overrides), depthLimit, nodeLimit, characterLimit))
+            Resolve(tree, depthLimit, nodeLimit, characterLimit))
           // merging and resolving go by key, not by source: the errors are put back in the order of the sources,
           // those directives parsed right after the one that parsed them
           val sources = (name :: included) ++ rest.flatMap { case (_, name, included) => name :: included }
@@ -74,6 +75,9 @@ private[psi] object PsiLoader {
   /** How deep a loaded tree, and the resolution of its substitutions, may go unless the builder says otherwise (§11).
     */
   def DefaultDepthLimit: Int = 256
+
+  /** The names of the built-in directives, which no handler may take (§6). */
+  def BuiltInDirectives: Seq[String] = Seq("include", "prop", "env")
 
   /** How many nodes resolving the substitutions may copy into the tree by grafts unless the builder says otherwise
     * (§11).

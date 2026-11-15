@@ -155,21 +155,33 @@ raw: '${not.a.path}'
 """)
 ```
 
-**System properties override the sources**: before substitutions are resolved, a value the sources define at
-`db.host` is replaced by the system property `db.host`, if the application was started with one. The property names
-the path as `${…}` does, a key that is not bare in backticks: a key `db.host` is overridden by ``-D'`db.host`=…'``,
-never by `-Ddb.host=…`. Only values the sources define are overridden, never a block or a sequence. With
-`-Ddb.host=db.prod`:
+## Values set at launch
+
+Nothing set at launch reaches a source on its own: no system property overrides a value, and the environment is not
+read. A source takes such a value where it says so:
+
+| Call | Gives |
+|---|---|
+| `#prop("db.host")` | the system property `db.host`; a name with a dot is quoted |
+| `#prop(java)` | with no property `java`, a block of every property under `java.`: `version`, `vm { name, … }` |
+| `#env(HOME)` | the environment variable `HOME` |
+| `…, default: localhost` | the default when it is not set |
+| `…, optional: true` | nothing when it is not set, so that the field is left out |
+
+A value not set is an error otherwise. Left out, a field leaves an earlier definition of its key standing, which makes a
+default of its own. With `-Ddb.host=db.prod`, and no `DB_PORT` in the environment:
 
 ```scala mdoc:passthrough
 example(
   """
 db {
   host: localhost
-  url: "${db.host}:5432"
+  host: #prop("db.host", optional: true)
+  port: #env(DB_PORT, default: 5432)
+  url: "${db.host}:${db.port}"
 }
 """,
-  Psi.builder.withSystemProperties(Map("db.host" -> "db.prod")).build.toOption.get)
+  Psi.builder.withSystemProperties(Map("db.host" -> "db.prod")).withEnvironment(Map.empty).build.toOption.get)
 ```
 
 ## Including other sources

@@ -65,10 +65,16 @@ class PsiLocationTest extends AnyFlatSpec with Matchers {
     MergedLocation(a, ::(SourceLocation("b.psi", 1, 1), Nil)).order(sources) shouldBe ((0, 4, 5))
     NoSourceLocation.order(sources) shouldBe ((2, 0, 0))
     SystemPropertyLocation("p").order(sources) shouldBe ((2, 0, 0))
+    EnvironmentLocation("E").order(sources) shouldBe ((2, 0, 0))
   }
 
   "SystemPropertyLocation" should "name the property" in {
     SystemPropertyLocation("db.url").description shouldBe "system property db.url"
+  }
+
+  "EnvironmentLocation" should "name the variable, and stand in no source" in {
+    EnvironmentLocation("HOME").description shouldBe "environment variable HOME"
+    EnvironmentLocation("HOME").anchor shouldBe None
   }
 
 }

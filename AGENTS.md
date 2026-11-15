@@ -110,12 +110,13 @@ Unlike the HOCON loader this one sets `tags` — but only when the tag was *writ
 ### Psi loader (`h8io.cfg.impl.psi`)
 
 `Psi.apply(urls: URL*)` and `Psi.parse(name, text)` load Psi sources into `Either[PsiErrors, Node.IMap[Id.Root]]`;
-`Psi.builder` builds a `PsiLoader` with directives and markers of its own, `#include` disabled, system properties from a
-map rather than `sys.props`, or other depth and size limits, and `build` reports every error of that configuration at
-once. A load runs in phases (`format.md` §8): each source is lexed and parsed (`Lexer`, `Parser` → `Ast`) and its
-directives expanded (`Expand`), then the sources are merged (`Merge` → `Tree`), overridden from system properties
-(`Override`) and their substitutions resolved (`Resolve`); `MapImpl` and `SeqImpl` are the `Node` views over the result,
-and `Render` writes a tree back as Psi, which is their `toString`.
+`Psi.builder` builds a `PsiLoader` (from a `Settings`) with directives and markers of its own, a built-in one disabled,
+the system properties and the environment `#prop` and `#env` read from maps rather than `sys.props` and `sys.env`, or
+other limits, and `build` reports every error of that configuration at once. A load runs in phases (`format.md` §8):
+each source is lexed and parsed (`Lexer`, `Parser` → `Ast`) and its directives expanded (`Expand`), `#include`, `#prop`
+and `#env` among them (`Include`, `Launch`), then the sources are merged (`Merge` → `Tree`) and their substitutions
+resolved (`Resolve`); nothing set at launch overrides a value; `MapImpl` and `SeqImpl` are the `Node` views over the
+result, and `Render` writes a tree back as Psi, which is their `toString`.
 
 Errors are collected, never thrown: every `PsiError` carries a `PsiLocation`, a `message` and a `hint`, computed from
 its fields; `PsiErrors.message` is the report, grouped by source. Errors of the syntax and of directives come as one

@@ -19,19 +19,18 @@ import java.net.URL
   * their tags united, anything else is replaced; `:=` replaces a map too. Keys keep the order they first appeared in.
   * No sources give an empty root map (§7).
   *
-  * ==Launch overrides==
-  * A value the sources define that is not a container, at a path of keys, is replaced by the system property of that
-  * path as `Id.path` writes it, `db.url`, a key that is not bare in backticks, if there is one (§9). The environment is
-  * not read.
+  * ==Launch values==
+  * Nothing set at launch reaches a source on its own: `#prop(name)` reads a system property, or a map of those under
+  * it, and `#env(name)` an environment variable, where the call stands (§6).
   *
   * ==Substitutions==
-  * `\${path}` grafts the node at `path` whole, looked up in the overridden tree; `\${?path}` with nothing there drops
-  * its field or element, and reads as empty in a concatenation (§9).
+  * `\${path}` grafts the node at `path` whole, looked up in the merged tree; `\${?path}` with nothing there drops its
+  * field or element, and reads as empty in a concatenation (§9).
   *
   * ==Directives==
   * `#name(…)` is expanded by the handler registered for it, while its source is read (§6); [[builder]] builds a loader
   * with handlers of its own. The built-in `#include(file: …)`, `#include(resource: …)` and `#include(url: …)` read
-  * another Psi source where the call stands.
+  * another Psi source where the call stands, and `#prop` and `#env` a value set at launch.
   *
   * ==Markers==
   * A triple-quoted block's built-in markers shape its lines; a loader's own markers, registered through the
@@ -49,32 +48,12 @@ object Psi {
   /** Loads a source held as `text`, named `name` in locations. */
   def parse(name: String, text: String): Either[PsiErrors, Node.IMap[Id.Root]] = loader.parse(name, text)
 
-  private def loader: PsiLoader =
-    new PsiLoader(
-      Map.empty,
-      Set.empty,
-      Map.empty,
-      None,
-      PsiLoader.DefaultDepthLimit,
-      PsiLoader.DefaultNodeLimit,
-      PsiLoader.DefaultCharacterLimit,
-      ReadBudget.DefaultBytes,
-      ReadBudget.DefaultTime
-    )
+  private def loader: PsiLoader = new PsiLoader(Settings())
 
-  /** Loads `sources` with no directive of its own, their values overridden by `properties`. */
+  /** Loads `sources` with no directive of its own, `#prop` reading `properties`. */
   private[psi] def load(
       sources: Seq[Either[PsiError, Source]],
       properties: Map[String, String]): Either[PsiErrors, Node.IMap[Id.Root]] =
-    new PsiLoader(
-      Map.empty,
-      Set.empty,
-      Map.empty,
-      Some(properties),
-      PsiLoader.DefaultDepthLimit,
-      PsiLoader.DefaultNodeLimit,
-      PsiLoader.DefaultCharacterLimit,
-      ReadBudget.DefaultBytes,
-      ReadBudget.DefaultTime
-    ).load(sources, new ReadBudget(ReadBudget.DefaultBytes, ReadBudget.DefaultTime))
+    new PsiLoader(Settings(properties = Some(properties)))
+      .load(sources, new ReadBudget(ReadBudget.DefaultBytes, ReadBudget.DefaultTime))
 }
