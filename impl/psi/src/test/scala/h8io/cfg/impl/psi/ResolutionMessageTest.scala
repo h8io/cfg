@@ -20,6 +20,17 @@ class ResolutionMessageTest extends AnyFlatSpec with Matchers {
           Some("shorten the chain of substitutions, or build the loader with a higher withDepthLimit")))
   }
 
+  "Size" should "say what went past the limit, and how to raise it" in {
+    text(ResolutionTooLarge(at(1), "a.b", 1000000)) shouldBe
+      ((
+        "grafting '$" + "{a.b}' copies more than 1000000 nodes into the tree, substitutions together",
+        Some("graft large values fewer times, or build the loader with a higher withSizeLimit")))
+    text(ConcatenationTooLong(at(1), 10000000)) shouldBe
+      ((
+        "the concatenation takes the text concatenations build past 10000000 characters",
+        Some("concatenate long values fewer times, or build the loader with a higher withSizeLimit")))
+  }
+
   "A merge with a substitution" should "name the earlier value and offer ':='" in {
     text(MergeWithSubstitution(at(2), at(1))) shouldBe
       ((

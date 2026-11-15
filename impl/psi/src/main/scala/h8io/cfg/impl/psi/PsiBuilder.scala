@@ -8,36 +8,45 @@ final class PsiBuilder private (
     disabled: Vector[String],
     markers: Vector[Marker],
     properties: Option[Map[String, String]],
-    depthLimit: Int) {
+    depthLimit: Int,
+    nodeLimit: Int,
+    characterLimit: Int) {
 
   /** Adds `directives` to those registered, the built-in `#include` among them. */
   def withDirectives(directives: Directive*): PsiBuilder =
-    new PsiBuilder(this.directives ++ directives, disabled, markers, properties, depthLimit)
+    new PsiBuilder(this.directives ++ directives, disabled, markers, properties, depthLimit, nodeLimit, characterLimit)
 
   /** Turns the directive `name` off for good, whether a handler for it is registered or not: a call of it is a
     * [[DisabledDirective]].
     */
   def disableDirective(name: String): PsiBuilder =
-    new PsiBuilder(directives, disabled :+ name, markers, properties, depthLimit)
+    new PsiBuilder(directives, disabled :+ name, markers, properties, depthLimit, nodeLimit, characterLimit)
 
   /** Adds `markers` to those registered, the built-in `<`, `>`, `width` and `+` among them. */
   def withMarkers(markers: Marker*): PsiBuilder =
-    new PsiBuilder(directives, disabled, this.markers ++ markers, properties, depthLimit)
+    new PsiBuilder(directives, disabled, this.markers ++ markers, properties, depthLimit, nodeLimit, characterLimit)
 
   /** Overrides the sources' values from `properties` rather than from `sys.props`, read at every load; an empty map
     * turns the overrides off (§9).
     */
   def withSystemProperties(properties: Map[String, String]): PsiBuilder =
-    new PsiBuilder(directives, disabled, markers, Some(properties), depthLimit)
+    new PsiBuilder(directives, disabled, markers, Some(properties), depthLimit, nodeLimit, characterLimit)
 
   /** Limits the depth of the tree loaded, and of the resolution of its substitutions, to `limit`, at least 1, rather
     * than to 256 (`format.md` §11). The default holds on a thread with the JVM's default stack; lower it for a thread
     * with a smaller one.
     */
-  def withDepthLimit(limit: Int): PsiBuilder = new PsiBuilder(directives, disabled, markers, properties, limit)
+  def withDepthLimit(limit: Int): PsiBuilder =
+    new PsiBuilder(directives, disabled, markers, properties, limit, nodeLimit, characterLimit)
 
-  /** The loader, or every error of its configuration: the directives' first, then the markers', then the depth limit's.
+  /** Limits what resolving the substitutions adds to the tree loaded, rather than to 1 000 000 nodes and 10 000 000
+    * characters (`format.md` §11): `nodes`, the nodes copied by grafts, and `characters`, those of the scalars built by
+    * concatenations, each at least 0. The sources' own nodes and text are not counted.
     */
+  def withSizeLimit(nodes: Int, characters: Int): PsiBuilder =
+    new PsiBuilder(directives, disabled, markers, properties, depthLimit, nodes, characters)
+
+  /** The loader, or every error of its configuration: the directives' first, then the markers', then the limits'. */
   def build: Either[PsiBuildErrors, PsiLoader] = {
     val errors = Vector.newBuilder[PsiBuildError]
     def report(error: PsiBuildError): Unit = {
@@ -61,6 +70,7 @@ final class PsiBuilder private (
       parameters(marker.parameters, DuplicateMarkerParameter(marker.name, _))
     }
     if (depthLimit < 1) report(InvalidDepthLimit(depthLimit))
+    if (nodeLimit < 0 || characterLimit < 0) report(InvalidSizeLimit(nodeLimit, characterLimit))
     errors.result().toList match {
       case Nil =>
         Right(
@@ -69,7 +79,9 @@ final class PsiBuilder private (
             disabled.toSet,
             markers.map(m => m.name -> m).toMap,
             properties,
-            depthLimit))
+            depthLimit,
+            nodeLimit,
+            characterLimit))
       case first :: rest => Left(PsiBuildErrors(::(first, rest)))
     }
   }
@@ -87,7 +99,14 @@ private[psi] object PsiBuilder {
         Lexer.isNameStart(name.codePointAt(0)) && name.codePoints.allMatch(cp => Lexer.isNamePart(cp)))
 
   private[psi] def empty: PsiBuilder =
-    new PsiBuilder(Vector.empty, Vector.empty, Vector.empty, None, PsiLoader.DefaultDepthLimit)
+    new PsiBuilder(
+      Vector.empty,
+      Vector.empty,
+      Vector.empty,
+      None,
+      PsiLoader.DefaultDepthLimit,
+      PsiLoader.DefaultNodeLimit,
+      PsiLoader.DefaultCharacterLimit)
 }
 
 /** An error in the configuration of a [[PsiBuilder]]. */
@@ -114,6 +133,9 @@ final case class DuplicateMarkerParameter(marker: String, parameter: String) ext
 
 /** A depth limit below 1. */
 final case class InvalidDepthLimit(limit: Int) extends PsiBuildError
+
+/** A size limit below 0, of nodes or of characters. */
+final case class InvalidSizeLimit(nodes: Int, characters: Int) extends PsiBuildError
 
 /** Every error of a [[PsiBuilder]]'s configuration, in the order the handlers were registered. */
 final case class PsiBuildErrors(errors: ::[PsiBuildError])

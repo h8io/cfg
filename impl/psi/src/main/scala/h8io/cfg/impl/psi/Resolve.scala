@@ -19,8 +19,12 @@ import scala.collection.mutable
   * Resolution goes at most `limit` steps deep, each a level descended or a substitution followed, and a value is
   * grafted only where it fits under `limit` levels (§11). A substitution already resolved counts as deep as resolving
   * it went, so that what goes past the limit does not depend on the order the tree is resolved in.
+  *
+  * What resolution adds to the tree is limited too (§11): at most `nodeLimit` nodes copied by grafts, and
+  * `characterLimit` characters in the scalars concatenations build, each counted before it is built. Past either, the
+  * load fails: the first to go past is reported, and nothing is built after it.
   */
-private[psi] final class Resolve(root: Tree.Map, limit: Int) {
+private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, characterLimit: Int) {
   import Resolve.*
 
   private val errors = mutable.ListBuffer.empty[PsiError]
@@ -41,6 +45,13 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int) {
     */
   private val resolved = mutable.Map.empty[Id, Option[(Resolution, Int)]]
 
+  /** The nodes grafts have copied, and the characters of the scalars concatenations have built. */
+  private var nodes = 0L
+  private var characters = 0L
+
+  /** Whether either has gone past its limit, after which nothing more is built. */
+  private var exhausted = false
+
   def tree: Result[Tree.Map] = Result(map(Id.Root, root).getOrElse(root), errors.toList)
 
   /** The value at `id` resolved: `Right(None)` when it is an optional substitution with nothing to graft. */
@@ -53,8 +64,10 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int) {
         once(id, Some(new Following(at, path)))(reference(path, optional, at).flatMap(_.fold[Resolution](Right(None)) {
           value =>
             // the levels around the substitution, and those its value opens
-            if (segments(id).size - 1 + height(value) <= limit) Right(Some(graft(value, at, path, tags)))
-            else failed(DepthExceeded(at, limit, fatal = false))
+            if (segments(id).size - 1 + height(value) > limit) failed(DepthExceeded(at, limit, fatal = false))
+            else
+              grow(size(value), 0, ResolutionTooLarge(at, Message.path(path), nodeLimit))
+                .map(_ => Some(graft(value, at, path, tags)))
         }))
       case concatenation: Tree.Concatenation =>
         once(id, first(concatenation))(this.concatenation(concatenation).map(Some(_)))
@@ -214,15 +227,31 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int) {
           case None => Right("" -> None)
         }
     }
-    failure(parts).toLeft {
-      val (texts, references) = parts.collect { case Right(part) => part }.unzip
-      val location = references.flatten.toList match {
-        case Nil => concatenation.location
-        case first :: rest => ConcatenationLocation(concatenation.location, ::(first, rest))
+    failure(parts).toLeft(parts.collect { case Right(part) => part }).flatMap { parts =>
+      val (texts, references) = parts.unzip
+      grow(0, texts.foldLeft(0L)(_ + _.length), ConcatenationTooLong(concatenation.location, characterLimit)).map { _ =>
+        val location = references.flatten.toList match {
+          case Nil => concatenation.location
+          case first :: rest => ConcatenationLocation(concatenation.location, ::(first, rest))
+        }
+        Tree.Scalar(texts.mkString, concatenation.tags, location)
       }
-      Tree.Scalar(texts.mkString, concatenation.tags, location)
     }
   }
+
+  /** Counts `nodes` and `characters` more added to the tree, before they are built; past either limit the load fails,
+    * with `error` the first time and silently after, nothing more being built.
+    */
+  private def grow(nodes: Long, characters: Long, error: => PsiError): Either[Failure, Unit] =
+    if (exhausted) Left(Failed)
+    else if (this.nodes + nodes > nodeLimit || this.characters + characters > characterLimit) {
+      exhausted = true
+      failed(error)
+    } else {
+      this.nodes += nodes
+      this.characters += characters
+      Right(())
+    }
 }
 
 private[psi] object Resolve {
@@ -246,7 +275,20 @@ private[psi] object Resolve {
   private def first(concatenation: Tree.Concatenation): Option[Following] =
     concatenation.parts.collectFirst { case Token.Reference(path, _, at) => new Following(at, path) }
 
-  def apply(root: Tree.Map, limit: Int = PsiLoader.DefaultDepthLimit): Result[Tree.Map] = new Resolve(root, limit).tree
+  def apply(
+      root: Tree.Map,
+      limit: Int = PsiLoader.DefaultDepthLimit,
+      nodeLimit: Int = PsiLoader.DefaultNodeLimit,
+      characterLimit: Int = PsiLoader.DefaultCharacterLimit): Result[Tree.Map] =
+    new Resolve(root, limit, nodeLimit, characterLimit).tree
+
+  /** How many nodes `value` holds, itself among them. */
+  private def size(value: Tree.Value): Long =
+    value match {
+      case map: Tree.Map => map.entries.valuesIterator.foldLeft(1L)(_ + size(_))
+      case sequence: Tree.Sequence => sequence.elements.foldLeft(1L)(_ + size(_))
+      case _ => 1L
+    }
 
   /** How many levels `value` opens. */
   private def height(value: Tree.Value): Int =
