@@ -464,6 +464,29 @@ final case class ResolutionTooDeep(location: SourceLocation, path: String, limit
     Some("shorten the chain of substitutions, or build the loader with a higher withDepthLimit")
 }
 
+/** A graft, of `\${path}` at `location`, that would take the nodes grafts copy into the tree past `limit` (`format.md`
+  * §11): the first thing resolution would build past either of its size limits.
+  */
+final case class ResolutionTooLarge(location: SourceLocation, path: String, limit: Int) extends PsiError {
+  def message: String =
+    "grafting '$" + "{" + Message.cut(path) + "}' copies more than " + limit.toString +
+      " nodes into the tree, substitutions together"
+
+  override def hint: Option[String] =
+    Some("graft large values fewer times, or build the loader with a higher withSizeLimit")
+}
+
+/** A concatenation, written at `location`, that would take the characters of the scalars concatenations build past
+  * `limit` (`format.md` §11): the first thing resolution would build past either of its size limits.
+  */
+final case class ConcatenationTooLong(location: SourceLocation, limit: Int) extends PsiError {
+  def message: String =
+    "the concatenation takes the text concatenations build past " + limit.toString + " characters"
+
+  override def hint: Option[String] =
+    Some("concatenate long values fewer times, or build the loader with a higher withSizeLimit")
+}
+
 /** A `:` merge of a map or a substitution, written at `location`, with an earlier value of its key where either is a
   * whole-value substitution, which may turn out a map or not (`format.md` §7); `:=` replaces instead.
   *

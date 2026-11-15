@@ -13,7 +13,9 @@ final class PsiLoader private[psi] (
     disabled: Set[String],
     markers: Map[String, Marker],
     properties: Option[Map[String, String]],
-    depthLimit: Int) {
+    depthLimit: Int,
+    nodeLimit: Int,
+    characterLimit: Int) {
 
   /** The directives with the built-in `#include` among them. */
   private val handlers: Map[String, Directive] = directives.updated(Include.name, Include)
@@ -39,7 +41,7 @@ final class PsiLoader private[psi] (
           val located = rest.map { case (document, name, _) => (document, SourceLocation(name, 1, 1)) }
           val overrides = properties.getOrElse(sys.props.toMap)
           val merged = Merge(::((document, SourceLocation(name, 1, 1)), located)).flatMap(tree =>
-            Resolve(Override(tree, overrides), depthLimit))
+            Resolve(Override(tree, overrides), depthLimit, nodeLimit, characterLimit))
           // merging and resolving go by key, not by source: the errors are put back in the order of the sources,
           // those directives parsed right after the one that parsed them
           val sources = (name :: included) ++ rest.flatMap { case (_, name, included) => name :: included }
@@ -55,6 +57,15 @@ private[psi] object PsiLoader {
   /** How deep a loaded tree, and the resolution of its substitutions, may go unless the builder says otherwise (§11).
     */
   def DefaultDepthLimit: Int = 256
+
+  /** How many nodes resolving the substitutions may copy into the tree by grafts unless the builder says otherwise
+    * (§11).
+    */
+  def DefaultNodeLimit: Int = 1000000
+
+  /** How many characters the scalars built by concatenations may hold together unless the builder says otherwise (§11).
+    */
+  def DefaultCharacterLimit: Int = 10000000
 
   /** `errors` with each reported once: a fragment used more than once, or one source parsed by two, reports the same
     * errors.

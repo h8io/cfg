@@ -110,19 +110,20 @@ Unlike the HOCON loader this one sets `tags` — but only when the tag was *writ
 ### Psi loader (`h8io.cfg.impl.psi`)
 
 `Psi.apply(urls: URL*)` and `Psi.parse(name, text)` load Psi sources into `Either[PsiErrors, Node.IMap[Id.Root]]`;
-`Psi.builder` builds a `PsiLoader` with directives and markers of its own, `#include` disabled, system properties
-from a map rather than `sys.props`, or another depth limit, and `build` reports every error of that configuration at
+`Psi.builder` builds a `PsiLoader` with directives and markers of its own, `#include` disabled, system properties from a
+map rather than `sys.props`, or other depth and size limits, and `build` reports every error of that configuration at
 once. A load runs in phases (`format.md` §8): each source is lexed and parsed (`Lexer`, `Parser` → `Ast`) and its
 directives expanded (`Expand`), then the sources are merged (`Merge` → `Tree`), overridden from system properties
-(`Override`) and their substitutions resolved (`Resolve`); `MapImpl` and `SeqImpl` are the `Node` views over the
-result, and `Render` writes a tree back as Psi, which is their `toString`.
+(`Override`) and their substitutions resolved (`Resolve`); `MapImpl` and `SeqImpl` are the `Node` views over the result,
+and `Render` writes a tree back as Psi, which is their `toString`.
 
 Errors are collected, never thrown: every `PsiError` carries a `PsiLocation`, a `message` and a `hint`, computed from
 its fields; `PsiErrors.message` is the report, grouped by source. Errors of the syntax and of directives come as one
 batch, and substitutions are resolved only when it is empty. A scalar is the text written, a tag is there only when
 written, and nothing is typed. Depth is limited (256 by default, `withDepthLimit`) in the tree loaded and in
 resolution, so that no input overflows the stack; nothing on a path from the input recurses past the limit, and a
-path is written with `Message.path`, never `Id.path`, which recurses.
+path is written with `Message.path`, never `Id.path`, which recurses. What resolution adds is limited too (1 000 000
+nodes grafts copy, 10 000 000 characters concatenations build, `withSizeLimit`), counted before it is built.
 
 ## sbt 2
 

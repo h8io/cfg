@@ -57,13 +57,14 @@ Psi.parse("app.psi", "a = 1").left.foreach(errors => println(errors.message))
 | `withSystemProperties(map)` | overrides values from `map` rather than from `sys.props`; an empty map turns overriding off |
 | `disableDirective(name)` | turns a directive off for good, as a loader for input it does not trust turns off `include` |
 | `withDepthLimit(n)` | limits depth to `n` rather than 256: lower for a thread with a smaller stack than the JVM's default |
+| `withSizeLimit(nodes, characters)` | limits what resolving substitutions adds, the nodes grafts copy and the characters concatenations build, rather than to 1 000 000 and 10 000 000 |
 | `withDirectives(directives*)` | adds directives of its own (below) |
 | `withMarkers(markers*)` | adds markers of its own (below) |
 
 `build` gives the `PsiLoader`, with `apply(urls*)` and `parse(name, text)` as `Psi` has, or every error of its
 configuration at once: a name registered twice, `include` and the built-in markers `<`, `>`, `width` and `+` included,
 a disabled name registered, a parameter declared twice, a marker named as no marker can be written, a depth limit
-below 1.
+below 1, a size limit below 0.
 
 ```scala mdoc:silent
 val untrusted = Psi.builder.disableDirective("include").withSystemProperties(Map.empty).build

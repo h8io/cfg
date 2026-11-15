@@ -895,6 +895,17 @@ mistake is worse than stopping.
   limit is lower: about 280 levels and 160 links at 512 KB, 100 and 60 at 256 KB. What a thread's
   stack holds only the application knows, hence the builder's setting: lower for a small stack,
   higher for a large one. The limit of 64 sources deep (§6) stays fixed.
+- **What resolution adds to the tree is limited, to 1 000 000 nodes and 10 000 000 characters
+  unless the loader is built with others**, `withSizeLimit(nodes, characters)`, each at least 0
+  (session 25), so that a source of a few hundred bytes cannot take the heap: a graft copies the
+  value it takes, and a concatenation builds a new scalar, so ten grafts of a sequence of ten
+  grafts, six times over, make 10⁷ nodes, and a scalar concatenated with itself, 25 times over,
+  makes 3·10⁸ characters. The depth limit bounds neither, the tree growing wide. Counted are the
+  nodes grafts copy and the characters of the scalars concatenations build, each before it is
+  built; the sources' own nodes and text are not, being the input, nor what a directive or a
+  loader's marker builds, being a handler's. The first graft or concatenation to go past either
+  limit is reported, as `ResolutionTooLarge` or `ConcatenationTooLong`, at its reference or its
+  concatenation; nothing is built after it, and the load fails.
 
 **Messages and the report** (session 21):
 
@@ -2057,3 +2068,14 @@ the user; the last, the growth of a tree by substitutions, is still to be discus
   with a stack of its own, so that no chain has a limit, which the user had leaned towards — it
   rewrites `Resolve` and needs `equals`, `hashCode` and `toString` of locations without recursion,
   for chains no config has (session 22).
+- **What resolution adds is limited: 1 000 000 nodes grafts copy, 10 000 000 characters
+  concatenations build** (§11), the user's choice of the three I put, the defaults and the one
+  builder method, `withSizeLimit(nodes, characters)`, as I proposed them. Measured first: ten
+  grafts of a sequence of ten grafts, six levels, 484 bytes, ran out of a 1 GB heap in 5 s, and
+  five levels took 145 MB; a scalar concatenated with itself, 25 links, 485 bytes, ran out of it
+  too. Counted before it is built, so nothing past the limit is allocated, and only what
+  resolution adds: a large source is the user's own input. Rejected: subtrees shared rather than
+  copied, which leaves a concatenation and the traversal of the tree as large, for a rewrite of
+  `Resolve`, the views and the locations; a limit on the substitutions grafting containers, as
+  SnakeYAML's `maxAliasesForCollections`, which bounds size only roughly and fails a config
+  grafting a common block a hundred times.
