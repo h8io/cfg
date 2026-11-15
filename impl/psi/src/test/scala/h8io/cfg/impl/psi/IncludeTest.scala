@@ -328,4 +328,33 @@ class IncludeTest extends AnyFlatSpec with Matchers {
     loader(a.toUri.toURL, b.toUri.toURL).left.map(_.errors) shouldBe
       Left(List(UnclosedBracket(SourceLocation(url(dir.resolve("common.psi")), 1, 4), '[')))
   }
+
+  "An include of a jar itself, naming no entry" should "fail as unreadable, optional or not" in {
+    val dir = Files.createTempDirectory("psi")
+    val jar = dir.resolve("c.jar")
+    val out = new ZipOutputStream(Files.newOutputStream(jar))
+    try {
+      out.putNextEntry(new ZipEntry("a.psi"))
+      out.closeEntry()
+    } finally out.close()
+    val root = "jar:" + url(jar) + "!/"
+    loader.parse("s", "#include(url: \"" + root + "\")\n#include(url: \"" + root + "\", optional: true)") match {
+      case Left(PsiErrors(
+            ::(
+              DirectiveFailed(_, "include", IncludeUnreadable(`root`, first)),
+              List(DirectiveFailed(_, "include", IncludeUnreadable(`root`, second)))))) =>
+        List(first, second).foreach(_ should not be a[FileNotFoundException])
+      case other => fail(other.toString)
+    }
+  }
+
+  "A source two sources include that cannot read its own include" should "be reported once" in {
+    val dir = Files.createTempDirectory("psi")
+    write(dir, "broken.jar", "not a jar")
+    write(dir, "common.psi", "#include(url: \"jar:" + url(dir.resolve("broken.jar")) + "!/x.psi\")")
+    val a = write(dir, "a.psi", "#include(file: \"common.psi\")")
+    val b = write(dir, "b.psi", "#include(file: \"common.psi\")")
+    loader(a.toUri.toURL, b.toUri.toURL).left.map(_.errors.map(_.location)) shouldBe
+      Left(List(SourceLocation(url(dir.resolve("common.psi")), 1, 1)))
+  }
 }

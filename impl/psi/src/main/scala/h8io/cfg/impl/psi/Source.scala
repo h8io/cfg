@@ -1,11 +1,12 @@
 package h8io.cfg.impl.psi
 
-import java.io.IOException
-import java.net.{URL, URLConnection}
+import java.io.{File, FileNotFoundException, IOException}
+import java.net.{JarURLConnection, URISyntaxException, URL, URLConnection}
 import java.nio.charset.{CodingErrorAction, StandardCharsets}
-import java.nio.file.Paths
+import java.nio.file.{Files, Paths, StandardCopyOption}
 import java.nio.{ByteBuffer, CharBuffer}
 import java.util.Arrays
+import java.util.jar.JarFile
 import scala.util.control.NonFatal
 
 /** The text of one source, with a byte order mark at its start already skipped, and the means to turn an offset into
@@ -70,21 +71,70 @@ private[psi] object Source {
   /** Reads `url` as UTF-8; an unreadable source and one that is not UTF-8 are errors, and so is one that keeps the
     * connection or its next bytes waiting past the timeouts.
     */
-  def read(name: String, url: URL): Either[PsiError, Source] =
-    try {
-      val stream = connect(url).getInputStream
-      try decode(name, stream.readAllBytes()).map(source => new Source(name, source.text, Some(url), key(url)))
+  def read(name: String, url: URL): Either[PsiError, Source] = read(name, url, ConnectTimeout, ReadTimeout)
+
+  private[psi] def read(name: String, url: URL, connectTimeout: Int, readTimeout: Int): Either[PsiError, Source] =
+    try
+      decode(name, bytes(url, connectTimeout, readTimeout))
+        .map(source => new Source(name, source.text, Some(url), key(url)))
+    catch { case e: IOException => Left(SourceUnreadable(name, e)) }
+
+  private def bytes(url: URL, connectTimeout: Int, readTimeout: Int): Array[Byte] =
+    if (url.getProtocol == "jar") entry(url, connectTimeout, readTimeout)
+    else {
+      val stream = connect(url, connectTimeout, readTimeout).getInputStream
+      try stream.readAllBytes()
       finally stream.close()
-    } catch { case e: IOException => Left(SourceUnreadable(name, e)) }
+    }
 
   /** A connection to `url`, not yet made, with the timeouts set: a URL connection has none of its own, and a server
     * that never answers would hold the load forever.
     */
-  def connect(url: URL): URLConnection = {
+  def connect(url: URL, connectTimeout: Int = ConnectTimeout, readTimeout: Int = ReadTimeout): URLConnection = {
     val connection = url.openConnection()
-    connection.setConnectTimeout(ConnectTimeout)
-    connection.setReadTimeout(ReadTimeout)
+    connection.setConnectTimeout(connectTimeout)
+    connection.setReadTimeout(readTimeout)
     connection
+  }
+
+  /** The entry of a jar `url` names, read from the jar itself rather than through the connection a `jar:` URL opens:
+    * that one keeps a jar it opened in the JVM's cache, and gives every later load what the jar held then, and fetches
+    * a remote jar with no timeouts at all. A remote jar is fetched whole into a temporary file, as the JVM does.
+    */
+  private def entry(url: URL, connectTimeout: Int, readTimeout: Int): Array[Byte] = {
+    // opening no connection: a `JarURLConnection` parses the URL, and connects only once asked to
+    val connection = url.openConnection().asInstanceOf[JarURLConnection]
+    val name = Option(connection.getEntryName).getOrElse(throw new IOException(url.toString + " names no entry"))
+    val archive = connection.getJarFileURL
+    if (archive.getProtocol == "file") {
+      val file =
+        try Paths.get(archive.toURI).toFile
+        catch {
+          // a `file:` URL with a host, `file://host/x`, is no path
+          case e @ (_: URISyntaxException | _: IllegalArgumentException) =>
+            throw new IOException(archive.toString + " is no path", e)
+        }
+      entry(file, name, url)
+    } else {
+      val temporary = Files.createTempFile("psi", ".jar")
+      try {
+        val stream = connect(archive, connectTimeout, readTimeout).getInputStream
+        try { val _ = Files.copy(stream, temporary, StandardCopyOption.REPLACE_EXISTING) }
+        finally stream.close()
+        entry(temporary.toFile, name, url)
+      } finally Files.delete(temporary)
+    }
+  }
+
+  /** The entry `name` of the jar `file`; one not there is not found, as the JVM reports it. */
+  private def entry(file: File, name: String, url: URL): Array[Byte] = {
+    val jar = new JarFile(file)
+    try {
+      val entry = Option(jar.getEntry(name)).getOrElse(throw new FileNotFoundException(url.toString + " is not found"))
+      val stream = jar.getInputStream(entry)
+      try stream.readAllBytes()
+      finally stream.close()
+    } finally jar.close()
   }
 
   /** The key of a source read from `url`: its URI normalized, a file's real path; the URL as it is written when it is

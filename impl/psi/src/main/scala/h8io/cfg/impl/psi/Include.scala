@@ -144,6 +144,8 @@ private[psi] object Include extends Directive {
           else {
             val path = Paths.get(archive.toURI)
             if (Files.notExists(path)) Right(Some(false))
+            // the jar itself, which is there and is no source: reading it fails as unreadable
+            else if (connection.getEntryName == null) Right(Some(true))
             else {
               val jar = new JarFile(path.toFile)
               try Right(Some(jar.getEntry(connection.getEntryName) != null))
