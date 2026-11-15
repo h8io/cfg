@@ -139,9 +139,18 @@ final case class DirectiveLocation(at: SourceLocation, directive: String, origin
   private[psi] def anchor: Option[SourceLocation] = Some(at)
 }
 
-/** A value overridden at launch by the system property `name`. */
+/** A value `#prop` read from the system property `name` (`format.md` §6, §10). */
 final case class SystemPropertyLocation(name: String) extends PsiLocation {
   def description: String = "system property " + name
+
+  private[psi] def order(sources: Seq[String]): (Int, Int, Int) = (sources.size, 0, 0)
+
+  private[psi] def anchor: Option[SourceLocation] = None
+}
+
+/** A value `#env` read from the environment variable `name` (`format.md` §6, §10). */
+final case class EnvironmentLocation(name: String) extends PsiLocation {
+  def description: String = "environment variable " + name
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = (sources.size, 0, 0)
 

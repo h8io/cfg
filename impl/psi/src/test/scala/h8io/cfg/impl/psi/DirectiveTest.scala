@@ -64,13 +64,18 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
           )))
   }
 
-  it should "override from the system properties received, none with an empty map" in {
-    def built(properties: Map[String, String]) =
-      Psi.builder.withSystemProperties(properties).build.fold(e => fail(e.toString), identity)
-    loaded(built(Map("a" -> "2")), "a: 1")("a") shouldBe
-      Node.IScalar(keyed("a"), NoTags, "2", SystemPropertyLocation("a"))
-    loaded(built(Map.empty), "a: 1")("a") shouldBe Node.IScalar(keyed("a"), NoTags, "1", at(1, 4))
-    Psi.builder.build.map(_.parse("s", "a: 1").isRight) shouldBe Right(true)
+  it should "give #prop and #env the maps received, which override nothing of their own" in {
+    val built = Psi.builder
+      .withSystemProperties(Map("a" -> "2"))
+      .withEnvironment(Map("E" -> "3"))
+      .build
+      .fold(e => fail(e.toString), identity)
+    val root = loaded(built, "a: 1\nb: #prop(a)\nc: #env(E)")
+    root("a") shouldBe Node.IScalar(keyed("a"), NoTags, "1", at(1, 4))
+    root("b") shouldBe
+      Node.IScalar(keyed("b"), NoTags, "2", DirectiveLocation(at(2, 4), "prop", SystemPropertyLocation("a")))
+    root("c") shouldBe
+      Node.IScalar(keyed("c"), NoTags, "3", DirectiveLocation(at(3, 4), "env", EnvironmentLocation("E")))
   }
 
   "A call" should "be reported when its directive is unknown or disabled" in {

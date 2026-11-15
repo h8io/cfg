@@ -117,18 +117,6 @@ class MarkerTest extends AnyFlatSpec with Matchers {
       List(MarkerFailed(at(1, 13), "fails", Problem("no")))
   }
 
-  "A block overridden at launch" should "be replaced with its markers" in {
-    var runs = 0
-    val counted = marker("counted") { (_, value) =>
-      runs += 1
-      Right(value)
-    }
-    val built =
-      Psi.builder.withMarkers(counted).withSystemProperties(Map("a" -> "x")).build.fold(e => fail(e.toString), identity)
-    value(loaded(built, "a: \"\"\"counted\n  v\n  \"\"\"")("a")) shouldBe "x"
-    runs shouldBe 0
-  }
-
   "A marked block" should "be caught in a cycle, and resolved once however many refer to it" in {
     val identity = marker("identity")((_, value) => Right(value))
     errors(loader(identity), "a: \"\"\"identity\n  ${a}\n  \"\"\"") shouldBe List(SubstitutionCycle(at(2, 3), "a"))
