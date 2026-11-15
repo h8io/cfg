@@ -703,8 +703,8 @@ cannot be expressed any other way.
 2. Expand directives depth-first. `#include` parses the referenced source recursively and merges it
    positionally. Cycle detection lives here.
 3. Merge the input sources, last wins.
-4. Resolve substitutions over the merged tree, and run the loader's own markers over the blocks
-   that have them (§5).
+4. Resolve substitutions over the merged tree, merge what each spread finds into the block it
+   stands in, and run the loader's own markers over the blocks that have them (§5, §9).
 5. Wrap the result as `Node.IMap[Id.Root]`.
 
 Nothing overrides the merged tree from outside (session 25): a value set at launch comes in where
@@ -761,6 +761,35 @@ from a substitution.
   as `${?a}` over a missing `a`.
 - Cycles are an error naming the path. Self-reference (`a: ${a}" x"` reading the pre-merge value) is
   **not** supported in v1; it is reported as a cycle.
+
+**Spreads** (session 25) put the contents of a node where a node would stand: the fields of a map
+among the fields of a block, the elements of a sequence among the elements of a sequence.
+
+- **A `*` after the path marks a spread**: `$a*` and `${a*}`, `$?a*` and `${?a*}` optional. Among
+  the fields of a block it may be left out, nothing but a spread standing there: `$a`, `$a*`,
+  `${a}` and `${a*}` are one spread. Among the elements of a sequence it is required, `$a` and
+  `${a}` grafting the sequence whole as one element. Anywhere else a spread is an error: as a
+  field's value, in a string, in a concatenation, or with tags before it.
+- **Among the fields of a block, as if the map's fields were written there**: what stands after the
+  spread overrides it, what stands before it is overridden, and they merge as `:` merges (§7),
+  maps deep and anything else replaced; a `:=` after it replaces. With `a { x: 1, y: 2 }`,
+  `b { $a, x: 3, z: 4 }` is `{ x: 3, y: 2, z: 4 }`. A map over a substitution is the error `:` gives
+  there (§7), the substitution maybe no map.
+- **What it finds is the map as it ends up**, merged from every source and resolved, as every
+  substitution finds; what is merged into the block after it, from a later block or a later
+  source, comes after it. Its fields keep where they came from behind the spread (§10), and their
+  own tags; the map's tags are not brought along.
+- **Among the elements of a sequence, the sequence's elements in its place**: with `a: [x, y]`,
+  `[a, $a*, z]` is `[a, x, y, z]`. An index into a sequence counts the elements a spread put.
+- **What it finds must be a map among fields and a sequence among elements**, an error naming
+  where it is defined otherwise; an optional one finding nothing puts nothing.
+- **Not at the root, nor into the block it stands in**: every path goes through the root, so a spread
+  among its fields would refer to the tree it builds, an error of its own; one that refers to the
+  block it stands in, or one around it, is a cycle. A source included in a block puts its spreads
+  in that block. A field of the block may refer to another of it, the spreads merged before
+  either is resolved.
+- It copies what it puts, and counts against the size limit as a graft does, and against the depth
+  limit where its contents stand (§11).
 
 ## 10. Locations
 
@@ -1015,7 +1044,8 @@ mistake is worse than stopping.
 1. **Value expressions**, e.g. `${b} + ${c}` for sequence concatenation — the replacement for an
    append operator (§7). Not in v1. Whitespace never joins values (§3), so `${b} + ${c}` is an error
    today and the syntax stays free. **Parked** by the user as hard from every angle — do not reopen
-   it until it is raised again.
+   it until it is raised again. Spreads (§9, session 25) do the jobs that came first:
+   `[${b*}, ${c*}]` concatenates sequences, and `b { $a, x: 3 }` extends a map.
 2. **Indentation as an alternative to braces**, Scala 3 style — both forms allowed. Not in v1; v1 is
    braces only. **Parked until implementation of indentation starts** — do not reopen it before then.
 
@@ -2178,3 +2208,14 @@ the user; the last, the growth of a tree by substitutions, is still to be discus
   follows, so that `$host-name` and `$name.txt` are paths, and braces end one where it would go
   on. A `$path` in a directive's arguments is reported as `${path}` is, and the hint of that error
   says to quote the text. Breaks a value outside quotes holding a `$`, `price: 5$`, now an error.
+- **Spreads: the contents of a node where a node would stand** (§9), the user's idea: the fields of
+  a map among a block's, as if written there, and the elements of a sequence among a sequence's.
+  Settled with the user, point by point: the merge is deep, as `:`'s; a `*` after the path marks a
+  spread, optional among a block's fields, where nothing else may stand, and required among a
+  sequence's elements, where `$a` grafts; a spread at the root is an error, every path going
+  through it, my proposal over reading the root as written up to the spread, which would have
+  made such a reference alone see a tree half built. Mine, in the code: a map keeps what is written
+  from its first spread on as steps, merged once each spread is resolved, by `Merge`'s own rules,
+  so that "as if written there" is the same code; the merge is memoized as a substitution is, its
+  height counted (session 25, above), and a block's fields are resolved after it, so that one may
+  refer to another. Covers the first jobs of §13 item 1, which stays parked.

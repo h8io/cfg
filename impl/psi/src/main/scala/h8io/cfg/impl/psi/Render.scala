@@ -1,7 +1,7 @@
 package h8io.cfg.impl.psi
 
 import h8io.cfg.Id
-import h8io.cfg.impl.psi.Token.{Reference, Text, ValueMode}
+import h8io.cfg.impl.psi.Token.{Substitutes, Text, ValueMode}
 
 /** Writes a merged tree as Psi source, which parses and merges back to the same tree, its locations aside.
   *
@@ -82,6 +82,7 @@ private[psi] object Render {
           out += ']'
         }
       case Tree.Substitution(path, optional, _, _) => reference(out, path, optional)
+      case Tree.Splice(path, optional, _) => reference(out, path, optional, "*")
       case Tree.Concatenation(parts, _, _) => quoted(out, parts)
       // the loader's markers run as the tree is resolved, and only a resolved tree is shown
       case marked: Tree.Marked =>
@@ -99,8 +100,8 @@ private[psi] object Render {
   /** A key or a tag, as `Id.path` writes a key. */
   private def name(name: String): String = Id.Key(name, Id.Root).path
 
-  private def reference(out: StringBuilder, path: Id.Branch, optional: Boolean): Unit = {
-    val _ = out ++= (if (optional) "${?" else "${") ++= Message.path(path) += '}'
+  private def reference(out: StringBuilder, path: Id.Branch, optional: Boolean, spread: String = ""): Unit = {
+    val _ = out ++= (if (optional) "${?" else "${") ++= Message.path(path) ++= spread += '}'
   }
 
   /** Whether `text` reads back alone, unquoted, as itself: the lexer's own answer, `null` being no string. Half a
@@ -118,7 +119,8 @@ private[psi] object Render {
     out += '"'
     parts.foreach {
       case Text(text) => escape(out, text)
-      case Reference(path, optional, _) => reference(out, path, optional)
+      // the parser takes no spread in a string
+      case part: Substitutes => reference(out, part.path, part.optional)
     }
     out += '"'
     ()

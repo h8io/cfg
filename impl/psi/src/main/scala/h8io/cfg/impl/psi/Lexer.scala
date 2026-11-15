@@ -245,6 +245,8 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
         val kind = if (at(offset + 1, '=')) advance(2, Replace) else advance(1, Colon)
         if (has(offset) && !isBreak(offset)) report(ColonWithoutSpace.apply, start)
         kind
+      // a substitution among the fields of a block: a spread, which the parser takes (§9)
+      case '$' if startsWith("${") || startsBare(offset) => unquoted()
       case _ =>
         while (has(offset) && !endsKey(offset)) offset += 1
         val key = text.substring(start, offset)
@@ -616,15 +618,19 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
     * cannot be read is reported — at the space or tab, if that is what broke it, at the `${` otherwise — and skipped up
     * to the next `}` on its line, or with none up to where the scalar around it ends.
     */
-  private def reference(quoted: Boolean): Option[Reference] = {
+  private def reference(quoted: Boolean): Option[Part] = {
     val start = offset
     offset += 2
     val optional = at(offset, '?')
     if (optional) offset += 1
-    path(Id.Root).flatMap(path => if (at(offset, '}')) Some(path) else None) match {
-      case Some(path) =>
+    path(Id.Root).flatMap { path =>
+      val spread = at(offset, '*')
+      if (spread) offset += 1
+      if (at(offset, '}')) Some(path -> spread) else None
+    } match {
+      case Some((path, spread)) =>
         offset += 1
-        Some(Reference(path, optional, source.location(start)))
+        Some(part(path, optional, spread, start))
       case None if !ended =>
         if (has(offset) && isSpace(text.charAt(offset)))
           report(WhitespaceInSubstitution.apply, offset)
@@ -648,13 +654,22 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
     * `name.txt`, and `${name}.txt` the path `name` and the text `.txt`. `None` once an unterminated key in backticks
     * has ended the source.
     */
-  private def bare(): Option[Reference] = {
+  private def bare(): Option[Part] = {
     val start = offset
     offset += 1
     val optional = at(offset, '?')
     if (optional) offset += 1
-    key(Id.Root).map(key => Reference(greedy(key), optional, source.location(start)))
+    key(Id.Root).map { key =>
+      val path = greedy(key)
+      val spread = at(offset, '*')
+      if (spread) offset += 1
+      part(path, optional, spread, start)
+    }
   }
+
+  /** A substitution from its `$` at `start`: a spread when a `*` ends its path (§9). */
+  private def part(path: Id.Branch, optional: Boolean, spread: Boolean, start: Int): Part =
+    if (spread) Spread(path, optional, source.location(start)) else Reference(path, optional, source.location(start))
 
   /** The segments of a path with no braces after `current`, as many as there are. */
   @tailrec private def greedy(current: Id.Branch): Id.Branch =
@@ -734,7 +749,7 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
     val buffer = new StringBuilder
     private val parts = Vector.newBuilder[Part]
 
-    def reference(part: Reference): Unit = {
+    def reference(part: Part): Unit = {
       flush()
       parts += part
       ()
@@ -817,7 +832,7 @@ private[psi] object Lexer {
   sealed trait Piece
   final case class Written(c: Char) extends Piece
   final case class Escaped(value: String) extends Piece
-  final case class Substituted(reference: Reference) extends Piece
+  final case class Substituted(reference: Part) extends Piece
 
   def isBlank(piece: Piece): Boolean =
     piece match {

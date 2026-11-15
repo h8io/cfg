@@ -52,14 +52,24 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
   /** Whether either has gone past its limit, after which nothing more is built. */
   private var exhausted = false
 
-  def tree: Result[Tree.Map] = Result(map(Id.Root, root).getOrElse(root), errors.toList)
+  /** Merges what spreads bring into the maps they stand in, as it would have been merged had it been written there. */
+  private val merging = new Merge
+
+  def tree: Result[Tree.Map] = {
+    // every path goes through the root: a spread there would refer to the tree it is building (§9)
+    errors ++= root.steps.collect { case Tree.Step.Spread(_, _, at) => SpreadAtRoot(at) }
+    val resolved = if (root.steps.isEmpty) map(Id.Root, root).toOption else None
+    Result(resolved.getOrElse(root), errors.toList ++ merging.reported)
+  }
 
   /** The value at `id` resolved: `Right(None)` when it is an optional substitution with nothing to graft. */
   private def resolve(id: Id, value: Tree.Value): Resolution =
     value match {
       case _: Tree.Scalar | _: Tree.Null => Right(Some(value))
+      case map: Tree.Map if map.steps.nonEmpty => step(completed(id, map).flatMap(this.map(id, _)).map(Some(_)))
       case map: Tree.Map => step(this.map(id, map).map(Some(_)))
       case sequence: Tree.Sequence => step(this.sequence(id, sequence).map(Some(_)))
+      case splice: Tree.Splice => once(id, Some(new Following(splice.location, splice.path)))(spliced(id, splice))
       case Tree.Substitution(path, optional, tags, at) =>
         once(id, Some(new Following(at, path)))(reference(path, optional, at).flatMap(_.fold[Resolution](Right(None)) {
           value =>
@@ -105,9 +115,94 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
   }
 
   private def sequence(id: Id, sequence: Tree.Sequence): Either[Failure, Tree.Sequence] = {
-    val elements = sequence.elements.zipWithIndex.map { case (value, i) => resolve(Id.Index(i, id), value) }
-    failure(elements).toLeft(sequence.copy(elements = elements.collect { case Right(Some(value)) => value }))
+    val elements = sequence.elements.zipWithIndex.map { case (value, i) => value -> resolve(Id.Index(i, id), value) }
+    failure(elements.map(_._2)).toLeft(sequence.copy(elements = elements.flatMap {
+      // a spread puts the elements of the sequence it found
+      case (_: Tree.Splice, Right(Some(spliced: Tree.Sequence))) => spliced.elements
+      case (_, Right(Some(value))) => Vector(value)
+      case _ => Vector.empty
+    }))
   }
+
+  /** `map`, which has steps, completed once: each spread resolved and merged in turn with what is written after it, as
+    * if what it found were written there (§9). Its children are resolved apart, after it, so that one may refer to
+    * another; only what a spread refers to through the map itself leads back to it.
+    */
+  private def completed(id: Id, map: Tree.Map): Either[Failure, Tree.Map] =
+    once(id, map.steps.collectFirst { case Tree.Step.Spread(path, _, at) => new Following(at, path) }) {
+      map.steps
+        .foldLeft[Either[Failure, Tree.Map]](Right(map.copy(steps = Vector.empty))) { (done, step) =>
+          done.flatMap { current =>
+            step match {
+              case Tree.Step.Spread(path, optional, at) => spread(id, current, path, optional, at)
+              case Tree.Step.Statements(statements) => Right(merging.block(current, statements))
+              case Tree.Step.Graft(content) => Right(over(current, content))
+            }
+          }
+        }
+        .map(Some(_))
+      // a completion always gives a map
+    }.map(_.get.asInstanceOf[Tree.Map])
+
+  /** The map `current` with the fields of the map at `path` merged into it; unchanged when an optional spread finds
+    * nothing.
+    */
+  private def spread(
+      id: Id,
+      current: Tree.Map,
+      path: Id.Branch,
+      optional: Boolean,
+      at: SourceLocation): Either[Failure, Tree.Map] =
+    reference(path, optional, at).flatMap(_.fold[Either[Failure, Tree.Map]](Right(current)) {
+      case found: Tree.Map =>
+        // its fields stand where the map's do
+        if (segments(id).size - 1 + height(found) > limit) failed(DepthExceeded(at, limit, fatal = false))
+        else
+          grow(size(found) - 1, 0, ResolutionTooLarge(at, Message.path(path), nodeLimit))
+            // a map grafted is a map
+            .map(_ => over(current, graft(found, at, path, Set.empty).asInstanceOf[Tree.Map]))
+      case other => failed(SpreadNotMap(at, Message.path(path), other.location))
+    })
+
+  /** The elements of the sequence a spread among elements finds, as a sequence; none when an optional one finds
+    * nothing.
+    */
+  private def spliced(id: Id, splice: Tree.Splice): Resolution =
+    reference(splice.path, splice.optional, splice.location).flatMap(_.fold[Resolution](Right(None)) {
+      case found: Tree.Sequence =>
+        // its elements stand where the spread does
+        if (segments(id).size - 2 + height(found) > limit)
+          failed(DepthExceeded(splice.location, limit, fatal = false))
+        else
+          grow(size(found) - 1, 0, ResolutionTooLarge(splice.location, Message.path(splice.path), nodeLimit))
+            .map(_ => Some(graft(found, splice.location, splice.path, Set.empty)))
+      case other => failed(SpreadNotSequence(splice.location, Message.path(splice.path), other.location))
+    })
+
+  /** `current` with the fields of `content`, resolved, merged into it as `:` merges them (§7): maps merge, anything
+    * else replaces, and a map over a substitution is an error, the substitution maybe no map.
+    */
+  private def over(current: Tree.Map, content: Tree.Map): Tree.Map =
+    content.keys.foldLeft(current) { (map, key) =>
+      val value = content.entries(key)
+      map.entries.get(key).fold(map.updated(key, value)) { earlier =>
+        combined(earlier, value).fold(map.failedAt(key))(map.updated(key, _))
+      }
+    }
+
+  private def combined(earlier: Tree.Value, value: Tree.Value): Option[Tree.Value] =
+    (earlier, value) match {
+      case (map: Tree.Map, content: Tree.Map) if map.steps.isEmpty =>
+        Some(over(
+          map.copy(tags = map.tags ++ content.tags, location = Merge.again(content.location, map.location)), content))
+      // a map with spreads of its own takes this one after them
+      case (map: Tree.Map, content: Tree.Map) =>
+        Some(map.copy(tags = map.tags ++ content.tags, steps = map.steps :+ Tree.Step.Graft(content)))
+      case (substitution: Tree.Substitution, content: Tree.Map) =>
+        errors += MergeWithSubstitution(content.location, substitution.location)
+        None
+      case _ => Some(value)
+    }
 
   /** The node at `id`, resolved once: a later use takes what the first gave, as many steps deep as it went, and fails
     * where resolving it again would go past the limit, as `step` does; with no substitution being followed, at `site`,
@@ -177,6 +272,9 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       case next :: rest =>
         val here = value match {
           case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Marked => resolve(id, value)
+          // what a spread brings in, keys or elements, is known only once it is resolved
+          case map: Tree.Map if map.steps.nonEmpty => completed(id, map).map(Some(_))
+          case sequence: Tree.Sequence if sequence.elements.exists(_.isInstanceOf[Tree.Splice]) => resolve(id, value)
           case _ => Right(Some(value))
         }
         here.flatMap(_.fold[Either[Failure, Option[(Id, Tree.Value)]]](Right(None))(child(id, _, next))) match {
@@ -219,7 +317,9 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
   private def concatenation(concatenation: Tree.Concatenation): Either[Failure, Tree.Scalar] = {
     val parts = concatenation.parts.map {
       case Token.Text(text) => Right(text -> None)
-      case Token.Reference(path, optional, at) =>
+      // the parser takes no spread in a string
+      case part: Token.Substitutes =>
+        val (path, optional, at) = (part.path, part.optional, part.location)
         reference(path, optional, at).flatMap {
           case Some(Tree.Scalar(text, _, origin)) =>
             Right(text -> Some(ReferenceLocation(at, Message.path(path), origin)))
@@ -330,7 +430,7 @@ private[psi] object Resolve {
           val entries = map.entries.map { case (key, child) => key -> moved(child, Id.Key(key, id), Set.empty) }
           map.copy(entries = entries, tags = map.tags ++ tags, location = location)
         // a node is resolved whole before it is grafted
-        case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Marked =>
+        case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Marked | _: Tree.Splice =>
           throw new IllegalStateException("An unresolved substitution at " + value.location.description + " grafted")
       }
     }

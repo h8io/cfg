@@ -25,6 +25,11 @@ private[psi] object Tree {
   final case class Substitution(path: Id.Branch, optional: Boolean, tags: Set[String], location: SourceLocation)
       extends Value
 
+  /** `$path*` or `${path*}` as an element of a sequence: the elements of the sequence at `path`, once resolved. */
+  final case class Splice(path: Id.Branch, optional: Boolean, location: SourceLocation) extends Value {
+    def tags: Set[String] = Set.empty
+  }
+
   /** A scalar with `\${…}` inside it. */
   final case class Concatenation(parts: Vector[Token.Part], tags: Set[String], location: SourceLocation) extends Value
 
@@ -40,13 +45,17 @@ private[psi] object Tree {
     *   where it was defined: one place, or a [[MergedLocation]] of each block merged into it since it was last replaced
     * @param failed
     *   the keys left out because their merge failed (`format.md` §7): what refers to one fails silently (§11)
+    * @param steps
+    *   what was written in the map from its first spread on, to be merged into it in order once each spread is resolved
+    *   (§9); the keys and entries are the fields written before it. A map with none is complete.
     */
   final case class Map(
       keys: Vector[String],
       entries: immutable.Map[String, Value],
       tags: Set[String],
       location: PsiLocation,
-      failed: Set[String] = Set.empty)
+      failed: Set[String] = Set.empty,
+      steps: Vector[Step] = Vector.empty)
       extends Value {
 
     /** This map with `value` at `key`: in its place when the key is there, last when it is not. */
@@ -65,5 +74,20 @@ private[psi] object Tree {
 
   object Map {
     def empty(tags: Set[String], location: PsiLocation): Map = Map(Vector.empty, immutable.Map.empty, tags, location)
+  }
+
+  /** What is merged into a map after its first spread, in order (§9). */
+  sealed trait Step
+
+  object Step {
+
+    /** A spread, `$path`, of the map at `path`. */
+    final case class Spread(path: Id.Branch, optional: Boolean, location: SourceLocation) extends Step
+
+    /** Statements written after a spread, merged as they would have been. */
+    final case class Statements(statements: Vector[Ast.Statement]) extends Step
+
+    /** A map a spread around this one brought in, already resolved, merged as a spread's is. */
+    final case class Graft(map: Map) extends Step
   }
 }

@@ -323,7 +323,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
 
   private def substitutes(token: Token): Boolean =
     token.kind match {
-      case Scalar(parts, _, _) => parts.exists(_.isInstanceOf[Reference])
+      case Scalar(parts, _, _) => parts.exists(part => part.isInstanceOf[Reference] || part.isInstanceOf[Spread])
       case _ => false
     }
 
@@ -341,6 +341,12 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     first.kind match {
       case Name(name, _) => keys(Ast.Key(name, first.location), Nil, doc)
       case Directive(name) => Ast.DirectiveStatement(call(first, name), doc)
+      // among the fields of a block a substitution is a spread, whether a `*` says so or not (§9)
+      case Scalar(Vector(Reference(path, optional, _)), false, _) =>
+        Ast.SpreadStatement(path, optional, first.location, doc)
+      case Scalar(Vector(Spread(path, optional, _)), false, _) =>
+        Ast.SpreadStatement(path, optional, first.location, doc)
+      case Scalar(_, false, _) => fail(first, MisplacedSpread(first.location))
       case Tag(_) => fail(first, TagBeforeKey(first.location))
       case Scalar(parts, _, _) => fail(first, QuotedKey(first.location, written(parts)))
       case _ => fail(first, ExpectedKey(first.location, describe(first.kind)))
@@ -355,8 +361,10 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
       case Dot =>
         within(rest.size)(enter(token))
         keys(head, dotted(token) :: rest, doc)
-      case Colon => Ast.Field(path, Ast.Operator.Merge, within(rest.size)(value(next(ValueMode), Set.empty)), doc)
-      case Replace => Ast.Field(path, Ast.Operator.Replace, within(rest.size)(value(next(ValueMode), Set.empty)), doc)
+      case Colon =>
+        Ast.Field(path, Ast.Operator.Merge, whole(within(rest.size)(value(next(ValueMode), Set.empty))), doc)
+      case Replace =>
+        Ast.Field(path, Ast.Operator.Replace, whole(within(rest.size)(value(next(ValueMode), Set.empty))), doc)
       case LeftBrace => Ast.Field(path, Ast.Operator.Merge, within(rest.size)(block(token, Set.empty)), doc)
       case Tag(_) => fail(token, TagAfterKey(token.location))
       case Newline =>
@@ -369,6 +377,15 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     }
   }
 
+  /** `value` as a field's: no spread, which has no node to stand for, only contents to put among others (§9). */
+  private def whole(value: Ast.Value): Ast.Value =
+    value match {
+      case spread: Ast.Spread =>
+        record(MisplacedSpread(spread.location))
+        throw Dropped
+      case _ => value
+    }
+
   /** The key after `dot`, which touches it on both sides. */
   private def dotted(dot: Token): Ast.Key = {
     if (dot.spaced) fail(dot, SpaceAroundDot(dot.location))
@@ -377,6 +394,8 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
       case Name(name, _) =>
         if (token.spaced) fail(token, SpaceAroundDot(dot.location))
         Ast.Key(name, token.location)
+      // a substitution, which key mode reads as one for a spread: a key is never computed
+      case Scalar(parts, false, _) => fail(token, InvalidKey(token.location, written(parts)))
       case Scalar(parts, _, _) => fail(token, QuotedKey(token.location, written(parts)))
       case _ => fail(token, ExpectedKey(token.location, describe(token.kind)))
     }
@@ -414,9 +433,13 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     */
   private def scalar(token: Token, parts: Vector[Part], quoted: Boolean, tags: Set[String]): Ast.Value = {
     unquoted = !quoted
-    substituted = parts.exists(_.isInstanceOf[Reference])
+    substituted = parts.exists(part => part.isInstanceOf[Reference] || part.isInstanceOf[Spread])
+    val spread = parts.collectFirst { case Spread(_, _, at) => at }
     parts match {
       case Vector(Reference(path, optional, _)) if !quoted => Ast.Substitution(path, optional, tags, token.location)
+      case Vector(Spread(path, optional, _)) if !quoted => Ast.Spread(path, optional, tags, token.location)
+      // a spread in a string has nothing to put its contents among
+      case _ if spread.nonEmpty => fail(token, MisplacedSpread(spread.get))
       case _ if substituted => Ast.Concatenation(parts, tags, token.location)
       case _ =>
         val value = text(parts)
@@ -437,7 +460,14 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     substituted = false
   }
 
-  private def element(first: Token, doc: Option[String]): Ast.Element = Ast.Element(value(first, Set.empty), doc)
+  private def element(first: Token, doc: Option[String]): Ast.Element =
+    value(first, Set.empty) match {
+      // a spread puts elements, each with its own tags: none written before it has a node to go to
+      case spread: Ast.Spread if spread.tags.nonEmpty =>
+        record(TaggedSpread(spread.location))
+        throw Dropped
+      case value => Ast.Element(value, doc)
+    }
 
   /** A directive from its `#name` token, the last one read: with its arguments when a `(` touches the name, with none
     * when nothing does — a `(` apart from the name, on its line or a later one, is an error (§6).
