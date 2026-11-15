@@ -17,7 +17,8 @@ import scala.collection.mutable
   * holding it — the result is then discarded anyway.
   *
   * Resolution goes at most `limit` steps deep, each a level descended or a substitution followed, and a value is
-  * grafted only where it fits under `limit` levels (§11).
+  * grafted only where it fits under `limit` levels (§11). A substitution already resolved counts as deep as resolving
+  * it went, so that what goes past the limit does not depend on the order the tree is resolved in.
   */
 private[psi] final class Resolve(root: Tree.Map, limit: Int) {
   import Resolve.*
@@ -30,8 +31,15 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int) {
   /** The substitutions being followed, innermost first. */
   private var following: List[Following] = Nil
 
-  /** By position, a substitution resolved, or `None` while it is being resolved. */
-  private val resolved = mutable.Map.empty[Id, Option[Resolution]]
+  /** The deepest `steps` has gone since the resolution being measured began, a memoized one counted as deep as
+    * resolving it went.
+    */
+  private var deepest = 0
+
+  /** By position, a substitution resolved, with how many steps deeper than where it began resolving it went; `None`
+    * while it is being resolved.
+    */
+  private val resolved = mutable.Map.empty[Id, Option[(Resolution, Int)]]
 
   def tree: Result[Tree.Map] = Result(map(Id.Root, root).getOrElse(root), errors.toList)
 
@@ -42,15 +50,17 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int) {
       case map: Tree.Map => step(this.map(id, map).map(Some(_)))
       case sequence: Tree.Sequence => step(this.sequence(id, sequence).map(Some(_)))
       case Tree.Substitution(path, optional, tags, at) =>
-        once(id)(reference(path, optional, at).flatMap(_.fold[Resolution](Right(None)) { value =>
-          // the levels around the substitution, and those its value opens
-          if (segments(id).size - 1 + height(value) <= limit) Right(Some(graft(value, at, path, tags)))
-          else failed(DepthExceeded(at, limit, fatal = false))
+        once(id, Some(new Following(at, path)))(reference(path, optional, at).flatMap(_.fold[Resolution](Right(None)) {
+          value =>
+            // the levels around the substitution, and those its value opens
+            if (segments(id).size - 1 + height(value) <= limit) Right(Some(graft(value, at, path, tags)))
+            else failed(DepthExceeded(at, limit, fatal = false))
         }))
-      case concatenation: Tree.Concatenation => once(id)(this.concatenation(concatenation).map(Some(_)))
+      case concatenation: Tree.Concatenation =>
+        once(id, first(concatenation))(this.concatenation(concatenation).map(Some(_)))
       case Tree.Marked(value, markers) =>
         // resolved inside `once`, so that a cycle through the block is caught and the block resolved only once
-        once(id) {
+        once(id, Some(value).collect { case concatenation: Tree.Concatenation => concatenation }.flatMap(first)) {
           val text = value match {
             case concatenation: Tree.Concatenation => this.concatenation(concatenation)
             case scalar: Tree.Scalar => Right(scalar)
@@ -86,33 +96,47 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int) {
     failure(elements).toLeft(sequence.copy(elements = elements.collect { case Right(Some(value)) => value }))
   }
 
-  private def once(id: Id)(resolution: => Resolution): Resolution =
+  /** The node at `id`, resolved once: a later use takes what the first gave, as many steps deep as it went, and fails
+    * where resolving it again would go past the limit, as `step` does; with no substitution being followed, at `site`,
+    * the node's own first reference.
+    */
+  private def once(id: Id, site: Option[Following])(resolution: => Resolution): Resolution =
     resolved.get(id) match {
-      case Some(Some(done)) => done
+      case Some(Some((done, height))) if done.isLeft || steps + height <= limit =>
+        deepest = math.max(deepest, steps + height)
+        done
+      case Some(Some(_)) => tooDeep(following.headOption.orElse(site))
       case Some(None) => Left(Cycle)
       case None =>
         resolved(id) = None
+        val outer = deepest
+        deepest = steps
         val done = resolution
-        resolved(id) = Some(done)
+        resolved(id) = Some((done, deepest - steps))
+        deepest = math.max(outer, deepest)
         done
     }
 
-  /** `resolution`, a step deeper; past the limit the innermost substitution being followed fails, reported once however
-    * many of its branches go past. The tree's own levels being within the limit, there is one whenever it is gone past.
+  /** `resolution`, a step deeper; past the limit the innermost substitution being followed fails. The tree's own levels
+    * being within the limit, there is one whenever it is gone past.
     */
   private def step(resolution: => Resolution): Resolution =
-    if (steps >= limit) {
-      val innermost = following.head
-      if (!innermost.reported) {
-        innermost.reported = true
-        errors += ResolutionTooDeep(innermost.at, Message.path(innermost.path), limit)
-      }
-      Left(Failed)
-    } else {
+    if (steps >= limit) tooDeep(following.headOption)
+    else {
       steps += 1
+      deepest = math.max(deepest, steps)
       try resolution
       finally steps -= 1
     }
+
+  /** A failure past the limit, reported at `site` once however many of its branches go past. */
+  private def tooDeep(site: Option[Following]): Resolution = {
+    site.filterNot(_.reported).foreach { site =>
+      site.reported = true
+      errors += ResolutionTooDeep(site.at, Message.path(site.path), limit)
+    }
+    Left(Failed)
+  }
 
   /** `\${path}` or `\${?path}` at `at`: the node it refers to, resolved, or `None` for an optional one with none. */
   private def reference(path: Id.Branch, optional: Boolean, at: SourceLocation): Resolution = {
@@ -216,6 +240,11 @@ private[psi] object Resolve {
   private final class Following(val at: SourceLocation, val path: Id.Branch) {
     var reported = false
   }
+
+  /** The first reference of `concatenation`, where it is reported going past the limit with no substitution followed.
+    */
+  private def first(concatenation: Tree.Concatenation): Option[Following] =
+    concatenation.parts.collectFirst { case Token.Reference(path, _, at) => new Following(at, path) }
 
   def apply(root: Tree.Map, limit: Int = PsiLoader.DefaultDepthLimit): Result[Tree.Map] = new Resolve(root, limit).tree
 

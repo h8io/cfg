@@ -239,5 +239,7 @@ is not reported as missing: `${db.host}` above is reported once the rest is fixe
 ## Limits
 
 A tree loaded is at most 256 levels deep, counting each `{`, `[` and key after a dot, and resolving a substitution
-goes at most 256 steps, each a level descended or a substitution followed. Past either, the load reports an error.
+goes at most 256 steps, each a level descended or a substitution followed, a substitution used again counting as
+deep as it went the first time. So a chain of substitutions goes 256 links, whatever order its keys are written in.
+Past either limit, the load reports an error.
 A program can set another limit.

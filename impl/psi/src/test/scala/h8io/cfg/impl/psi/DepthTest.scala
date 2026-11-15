@@ -100,10 +100,10 @@ class DepthTest extends AnyFlatSpec with Matchers {
     errors("a { v: #listed }", listed) shouldBe List(DepthExceeded(at(1, 8), 3, fatal = false))
   }
 
-  "A substitution" should "fail where the value it grafts, resolved already, does not fit" in {
-    // `a` is resolved first, from the root, and grafted again as it was resolved
-    loads("b { c: 1 }\na: ${b}\nx { y: ${a} }") shouldBe true
-    errors("b { c { } }\na: ${b}\nx { y { z: ${a} } }") shouldBe List(DepthExceeded(at(3, 12), 3, fatal = false))
+  "A substitution" should "fail where the value it grafts does not fit, resolved from higher up" in {
+    // `z` is resolved first for `r`, a path being looked up with no step for its levels, and grafts `b` 3 levels down
+    errors("r: ${x.y.w.z}\nb { c: 1 }\nx { y { w { z: ${b} } } }") shouldBe
+      List(DepthExceeded(at(3, 16), 3, fatal = false))
   }
 
   "Resolution" should "fail, once, at the innermost substitution when it goes past the limit" in {
@@ -121,6 +121,45 @@ class DepthTest extends AnyFlatSpec with Matchers {
 
   it should "report the innermost substitution once, however many of its branches go past the limit" in {
     errors("a: ${b}\nb { c { d {}, e {}, f {} } }") shouldBe List(ResolutionTooDeep(at(1, 4), "b", 3))
+  }
+
+  it should "go past the limit or not whatever order the keys are written in" in {
+    def chain(n: Int, link: String => String): List[String] =
+      "a0: x" :: (1 to n).map(i => "a" + i.toString + ": " + link("a" + (i - 1).toString)).toList
+    def graft(key: String) = "$" + "{" + key + "}"
+    def concatenation(key: String) = "\"$" + "{" + key + "}-\""
+    for (link <- List(graft _, concatenation _)) {
+      val (forward, reverse) = (chain(3, link), chain(4, link))
+      loads(forward.mkString("\n")) shouldBe true
+      loads(forward.reverse.mkString("\n")) shouldBe true
+      // where it goes past is where the order resolves it: the last link written in order, the first in reverse
+      val column = if (link("a") == graft("a")) 5 else 6
+      errors(reverse.mkString("\n")) shouldBe List(ResolutionTooDeep(at(5, column), "a3", 3))
+      errors(reverse.reverse.mkString("\n")) shouldBe List(ResolutionTooDeep(at(4, column), "a0", 3))
+    }
+  }
+
+  it should "count a substitution resolved before as deep as resolving it went, where it stands in the tree too" in {
+    // `a` resolved first, from the root, 2 steps deep: grafted 2 levels down it goes past, as it does in reverse
+    errors("b { c: 1 }\na: ${b}\nx { y: ${a} }") shouldBe List(ResolutionTooDeep(at(3, 8), "a", 3))
+    errors("x { y: ${a} }\na: ${b}\nb { c: 1 }") shouldBe List(ResolutionTooDeep(at(2, 4), "b", 3))
+    // `p` resolved for `r` first, 1 step deep, then reached where it stands, 2 levels deep
+    val first = "r: ${x.y.p}\nx { y { p: ${c1} } }\nc1: ${c0}\nc0: v"
+    val last = "x { y { p: ${c1} } }\nc1: ${c0}\nc0: v\nr: ${x.y.p}"
+    loader(4).parse("s", first).isRight shouldBe true
+    loader(4).parse("s", last).isRight shouldBe true
+    errors(first) shouldBe List(ResolutionTooDeep(at(2, 12), "c1", 3))
+    errors(last) shouldBe List(ResolutionTooDeep(at(2, 5), "c0", 3))
+  }
+
+  "A chain of substitutions" should "go 256 links at the default limit, and no further, in either order" in {
+    def chain(n: Int): List[String] =
+      "a0: x" :: (1 to n).map(i => "a" + i.toString + ": $" + "{a" + (i - 1).toString + "}").toList
+    for {
+      n <- List(256, 257, 100000)
+      order <- List(chain(n), chain(n).reverse)
+    }
+      Psi.parse("s", order.mkString("\n")).isRight shouldBe n == 256
   }
 
   "A path of any length" should "be followed, rendered and described with no recursion" in {
@@ -154,13 +193,16 @@ class DepthTest extends AnyFlatSpec with Matchers {
       val text =
         ("a0: null" +: (1 to n).map(i => "a" + i.toString + ": $" + "{a" + (i - 1).toString + "}") :+
           ("b: \"$" + "{a" + n.toString + "}\"")).mkString("\n")
+      // a limit as high as the chain: written in order, each link finds the one before resolved, and nothing recurses
+      val loader =
+        Psi.builder.withDepthLimit(n + 1).withSystemProperties(Map.empty).build.fold(e => fail(e.toString), identity)
       // the stack a thread gets by default on most platforms, which the test runner's may well exceed
       var report: Either[Throwable, String] = Left(new IllegalStateException("never run"))
       val thread = new Thread(
         null,
         { () =>
           report =
-            try Right(Psi.parse("s", text).fold(_.message, root => fail(root.toString)))
+            try Right(loader.parse("s", text).fold(_.message, root => fail(root.toString)))
             catch { case e: StackOverflowError => Left(e) }
         },
         "1 MB",
