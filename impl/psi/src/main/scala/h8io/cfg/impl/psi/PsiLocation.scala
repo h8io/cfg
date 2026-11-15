@@ -21,6 +21,50 @@ sealed trait PsiLocation extends Location {
   private[psi] def anchor: Option[SourceLocation]
 }
 
+private[psi] object PsiLocation {
+
+  /** The description of `location`, built with a stack of its own rather than by recursion: a chain of substitutions
+    * nests a location in another for every link, as deep as the chain is long, and no depth limit bounds a chain
+    * written in order.
+    */
+  def describe(location: Location): String = {
+    val out = new java.lang.StringBuilder
+    var stack: List[Part] = Right(location) :: Nil
+    while (stack.nonEmpty) {
+      val head = stack.head
+      stack = stack.tail
+      head match {
+        case Left(text) => val _ = out.append(text)
+        case Right(next) => stack = parts(next) ::: stack
+      }
+    }
+    out.toString
+  }
+
+  /** A part of a description: text as it is, or a location to describe in turn. */
+  private type Part = Either[String, Location]
+
+  /** What the description of `location` is made of, in order. */
+  private def parts(location: Location): List[Part] =
+    location match {
+      case ReferenceLocation(at, path, origin) => Left(at.description + " (") :: reference(path, origin) :::
+          Left(")") :: Nil
+      case ConcatenationLocation(at, parts) =>
+        Left(at.description + " (") :: joined(parts.map(part => reference(part.path, part.origin)))
+      case MergedLocation(at, earlier) => Right(at) :: Left(" (also ") :: joined(earlier.map(Right(_) :: Nil))
+      case DirectiveLocation(at, directive, origin) =>
+        Left(at.description + " (#" + Id.Key(directive, Id.Root).path + " from ") :: Right(origin) :: Left(")") :: Nil
+      case _ => Left(location.description) :: Nil
+    }
+
+  private def reference(path: String, origin: Location): List[Part] =
+    Left("${" + path + "} from ") :: Right(origin) :: Nil
+
+  /** `items` separated by commas, and the parenthesis closed. */
+  private def joined(items: List[List[Part]]): List[Part] =
+    items.head ::: items.tail.flatMap(Left(", ") :: _) ::: Left(")") :: Nil
+}
+
 /** A position in a source: the source's name, a 1-based line and a 1-based column counted in code points.
   *
   * @param source
@@ -44,19 +88,16 @@ final case class SourceLocation(source: String, line: Int, column: Int) extends 
   *   the location of the node the value was taken from; a chain of substitutions nests further references here
   */
 final case class ReferenceLocation(at: SourceLocation, path: String, origin: Location) extends PsiLocation {
-  def description: String = at.description + " (" + reference + ')'
+  def description: String = PsiLocation.describe(this)
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
 
   private[psi] def anchor: Option[SourceLocation] = Some(at)
-
-  /** The reference without its own site, as a part of a concatenation renders it. */
-  private[psi] def reference: String = "${" + path + "} from " + origin.description
 }
 
 /** A scalar built at `at` by concatenation, with one reference per `\${…}` in the order written. */
 final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLocation]) extends PsiLocation {
-  def description: String = parts.iterator.map(_.reference).mkString(at.description + " (", ", ", ")")
+  def description: String = PsiLocation.describe(this)
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
 
@@ -67,7 +108,7 @@ final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLo
   * the places before, the latest first.
   */
 final case class MergedLocation(at: PsiLocation, earlier: ::[PsiLocation]) extends PsiLocation {
-  def description: String = earlier.iterator.map(_.description).mkString(at.description + " (also ", ", ", ")")
+  def description: String = PsiLocation.describe(this)
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
 
@@ -91,8 +132,7 @@ case object NoSourceLocation extends PsiLocation {
   *   the location the node had
   */
 final case class DirectiveLocation(at: SourceLocation, directive: String, origin: Location) extends PsiLocation {
-  def description: String =
-    at.description + " (#" + Id.Key(directive, Id.Root).path + " from " + origin.description + ')'
+  def description: String = PsiLocation.describe(this)
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
 

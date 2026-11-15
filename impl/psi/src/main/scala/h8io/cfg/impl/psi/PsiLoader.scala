@@ -33,8 +33,7 @@ final class PsiLoader private[psi] (
       case Left(error) => Result.failed(None, error)
     })
     for {
-      // a fragment used more than once, or one source parsed by two, reports the same errors: each is reported once
-      documents <- parsed.copy(errors = parsed.errors.distinct).toEither
+      documents <- parsed.copy(errors = PsiLoader.distinct(parsed.errors)).toEither
       root <- (documents.flatten.toList match {
         case (document, name, included) :: rest =>
           val located = rest.map { case (document, name, _) => (document, SourceLocation(name, 1, 1)) }
@@ -56,6 +55,15 @@ private[psi] object PsiLoader {
   /** How deep a loaded tree, and the resolution of its substitutions, may go unless the builder says otherwise (§11).
     */
   def DefaultDepthLimit: Int = 256
+
+  /** `errors` with each reported once: a fragment used more than once, or one source parsed by two, reports the same
+    * errors. They are told apart by what the report says of them, not by `equals`: an error carrying an exception
+    * equals none but itself, and each parse of a source that cannot be read throws an exception of its own.
+    */
+  def distinct(errors: List[PsiError]): List[PsiError] = {
+    val reported = mutable.HashSet.empty[(PsiLocation, String, Option[String])]
+    errors.filter(error => reported.add((error.location, error.message, error.hint)))
+  }
 }
 
 /** Builds a [[PsiLoader]] (`format.md` §5, §6): every method gives a new builder. */

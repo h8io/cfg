@@ -147,4 +147,27 @@ class DepthTest extends AnyFlatSpec with Matchers {
     )
     inputs.map(text => Psi.parse("s", text).isLeft) shouldBe inputs.map(_ => true)
   }
+
+  "The report of an error at the end of a chain of substitutions written in order" should
+    "not overflow the stack" in {
+      val n = 100000
+      val text =
+        ("a0: null" +: (1 to n).map(i => "a" + i.toString + ": $" + "{a" + (i - 1).toString + "}") :+
+          ("b: \"$" + "{a" + n.toString + "}\"")).mkString("\n")
+      // the stack a thread gets by default on most platforms, which the test runner's may well exceed
+      var report: Either[Throwable, String] = Left(new IllegalStateException("never run"))
+      val thread = new Thread(
+        null,
+        { () =>
+          report =
+            try Right(Psi.parse("s", text).fold(_.message, root => fail(root.toString)))
+            catch { case e: StackOverflowError => Left(e) }
+        },
+        "1 MB",
+        1L << 20
+      )
+      thread.start()
+      thread.join()
+      report.map(_.length > n) shouldBe Right(true)
+    }
 }
