@@ -12,6 +12,11 @@ scalars and explicit nulls, each node knowing its path in the tree and where in 
 | `cfg-hocon` | A loader on Typesafe Config for HOCON, JSON, `.properties` and YAML, with HOCON's substitutions. |
 | `cfg-psi` | A loader for [Psi](psi.md), `cfg`'s own format: merging, substitutions and includes, errors collected rather than thrown, and no dependencies. |
 
+`cfg-psi` and `cfg-yaml` take input from anyone: how deep it nests is limited, 256 levels, so that no input overflows
+the stack. `cfg-hocon` is for configuration you trust, as Typesafe Config is: it parses and resolves by recursion with
+no limit, and a source nested a few thousand levels deep, or a chain of a few thousand substitutions, overflows the
+stack. YAML read through `cfg-hocon` is no exception.
+
 Every loader depends on `cfg`, so one of them is all a project needs:
 
 ```scala

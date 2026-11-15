@@ -1,6 +1,6 @@
 package h8io.cfg.impl
 
-import h8io.cfg.{Id, Node}
+import h8io.cfg.{Id, Location, Node}
 import org.snakeyaml.engine.v2.api.lowlevel.{Present, Serialize}
 import org.snakeyaml.engine.v2.api.{DumpSettings, LoadSettings}
 import org.snakeyaml.engine.v2.common.FlowStyle
@@ -26,37 +26,57 @@ package object yaml {
   private[yaml] def settings(label: String): LoadSettings =
     LoadSettings.builder().setLabel(label).setSchema(CoreSchemaInstance).build()
 
+  /** How many levels a configuration may nest, each mapping and sequence one, the root's among them: snakeyaml-engine
+    * composes a document, and this module walks it, by recursion with no limit of its own, and the default stack of 1
+    * MB overflows before 1 000 levels of block mappings, a `StackOverflowError` that may leave a class broken for the
+    * JVM (`format.md` §13 item 10). 256, as Psi's default.
+    */
+  private[yaml] def DepthLimit: Int = 256
+
   /** Composes a single YAML document, returning an empty mapping for an empty input. */
   private[yaml] def compose(settings: LoadSettings, reader: Reader): YamlNode =
     validated(
-      new Composer(settings, new ParserImpl(settings, new StreamReader(settings, reader)))
+      new Composer(settings, new Bounded(new ParserImpl(settings, new StreamReader(settings, reader))))
         .getSingleNode
         .orElse(emptyMapping))
 
+  private[yaml] def tooDeep(location: Location): YamlEngineException =
+    new YamlEngineException(s"A configuration nests deeper than $DepthLimit levels at ${location.description}")
+
   /** Rejects a node that an alias makes contain itself, which a config tree cannot hold and `merge` would recurse into
-    * forever. An anchor reused anywhere outside its own subtree is fine, and each node is visited once however often it
-    * is reused. Keys need no check: snakeyaml-engine refuses keys that are not scalars by default, recursive ones
-    * included, which is also what makes `keyOf`'s cast safe.
+    * forever, and a tree deeper than [[DepthLimit]] once its aliases are followed: an anchor nested deep and used deep
+    * makes the tree deeper than its source, which the parser has bounded. An anchor reused anywhere outside its own
+    * subtree is fine, and each node is visited once however often it is reused, its height kept for every later use.
+    * Keys need no check: snakeyaml-engine refuses keys that are not scalars by default, recursive ones included, which
+    * is also what makes `keyOf`'s cast safe.
     */
   private[yaml] def validated(root: YamlNode): YamlNode = {
-    def identitySet = Collections.newSetFromMap(new IdentityHashMap[YamlNode, java.lang.Boolean]).asScala
-    val visited = identitySet
-    val inProgress = identitySet
-    def visit(node: YamlNode): Unit =
-      if (!visited(node)) {
+    val heights = new IdentityHashMap[YamlNode, Integer]
+    val inProgress = Collections.newSetFromMap(new IdentityHashMap[YamlNode, java.lang.Boolean]).asScala
+    // the levels `node` opens, `above` levels standing above it in `parent`; never deeper than the limit, a node used
+    // again past it reported in the parent, where the alias stands, rather than where its anchor does
+    def visit(node: YamlNode, above: Int, parent: YamlNode): Int =
+      Option(heights.get(node)).fold {
         if (!inProgress.add(node))
           throw new YamlEngineException(
             s"An alias makes the ${node.getNodeType.toString} at ${LocationImpl(node).description} contain itself")
-        node match {
-          case mapping: MappingNode =>
-            mapping.getValue.asScala.foreach(tuple => visit(tuple.getValueNode))
-          case sequence: SequenceNode => sequence.getValue.asScala.foreach(visit)
-          case _ =>
+        // a mapping or a sequence opens a level, past the limit failing before its children are visited
+        def nested(children: Iterator[YamlNode]): Int =
+          if (above + 1 > DepthLimit) throw tooDeep(LocationImpl(node))
+          else 1 + children.map(visit(_, above + 1, node)).foldLeft(0)(math.max)
+        val height = node match {
+          case mapping: MappingNode => nested(mapping.getValue.asScala.iterator.map(_.getValueNode))
+          case sequence: SequenceNode => nested(sequence.getValue.asScala.iterator)
+          case _ => 0
         }
         inProgress -= node
-        visited += node
+        heights.put(node, height)
+        height
+      } { height =>
+        if (above + height > DepthLimit) throw tooDeep(LocationImpl(parent))
+        height.intValue
       }
-    visit(root)
+    val _ = visit(root, 0, root)
     root
   }
 

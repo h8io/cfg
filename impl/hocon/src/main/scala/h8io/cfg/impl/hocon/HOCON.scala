@@ -26,6 +26,12 @@ import java.net.URL
   *
   * YAML tags are not propagated; `tags` is always empty.
   *
+  * ==Trusted input only==
+  * Typesafe Config parses and resolves by recursion with no limit of its own: a source nested a few thousand levels
+  * deep, or a chain of a few thousand substitutions, overflows the stack, and the `StackOverflowError` reaches the
+  * caller as it is, and may leave a class broken for the JVM. YAML goes through `typesafe-config-yaml` alike. Load
+  * input that is not trusted with `cfg-psi` or `cfg-yaml`, which limit their depth.
+  *
   * ==Thread safety==
   * The shared `ConfigLoader` is stateless after construction and safe for concurrent use.
   */

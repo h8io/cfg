@@ -26,6 +26,11 @@ import java.net.URL
   * non-specific tag `!`, which says nothing about the type. Scalars are always carried as raw strings — a tag never
   * converts a value, it only records what the author asked for, and acting on it is up to the consumer.
   *
+  * ==Depth==
+  * A configuration nests at most 256 levels, each mapping and sequence one, the root's among them, aliases followed:
+  * snakeyaml-engine composes a document by recursion with no limit of its own, and a deeper one would overflow the
+  * stack. Past it, the load fails before the composer goes there.
+  *
   * ==Duplicate keys==
   * A mapping that repeats a key keeps the last occurrence, matching the last-wins rule used for merging.
   *
@@ -43,8 +48,8 @@ object YAML {
     *   the root map node of the overlaid config tree
     * @note
     *   a `YamlEngineException` is thrown if a stream cannot be parsed, holds more than one document, is rooted at
-    *   something other than a mapping, has a key that is not a scalar, or has a node that an alias makes contain
-    *   itself; every URL is checked on its own, before any overlaying
+    *   something other than a mapping, has a key that is not a scalar, has a node that an alias makes contain itself,
+    *   or nests deeper than 256 levels, aliases followed; every URL is checked on its own, before any overlaying
     */
   def apply(urls: URL*): Node.IMap[Id.Root] =
     wrap(Id.Root, urls.iterator.map(url => rootOf(read(url))).reduceOption(mergeMappings).getOrElse(emptyMapping))

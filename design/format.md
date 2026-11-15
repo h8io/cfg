@@ -1102,14 +1102,13 @@ mistake is worse than stopping.
    was written, two files that two sources each include as `common.psi` gave errors located alike,
    and the second batch (§11), ordered by the name, put both after the first includer.
 
-10. **`impl/hocon` and `impl/yaml` have no depth limit.** Found in session 22, on the default 1 MB
-    stack: typesafe-config parses and resolves by recursion with no limit of its own, and overflows
-    past about 6 000 levels of `{ … }`, 1 000 of `[ … ]`, 3 000 keys of a dotted key or 6 700 links
-    of a chain; snakeyaml-engine 3.2 has no nesting limit either, unlike SnakeYAML's
-    `nestingDepthLimit`, and overflows somewhere past 3 000 levels of `[ … ]` and before 1 000
-    of block mappings. The `StackOverflowError` reaches the caller as it is, and may leave a class
-    broken for the JVM (§11). Not Psi's, and not plan step 13's: open whether the two loaders
-    should guard their input.
+10. ~~**`impl/hocon` and `impl/yaml` have no depth limit.**~~ — closed in session 25: `impl/yaml`
+    limits a file to 256 levels, aliases followed, and `impl/hocon` is documented for trusted input
+    only. Found in session 22, on the default 1 MB stack: typesafe-config parses and resolves by
+    recursion with no limit of its own, and overflows past about 6 000 levels of `{ … }`, 1 000 of
+    `[ … ]`, 3 000 keys of a dotted key or 6 700 links of a chain; snakeyaml-engine 3.2 has no
+    nesting limit either, unlike SnakeYAML's `nestingDepthLimit`, and overflows somewhere past
+    3 000 levels of `[ … ]` and before 1 000 of block mappings.
 
 ## 14. Decision log
 
@@ -2105,3 +2104,17 @@ the user; the last, the growth of a tree by substitutions, is still to be discus
   a read timeout set on a connection already made is not applied, so the time may be outrun by one
   wait. The error is held by the load, not by the fragment of the read, which a directive of the
   program's own may drop.
+- **`impl/yaml` limits a file to 256 levels; `impl/hocon` is for trusted input** (§13 item 10),
+  the user's choice on my proposal, the limit fixed, with no setting until one is needed. In YAML
+  the parser and the scanner keep stacks of their own and only the composer recurses, so a parser
+  that counts the starts and ends of mappings and sequences fails past the limit before the
+  composer follows; and `validated`, walking the tree as composed, keeps each node's height, since
+  an anchor nested deep and used deep makes the tree deeper than its text, 50 aliases to
+  collections, snakeyaml-engine's own limit, reaching 50 times the limit. Typesafe-config offers no
+  place to stand: its parser, its objects and its resolution all recurse, and its tokenizer is
+  internal. Rejected: a lexer of our own counting brackets and dotted keys before it parses, every
+  include intercepted, which still cannot measure a chain of substitutions but by their number,
+  and that fails the substitutions of an ordinary `reference.conf`; parsing on a thread with a
+  large stack, which takes stack in proportion to the input, gigabytes for 10 MB. YAML read
+  through `impl/hocon` goes through `typesafe-config-yaml`, which composes alike; its guard
+  belongs in that library.
