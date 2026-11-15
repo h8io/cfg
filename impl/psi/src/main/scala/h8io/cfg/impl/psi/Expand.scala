@@ -46,6 +46,7 @@ private[psi] final class Expand private (
   /** `statements` expanded, standing `depth` levels deep. */
   private def statements(statements: Vector[Ast.Statement], stack: List[Source], depth: Int): Vector[Ast.Statement] =
     statements.flatMap {
+      case spread: Ast.SpreadStatement => Vector(spread)
       case field: Ast.Field =>
         value(field.value, stack, depth + field.keys.size - 1).map(value => field.copy(value = value))
       case Ast.DirectiveStatement(call, _) =>

@@ -58,8 +58,20 @@ private[psi] object Token {
 
   final case class Text(value: String) extends Part
 
+  /** A substitution, of the node at `path` or of its contents. */
+  sealed trait Substitutes extends Part {
+    def path: Id.Branch
+    def optional: Boolean
+    def location: SourceLocation
+  }
+
   /** `${path}`, or `${?path}` when `optional`, found at `location`. */
-  final case class Reference(path: Id.Branch, optional: Boolean, location: SourceLocation) extends Part
+  final case class Reference(path: Id.Branch, optional: Boolean, location: SourceLocation) extends Substitutes
+
+  /** `${path*}` or `$path*`, `${?path*}` when `optional`, found at `location`: the contents of the node at `path`, its
+    * fields among a block's or its elements among a sequence's (§9); anywhere else an error the parser reports.
+    */
+  final case class Spread(path: Id.Branch, optional: Boolean, location: SourceLocation) extends Substitutes
 
   /** What the parser asks the lexer for: the same characters mean different things on either side of `:`, and in a
     * directive's arguments.
@@ -104,5 +116,6 @@ private[psi] object Token {
     parts.iterator.map {
       case Text(value) => value
       case Reference(path, optional, _) => "${" + (if (optional) "?" else "") + Message.path(path) + "}"
+      case Spread(path, optional, _) => "${" + (if (optional) "?" else "") + Message.path(path) + "*}"
     }.mkString
 }

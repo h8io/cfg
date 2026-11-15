@@ -161,6 +161,30 @@ raw: '${not.a.path}'
 """)
 ```
 
+### Spreads
+
+A `*` after a substitution's path puts the node's contents in its place: the fields of a map among the fields of a
+block, the elements of a sequence among the elements of a sequence.
+
+- Among fields, as if the map's fields were written there: what follows overrides them, what comes before is
+  overridden, and blocks merge deep. Nothing but a spread stands alone among fields, so the `*` may be left out there.
+- Among elements, the `*` is needed: without it the sequence is grafted whole, as one element.
+- The map or the sequence is taken as it ends up, every source merged. A spread at the top of a source is an error,
+  unless the source is included in a block.
+
+```scala mdoc:passthrough
+example("""
+defaults { host: localhost, port: 5432, pool { size: 10, timeout: 30 } }
+db {
+  $defaults
+  port: 6432
+  pool { size: 20 }
+}
+hosts: [a, b]
+all: [primary, $hosts*, backup]
+""")
+```
+
 ## Values set at launch
 
 Nothing set at launch reaches a source on its own: no system property overrides a value, and the environment is not

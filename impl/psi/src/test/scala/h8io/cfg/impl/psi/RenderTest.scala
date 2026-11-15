@@ -1,7 +1,7 @@
 package h8io.cfg.impl.psi
 
 import h8io.cfg.{Id, Node}
-import h8io.cfg.impl.psi.Token.{Reference, Text}
+import h8io.cfg.impl.psi.Token.{Reference, Spread, Text}
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import org.scalatest.flatspec.AnyFlatSpec
@@ -31,14 +31,17 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
       case Tree.Null(tags, _) => Tree.Null(tags, nowhere)
       case Tree.Sequence(elements, tags, _) => Tree.Sequence(elements.map(located), tags, nowhere)
       case Tree.Substitution(path, optional, tags, _) => Tree.Substitution(path, optional, tags, nowhere)
+      case Tree.Splice(path, optional, _) => Tree.Splice(path, optional, nowhere)
       case Tree.Concatenation(parts, tags, _) =>
         Tree.Concatenation(
           parts.map {
             case Reference(path, optional, _) => Reference(path, optional, nowhere)
+            case Spread(path, optional, _) => Spread(path, optional, nowhere)
             case text: Text => text
           },
           tags,
-          nowhere)
+          nowhere
+        )
       case map: Tree.Map =>
         Tree.Map(map.keys, map.entries.map { case (k, v) => k -> located(v) }, map.tags, nowhere)
       // no loader's marker in these trees

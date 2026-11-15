@@ -29,6 +29,12 @@ private[psi] object Ast {
     */
   final case class DirectiveStatement(call: Call, doc: Option[String]) extends Statement
 
+  /** `$path` or `${path}`, a `*` after the path or not, among the fields of a block: the fields of the map at `path`,
+    * merged there as if written there (§7, §9).
+    */
+  final case class SpreadStatement(path: Id.Branch, optional: Boolean, location: SourceLocation, doc: Option[String])
+      extends Statement
+
   /** `#name(arguments)`, or `#name` alone with none, at `location`, the `#`. */
   final case class Call(name: String, arguments: Vector[Argument], location: SourceLocation)
 
@@ -77,6 +83,11 @@ private[psi] object Ast {
   /** `\${path}` or `\${?path}` unquoted and alone: the node it refers to, grafted whole (§9). */
   final case class Substitution(path: Id.Branch, optional: Boolean, tags: Set[String], location: SourceLocation)
       extends Value
+
+  /** `$path*` or `${path*}` as an element of a sequence: the elements of the sequence at `path`, in its place (§9). The
+    * parser takes it nowhere else.
+    */
+  final case class Spread(path: Id.Branch, optional: Boolean, tags: Set[String], location: SourceLocation) extends Value
 
   /** A scalar with `\${…}` inside it, or quoted around one alone, such as `"\${a}"`: always a scalar (§9).
     *
