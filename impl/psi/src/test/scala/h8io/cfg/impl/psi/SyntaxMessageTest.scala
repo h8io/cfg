@@ -70,7 +70,9 @@ class SyntaxMessageTest extends AnyFlatSpec with Matchers {
     text(TripleQuotedArgument(at)) shouldBe
       (("a triple-quoted string in a directive's arguments; it is read all the same", Some("write it in \"…\" or '…'")))
     text(SubstitutionInArgument(at)) shouldBe
-      (("a substitution in an argument, which is taken as written", Some("to mean the text, write '\\$" + "{'")))
+      ((
+        "a substitution in an argument, which is taken as written",
+        Some("to mean the text, quote it, and write '\\$" + "{' for '$" + "{'")))
     text(PositionalAfterNamed(at)) shouldBe
       (("a positional argument after a named one", Some("put positional arguments first, as in Scala")))
     text(UnknownArgument(at, "n")) shouldBe (("no argument named 'n' is taken here", None))

@@ -208,7 +208,7 @@ final case class InvalidArgument(location: SourceLocation, argument: String) ext
 final case class SubstitutionInArgument(location: SourceLocation) extends PsiError {
   def message: String = "a substitution in an argument, which is taken as written"
 
-  override def hint: Option[String] = Some("to mean the text, write '\\${'")
+  override def hint: Option[String] = Some("to mean the text, quote it, and write '\\${' for '${'")
 }
 
 /** With no marker, two lines of a triple-quoted block whose indents are not one a prefix of the other, such as a tab
@@ -255,6 +255,13 @@ final case class ColonWithoutSpace(location: SourceLocation) extends PsiError {
   def message: String = "no space after the colon"
 
   override def hint: Option[String] = Some("put a space after it, as in 'key: value'")
+}
+
+/** A `$` outside quotes that opens no substitution: no path after it, bare or in backticks (`format.md` §3, §9). */
+final case class StrayDollar(location: SourceLocation) extends PsiError {
+  def message: String = "a '$' outside quotes opens a substitution, and no path follows it"
+
+  override def hint: Option[String] = Some("write the path after it, or quote the value: \"…$…\"")
 }
 
 /** A `"` or backtick inside an unquoted scalar; the value has to be quoted as a whole. */

@@ -153,6 +153,11 @@ loader path.
   the `\$` escape is for: `"\${not.a.substitution}"`. Inside backticks there are no
   substitutions — a name is never computed — but `\$` is accepted there too, the escape set being
   one. Inside `"""…"""` a literal `${` is `\${` as well, the escape set being the same (§5).
+
+  **Outside quotes a `$` always opens a substitution** (session 25): `${path}`, or `$path` with
+  no braces (§9). One that opens none — no path after it, as in `5$` or `$ x` — is an error with
+  a hint to quote the value, and is read as text. Inside quotes nothing changes: only `${` opens a
+  substitution, and a `$` alone is text, `"$5"`.
 - **`:` after a key** must be followed by whitespace or the end of the line, so `a:b` in a block is an
   error with a hint rather than a field. Inside a value `:` is ordinary: `url: http://host:8080`.
   `:=` is the replacing form of `:` (§7) and follows the same rule: `a:=b` is an error.
@@ -719,6 +724,14 @@ from a substitution.
   ``${server.`odd key`[0]}``. An index is a decimal with no sign and no leading zeros, as `Id.path`
   prints it, so `[07]` and `[-1]` are errors. An index past the end of a sequence resolves to
   nothing, as a missing key does: an error for `${…}`, an omitted field for `${?…}`.
+- **Outside quotes the braces may be left out**, `$path` and `$?path` meaning `${path}` and
+  `${?path}` (session 25): `a: $b`, `url: jdbc:$host/db`. With no `}` to end it, the path takes all
+  it can — a key, then `.key` and `[index]` as long as they follow — and stops before anything
+  else, which is text again: `$host/db` is the path `host` and the text `/db`, but `$host-name`
+  is the path `host-name`, a `-` being part of a key, and `$name.txt` the path `name.txt`. A `.`
+  not followed by a key, and a `[` not followed by an index, end the path and are text. Braces end
+  a path where it would go on: `${name}.txt`. Inside quotes the braces stay, a `$` alone being
+  text (§3).
 - Tags written before a whole-value `${…}` are added to the grafted node's own: with
   `b: @x { … }`, `a: @y ${b}` gives `a` the tags `x` and `y`. The union is the same as in a merge
   (§7), so a graft and a merge never disagree about tags.
@@ -2157,3 +2170,11 @@ the user; the last, the growth of a tree by substitutions, is still to be discus
   `default: …`, not both; a dotted name quoted, as every argument is, for now. Breaks every config
   that relied on `-D` to override a key: before 1.0, as the user put it, compatibility is not
   kept.
+- **Outside quotes a `$` always opens a substitution, and `$path` is `${path}` with no braces**
+  (§3, §9), the user's proposal, with `${…}` kept: a `$` that opens none outside quotes is an
+  error, read as text. Inside quotes nothing changes, the user's call when I proposed `$path`
+  there too, with `\$` for a literal one: only `${…}` substitutes, and `"$5"` stays text. The path
+  with no braces is greedy, the user's choice: it takes every key, `.key` and `[index]` that
+  follows, so that `$host-name` and `$name.txt` are paths, and braces end one where it would go
+  on. A `$path` in a directive's arguments is reported as `${path}` is, and the hint of that error
+  says to quote the text. Breaks a value outside quotes holding a `$`, `price: 5$`, now an error.

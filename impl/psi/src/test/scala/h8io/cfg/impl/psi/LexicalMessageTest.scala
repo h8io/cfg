@@ -30,6 +30,12 @@ class LexicalMessageTest extends AnyFlatSpec with Matchers {
       (("reading the sources of this load takes longer than 1500 ms", hint))
   }
 
+  "A stray '$'" should "say that it opens a substitution, and how to write it as text" in {
+    text(StrayDollar(at)) shouldBe
+      (("a '$' outside quotes opens a substitution, and no path follows it",
+        Some("write the path after it, or quote the value: \"…$…\"")))
+  }
+
   "Characters" should "be named, with what to do about them" in {
     text(InvalidEncoding(at)) shouldBe
       (("a byte that is not UTF-8; the rest of this source is not read", Some("save the source as UTF-8")))

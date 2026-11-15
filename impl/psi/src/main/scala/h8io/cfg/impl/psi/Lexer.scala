@@ -266,6 +266,10 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
         report(SubstitutionInArgument.apply, start)
         reference(quoted = false).foreach(_ => ())
         Name(text.substring(start, offset), quoted = false)
+      case '$' if startsBare(offset) =>
+        report(SubstitutionInArgument.apply, start)
+        bare().foreach(_ => ())
+        Name(text.substring(start, offset), quoted = false)
       case _ =>
         while (has(offset) && !endsArgument(offset)) offset += 1
         val word = text.substring(start, offset)
@@ -362,12 +366,19 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
     } else fail(UnterminatedString(_, "\""), start)
   }
 
-  /** An unquoted scalar: everything up to whitespace, `,`, `}` or `]`, comment openers and backslashes included. */
+  /** An unquoted scalar: everything up to whitespace, `,`, `}` or `]`, comment openers and backslashes included. A `$`
+    * in it opens a substitution, `${path}` or `$path`; one that opens none is reported and read as text.
+    */
   private def unquoted(): Kind = {
     val parts = new Parts
     while (!ended && has(offset) && !endsUnquoted(offset))
       if (startsWith("${")) reference(quoted = false).foreach(parts.reference)
-      else {
+      else if (at(offset, '$') && startsBare(offset)) bare().foreach(parts.reference)
+      else if (at(offset, '$')) {
+        report(StrayDollar.apply, offset)
+        parts.buffer += '$'
+        offset += 1
+      } else {
         val c = text.charAt(offset)
         if (c == '"' || c == '`') report(QuoteInUnquotedScalar.apply, offset)
         parts.buffer += c
@@ -625,6 +636,44 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
       case None => None
     }
   }
+
+  /** Whether a `$path` or a `$?path` starts at the `$` at `i`: a key, bare or in backticks, after it. */
+  private def startsBare(i: Int): Boolean = {
+    val path = if (at(i + 1, '?')) i + 2 else i + 1
+    at(path, '`') || has(path) && isNameStart(text.codePointAt(path))
+  }
+
+  /** `$path` or `$?path` from its `$` (`format.md` §9), a path with no braces around it: it takes all it can, a `.`
+    * followed by a key and an `[index]`, and stops before anything else, which is text again — `$name.txt` is the path
+    * `name.txt`, and `${name}.txt` the path `name` and the text `.txt`. `None` once an unterminated key in backticks
+    * has ended the source.
+    */
+  private def bare(): Option[Reference] = {
+    val start = offset
+    offset += 1
+    val optional = at(offset, '?')
+    if (optional) offset += 1
+    key(Id.Root).map(key => Reference(greedy(key), optional, source.location(start)))
+  }
+
+  /** The segments of a path with no braces after `current`, as many as there are. */
+  @tailrec private def greedy(current: Id.Branch): Id.Branch =
+    if (at(offset, '.') && (at(offset + 1, '`') || has(offset + 1) && isNameStart(text.codePointAt(offset + 1)))) {
+      offset += 1
+      key(current) match {
+        case Some(next) => greedy(next)
+        case None => current
+      }
+    } else if (at(offset, '[')) {
+      val bracket = offset
+      offset += 1
+      index(current) match {
+        case Some(next) => greedy(next)
+        case None =>
+          offset = bracket
+          current
+      }
+    } else current
 
   /** The `}` that closes a broken substitution: the next one on its line, and inside quotes before the closing one. A
     * forbidden character stops the search too, so that it is reported rather than skipped.
