@@ -1,12 +1,13 @@
 package h8io.cfg.impl.psi
 
 import java.io.{File, FileNotFoundException, IOException}
-import java.net.{JarURLConnection, URISyntaxException, URL, URLConnection}
+import java.net.{JarURLConnection, URI, URL, URLConnection}
 import java.nio.charset.{CodingErrorAction, StandardCharsets}
-import java.nio.file.{Files, Paths, StandardCopyOption}
+import java.nio.file.{Files, Path, Paths, StandardCopyOption}
 import java.nio.{ByteBuffer, CharBuffer}
 import java.util.Arrays
 import java.util.jar.JarFile
+import java.util.zip.ZipFile
 import scala.util.control.NonFatal
 
 /** The text of one source, with a byte order mark at its start already skipped, and the means to turn an offset into
@@ -108,12 +109,8 @@ private[psi] object Source {
     val archive = connection.getJarFileURL
     if (archive.getProtocol == "file") {
       val file =
-        try Paths.get(archive.toURI).toFile
-        catch {
-          // a `file:` URL with a host, `file://host/x`, is no path
-          case e @ (_: URISyntaxException | _: IllegalArgumentException) =>
-            throw new IOException(archive.toString + " is no path", e)
-        }
+        try path(archive).toFile
+        catch { case e: IllegalArgumentException => throw new IOException(archive.toString + " is no path", e) }
       entry(file, name, url)
     } else {
       val temporary = Files.createTempFile("psi", ".jar")
@@ -128,7 +125,7 @@ private[psi] object Source {
 
   /** The entry `name` of the jar `file`; one not there is not found, as the JVM reports it. */
   private def entry(file: File, name: String, url: URL): Array[Byte] = {
-    val jar = new JarFile(file)
+    val jar = open(file, url)
     try {
       val entry = Option(jar.getEntry(name)).getOrElse(throw new FileNotFoundException(url.toString + " is not found"))
       val stream = jar.getInputStream(entry)
@@ -136,6 +133,21 @@ private[psi] object Source {
       finally stream.close()
     } finally jar.close()
   }
+
+  /** The path of a jar's `file:` URL, as a `JarURLConnection` gives it: with the fragment of the `jar:` URL, which
+    * names no part of the path. A `file:` URL with a host, `file://host/x`, is no path: an `IllegalArgumentException`.
+    */
+  private[psi] def path(archive: URL): Path = Paths.get(URI.create(archive.toString.takeWhile(_ != '#')))
+
+  /** The jar `file` that the `jar:` URL `url` names, opened as the JVM opens it: as of the version the JVM runs when
+    * the URL ends in `#runtime`, a multi-release jar giving the entry of that version, and as of its base otherwise.
+    */
+  private[psi] def open(file: File, url: URL): JarFile =
+    new JarFile(
+      file,
+      true,
+      ZipFile.OPEN_READ,
+      if (url.getRef == "runtime") JarFile.runtimeVersion else JarFile.baseVersion)
 
   /** The key of a source read from `url`: its URI normalized, a file's real path; the URL as it is written when it is
     * no URI, or the file is no longer there.

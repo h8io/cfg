@@ -357,4 +357,25 @@ class IncludeTest extends AnyFlatSpec with Matchers {
     loader(a.toUri.toURL, b.toUri.toURL).left.map(_.errors.map(_.location)) shouldBe
       Left(List(SourceLocation(url(dir.resolve("common.psi")), 1, 1)))
   }
+
+  "An include of an entry of a multi-release jar" should "find it as of the version the JVM runs with #runtime" in {
+    val jar = Files.createTempDirectory("psi").resolve("c.jar")
+    val out = new ZipOutputStream(Files.newOutputStream(jar))
+    try
+      for ((name, text) <- List(
+          "META-INF/MANIFEST.MF" -> "Manifest-Version: 1.0\r\nMulti-Release: true\r\n",
+          "META-INF/versions/9/only.psi" -> "v: nine")) {
+        out.putNextEntry(new ZipEntry(name))
+        out.write(text.getBytes(StandardCharsets.UTF_8))
+        out.closeEntry()
+      }
+    finally out.close()
+    val entry = "jar:" + url(jar) + "!/only.psi"
+    loader.parse("s", "#include(url: \"" + entry + "#runtime\")").map(_("v")) match {
+      case Right(Node.IScalar(_, _, value, _)) => value shouldBe "nine"
+      case other => fail(other.toString)
+    }
+    loader.parse("s", "#include(url: \"" + entry + "\")").left.map(_.errors) shouldBe
+      Left(List(DirectiveFailed(SourceLocation("s", 1, 1), "include", IncludeNotFound(entry))))
+  }
 }
