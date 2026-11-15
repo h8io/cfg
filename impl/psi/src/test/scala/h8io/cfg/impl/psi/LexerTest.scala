@@ -625,11 +625,46 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
           scalar(Text("jdbc:"), ref(at("host"), 1, 6), Text("/db")),
           scalar(ref(at("a"), 1, 17)),
           scalar(Reference(at("b"), optional = true, loc(1, 22))),
-          plain("$x"),
+          scalar(ref(at("x"), 1, 28)),
           plain("a\\b")
         ),
         Nil
       )
+  }
+
+  "A substitution with no braces" should "take a path as all it can, and stop before anything else" in {
+    lex("$a $?b x$a.b[0].c-d/e $a. $a[x] $a[07] $`odd key`.y $a.`b c`") shouldBe
+      Lexed(
+        List(
+          scalar(ref(at("a"), 1, 1)),
+          scalar(Reference(at("b"), optional = true, loc(1, 4))),
+          scalar(Text("x"), ref(Id.Key("c-d", Id.Index(0, Id.Key("b", at("a")))), 1, 9), Text("/e")),
+          scalar(ref(at("a"), 1, 23), Text(".")),
+          // an index that is none is text, up to the `]` that ends the scalar, as it ends any unquoted one
+          scalar(ref(at("a"), 1, 27), Text("[x")),
+          RightBracket,
+          scalar(ref(at("a"), 1, 33), Text("[07")),
+          RightBracket,
+          scalar(ref(Id.Key("y", at("odd key")), 1, 40)),
+          scalar(ref(Id.Key("b c", at("a")), 1, 53))
+        ),
+        Nil
+      )
+  }
+
+  it should "end the source with a key in backticks never closed" in {
+    lex("$`a").errors shouldBe List(UnterminatedName(loc(1, 2)))
+    lex("$a.`b").errors shouldBe List(UnterminatedName(loc(1, 4)))
+  }
+
+  "A '$' outside quotes that opens no substitution" should "be reported, and read as text" in {
+    lex("a$ $ $?1 5$,") shouldBe
+      Lexed(
+        List(plain("a$"), plain("$"), plain("$?1"), plain("5$"), Comma),
+        List(StrayDollar(loc(1, 2)), StrayDollar(loc(1, 4)), StrayDollar(loc(1, 6)), StrayDollar(loc(1, 11)))
+      )
+    // in quotes and in a raw string, a '$' is text, as it always was
+    lex("\"$a\" '$a'") shouldBe Lexed(List(quoted(Text("$a")), quoted(Text("$a"))), Nil)
   }
 
   "A substitution" should "take a path as Id.path renders one" in {

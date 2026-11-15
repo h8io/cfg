@@ -447,6 +447,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     parse("#x(1.5)") shouldBe Result(empty, List(InvalidLiteral(loc(1, 4), "1.5")))
     parse("#x(\"\"\"\n  a\n  \"\"\")") shouldBe Result(empty, List(TripleQuotedArgument(loc(1, 4))))
     parse("#x(${a})") shouldBe Result(empty, List(SubstitutionInArgument(loc(1, 4))))
+    parse("#x($a.b)") shouldBe Result(empty, List(SubstitutionInArgument(loc(1, 4))))
     parse("#x(a:1)") shouldBe Result(empty, List(ColonWithoutSpace(loc(1, 5))))
     parse("#") shouldBe Result(empty, List(MissingDirectiveName(loc(1, 1))))
     parse("a: #\nb: [#x(1.5), 2]") shouldBe

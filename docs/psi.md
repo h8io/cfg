@@ -139,8 +139,13 @@ to its final state, whichever source set it.
 - Inside a value, `jdbc:${host}/db` or `"jdbc:${host}/db"`, it builds a string, and the node has to be a value.
 - `${?path}` is optional: with nothing at `path`, the field is left out, an element of a sequence is dropped, and a
   part of a string is empty.
-- Inside `"…"` and `"""…"""`, `\${` is a literal `${`. A raw string, `'…'` or `'''…'''`, has no substitutions at
-  all, `${` being text. An unquoted value has no escapes, so a value holding a literal `${` is quoted.
+- Outside quotes the braces may be left out: `$path` is `${path}`, and `$?path` is `${?path}`. The path then takes
+  all it can, so `$host/db` is `host` and the text `/db`, but `$host-name` and `$name.txt` are paths whole; braces end
+  a path where it would go on, `${name}.txt`.
+- Outside quotes a `$` always opens a substitution, and one with no path after it is an error: a value holding a
+  literal `$` is quoted.
+- Inside `"…"` and `"""…"""` only `${` opens a substitution, a `$` alone being text, and `\${` is a literal `${`. A
+  raw string, `'…'` or `'''…'''`, has no substitutions at all, `${` being text.
 
 ```scala mdoc:passthrough
 example("""
@@ -149,7 +154,8 @@ db {
   url: "jdbc:postgresql://${db.host}:5432/orders"
 }
 replica: ${db}
-user: ${?env.user}
+backup: $db.host
+user: $?env.user
 escaped: "\${not.a.path}"
 raw: '${not.a.path}'
 """)
