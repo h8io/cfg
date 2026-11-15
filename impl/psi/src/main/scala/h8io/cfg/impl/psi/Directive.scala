@@ -30,36 +30,6 @@ trait Directive {
   def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Option[Fragment]]
 }
 
-/** A marker of a triple-quoted block, registered with a loader through [[PsiBuilder.withMarkers]] (`format.md` §5): a
-  * function from the block's value to a new one, given its arguments. The loader's markers on a block run left to
-  * right, after the built-in ones, over the value with its escapes read and its substitutions resolved.
-  */
-trait Marker {
-
-  /** The name the marker is written by: a run of the symbols `! # $ % & * + - . : ; < = > ? @ ^ | ~`, or a name by the
-    * key rule.
-    */
-  def name: String
-
-  /** The parameters, in the order positional arguments go to them. */
-  def parameters: Seq[Parameter]
-
-  /** The new value of a block, or an error, reported at the marker as its failure.
-    *
-    * @param arguments
-    *   the arguments by parameter, in the order the parameters are declared; every value a scalar string
-    */
-  def apply(arguments: Node.IMap[Id.Root], value: String): Either[MarkerError, String]
-}
-
-/** Why a [[Marker]] could not give a new value; a handler's own errors extend it. */
-trait MarkerError {
-  def message: String
-
-  /** What to do about it, shown under the message; none unless the handler gives one. */
-  def hint: Option[String] = None
-}
-
 /** Why a [[Directive]] could not be expanded; a handler's own errors extend it. */
 trait DirectiveError {
   def message: String
@@ -67,9 +37,6 @@ trait DirectiveError {
   /** What to do about it, shown under the message; none unless the handler gives one. */
   def hint: Option[String] = None
 }
-
-/** A parameter of a [[Directive]] or a [[Marker]]: an argument for a required one must be given. */
-final case class Parameter(name: String, required: Boolean)
 
 /** What a [[Directive]] is given besides its arguments. */
 trait DirectiveContext {
@@ -91,30 +58,4 @@ trait DirectiveContext {
 
   /** Parses a source held as `text`, named `name` in locations and known by its name for cycles. */
   def parse(name: String, text: String): Fragment
-}
-
-/** What a [[Directive]] gives back: Psi's own unexpanded tree, opaque to the handler. A fragment is a value: it carries
-  * the errors found in making it, reported wherever it is used, so a handler may keep one and give it back again, in
-  * the same load or a later one.
-  */
-sealed abstract class Fragment
-
-object Fragment {
-
-  /** A fragment of `node`, which holds no substitution; its ids are dropped, and its locations are kept as origins
-    * behind the call (§10).
-    */
-  def apply(node: Node.ISome[Id]): Fragment = Built(node)
-
-  /** A source parsed, its directives expanded; `root` is where it starts, `errors` what was found in it, reported
-    * wherever the fragment is used, and `sources` the names of it and of the sources it parsed, in the order parsed.
-    */
-  private[psi] final case class Parsed(
-      document: Ast.Document,
-      root: SourceLocation,
-      errors: List[PsiError],
-      sources: List[String])
-      extends Fragment
-
-  private[psi] final case class Built(node: Node.ISome[Id]) extends Fragment
 }
