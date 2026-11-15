@@ -185,7 +185,8 @@ the fields after it override them; as a value it makes the source a block.
 | `optional: true` | nothing when the target is not there, rather than an error |
 
 A `file` or `resource` with no extension is looked for as `.Ψ`, `.ψ` and `.psi`, in that order. A URL that takes
-more than 10 seconds to connect, or 30 to send its next bytes, is an error.
+more than 10 seconds to connect, or 30 to send its next bytes, is an error. Every include is read again, so the limits
+on reading below count it each time.
 
 ```scala mdoc:invisible
 // Writes the two files of the example below, and loads the second
@@ -242,5 +243,6 @@ A tree loaded is at most 256 levels deep, counting each `{`, `[` and key after a
 goes at most 256 steps, each a level descended or a substitution followed, a substitution used again counting as
 deep as it went the first time. So a chain of substitutions goes 256 links, whatever order its keys are written in.
 Resolving substitutions adds at most 1 000 000 nodes, those grafts copy, and 10 000 000 characters, those of the
-scalars concatenations build; a source's own size is not limited. Past any of these limits, the load reports an error.
+scalars concatenations build; a source's own size is not limited. Reading the sources of a load takes at most
+10 000 000 bytes, every read counted, and 60 seconds, give or take a wait already begun. Past any of these limits, the load reports an error.
 A program can set another limit.

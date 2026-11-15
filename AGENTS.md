@@ -123,7 +123,8 @@ batch, and substitutions are resolved only when it is empty. A scalar is the tex
 written, and nothing is typed. Depth is limited (256 by default, `withDepthLimit`) in the tree loaded and in
 resolution, so that no input overflows the stack; nothing on a path from the input recurses past the limit, and a
 path is written with `Message.path`, never `Id.path`, which recurses. What resolution adds is limited too (1 000 000
-nodes grafts copy, 10 000 000 characters concatenations build, `withSizeLimit`), counted before it is built.
+nodes grafts copy, 10 000 000 characters concatenations build, `withSizeLimit`), counted before it is built, and so is
+reading the sources of a load (10 000 000 bytes, every read counted, and 60 seconds, `withReadLimit`).
 
 ## sbt 2
 

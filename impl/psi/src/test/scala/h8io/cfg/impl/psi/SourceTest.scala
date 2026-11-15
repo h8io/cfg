@@ -7,10 +7,16 @@ import org.scalatest.matchers.should.Matchers
 import java.io.{FileNotFoundException, IOException}
 import java.net.{InetAddress, ServerSocket, SocketTimeoutException, URI, URL}
 import java.nio.charset.StandardCharsets
+import java.time.Duration
 import java.nio.file.{Files, Path, StandardCopyOption}
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
 class SourceTest extends AnyFlatSpec with Matchers with EitherValues with Inside {
+  private def budget: ReadBudget = new ReadBudget(Int.MaxValue, Duration.ofDays(1))
+
+  private def read(name: String, url: URL): Either[PsiError, Source] =
+    Source.read(name, url, budget).map(_.getOrElse(fail("dropped by the budget")))
+
   "location" should "count lines and columns from 1" in {
     val source = Source("s", "ab\ncd")
     source.location(0) shouldBe SourceLocation("s", 1, 1)
@@ -64,7 +70,7 @@ class SourceTest extends AnyFlatSpec with Matchers with EitherValues with Inside
     val file = Files.createTempFile("source", ".psi")
     try {
       Files.write(file, "a: 1".getBytes(StandardCharsets.UTF_8))
-      val source = Source.read("app.psi", file.toUri.toURL).value
+      val source = read("app.psi", file.toUri.toURL).value
       source.name shouldBe "app.psi"
       source.text shouldBe "a: 1"
     } finally Files.delete(file)
@@ -73,7 +79,7 @@ class SourceTest extends AnyFlatSpec with Matchers with EitherValues with Inside
   it should "report a URL that cannot be read" in {
     val file = Files.createTempFile("source", ".psi")
     Files.delete(file)
-    inside(Source.read("gone.psi", file.toUri.toURL).left.value) { case SourceUnreadable("gone.psi", _: IOException) =>
+    inside(read("gone.psi", file.toUri.toURL).left.value) { case SourceUnreadable("gone.psi", _: IOException) =>
     }
   }
 
@@ -101,11 +107,11 @@ class SourceTest extends AnyFlatSpec with Matchers with EitherValues with Inside
 
   it should "read a jar as it is now, not as an earlier read found it" in {
     val path = jar(Files.createTempDirectory("psi").resolve("c.jar"), "a.psi" -> "a: old")
-    Source.read("a", entry(path, "a.psi")).value.text shouldBe "a: old"
+    read("a", entry(path, "a.psi")).value.text shouldBe "a: old"
     // a new file, as a build puts one in place: the JVM's cache keeps the one it opened
     val next = jar(path.resolveSibling("next.jar"), "a.psi" -> "a: newer")
     Files.move(next, path, StandardCopyOption.REPLACE_EXISTING)
-    Source.read("a", entry(path, "a.psi")).value.text shouldBe "a: newer"
+    read("a", entry(path, "a.psi")).value.text shouldBe "a: newer"
   }
 
   it should "read a multi-release jar as of the version the JVM runs with #runtime, as of its base without" in {
@@ -115,15 +121,15 @@ class SourceTest extends AnyFlatSpec with Matchers with EitherValues with Inside
       "a.psi" -> "v: base",
       "META-INF/versions/9/a.psi" -> "v: nine"
     )
-    Source.read("a", entry(path, "a.psi#runtime")).value.text shouldBe "v: nine"
-    Source.read("a", entry(path, "a.psi")).value.text shouldBe "v: base"
+    read("a", entry(path, "a.psi#runtime")).value.text shouldBe "v: nine"
+    read("a", entry(path, "a.psi")).value.text shouldBe "v: base"
   }
 
   it should "report an entry its jar does not have as not found, and a jar URL that names no entry as unreadable" in {
     val path = jar(Files.createTempDirectory("psi").resolve("c.jar"), "a.psi" -> "a: 1")
-    inside(Source.read("b", entry(path, "b.psi")).left.value) { case SourceUnreadable("b", _: FileNotFoundException) =>
+    inside(read("b", entry(path, "b.psi")).left.value) { case SourceUnreadable("b", _: FileNotFoundException) =>
     }
-    inside(Source.read("root", entry(path, "")).left.value) { case SourceUnreadable("root", cause) =>
+    inside(read("root", entry(path, "")).left.value) { case SourceUnreadable("root", cause) =>
       cause should not be a[FileNotFoundException]
       cause.getMessage should include("names no entry")
     }
@@ -132,13 +138,13 @@ class SourceTest extends AnyFlatSpec with Matchers with EitherValues with Inside
   it should "report a jar whose file URL is no path" in {
     val path = jar(Files.createTempDirectory("psi").resolve("c.jar"), "a.psi" -> "a: 1")
     val archive = path.toUri.toURL.toString + "?q"
-    inside(Source.read("a", URI.create("jar:" + archive + "!/a.psi").toURL).left.value) {
+    inside(read("a", URI.create("jar:" + archive + "!/a.psi").toURL).left.value) {
       case SourceUnreadable("a", cause) =>
         cause.getMessage shouldBe archive + " is no path"
         cause.getCause shouldBe an[IllegalArgumentException]
     }
     // a host: Java 17 takes the URL and fails on the path, later versions refuse the URL itself
-    inside(Source.read("a", URI.create("jar:file://host/c.jar!/a.psi").toURL).left.value) {
+    inside(read("a", URI.create("jar:file://host/c.jar!/a.psi").toURL).left.value) {
       case SourceUnreadable("a", _: IOException) =>
     }
   }
@@ -150,7 +156,7 @@ class SourceTest extends AnyFlatSpec with Matchers with EitherValues with Inside
       val base = "http://127.0.0.1:" + server.getLocalPort.toString + "/"
       for (url <- List(base + "a.psi", "jar:" + base + "c.jar!/a.psi")) {
         val started = System.nanoTime
-        inside(Source.read("a", URI.create(url).toURL, 1000, 200).left.value) {
+        inside(Source.read("a", URI.create(url).toURL, budget, 1000, 200).left.value) {
           case SourceUnreadable("a", _: SocketTimeoutException) =>
         }
         (System.nanoTime - started) should be < 10000000000L

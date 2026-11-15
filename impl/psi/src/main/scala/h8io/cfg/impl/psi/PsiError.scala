@@ -1,6 +1,7 @@
 package h8io.cfg.impl.psi
 
 import java.io.IOException
+import java.time.Duration
 
 /** An error found while loading a Psi configuration. Every error points at the place it is about, says what is wrong
   * there and, where it can, what to do about it (`format.md` §11). The texts are for people and may change in any
@@ -28,6 +29,31 @@ final case class InvalidEncoding(location: SourceLocation) extends PsiError {
   def message: String = "a byte that is not UTF-8" + Message.Fatal
 
   override def hint: Option[String] = Some("save the source as UTF-8")
+}
+
+/** Reading the sources of a load taking more than `limit` bytes in all, every read counted (`format.md` §6, §11): at
+  * the source whose reading went past, after which every read of the load is dropped and not reported.
+  */
+final case class ReadLimitExceeded(source: String, limit: Int) extends PsiError {
+  def location: SourceLocation = SourceLocation(source, 1, 1)
+
+  def message: String =
+    "reading the sources of this load takes more than " + limit.toString + " bytes, a source read twice counted twice"
+
+  override def hint: Option[String] =
+    Some("include fewer or smaller sources, or build the loader with a higher withReadLimit")
+}
+
+/** Reading the sources of a load taking longer than `limit` (`format.md` §6, §11): at the source being read then, after
+  * which every read of the load is dropped and not reported.
+  */
+final case class ReadTimeExceeded(source: String, limit: Duration) extends PsiError {
+  def location: SourceLocation = SourceLocation(source, 1, 1)
+
+  def message: String = "reading the sources of this load takes longer than " + Message.duration(limit)
+
+  override def hint: Option[String] =
+    Some("make the sources quicker to reach, or build the loader with a longer withReadLimit")
 }
 
 /** A carriage return that is not part of a CRLF. */

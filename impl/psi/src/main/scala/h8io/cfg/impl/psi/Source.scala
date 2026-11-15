@@ -1,9 +1,9 @@
 package h8io.cfg.impl.psi
 
-import java.io.{File, FileNotFoundException, IOException}
-import java.net.{JarURLConnection, URI, URL, URLConnection}
+import java.io.{ByteArrayOutputStream, File, FileNotFoundException, IOException, InputStream, OutputStream}
+import java.net.{JarURLConnection, SocketTimeoutException, URI, URL, URLConnection}
 import java.nio.charset.{CodingErrorAction, StandardCharsets}
-import java.nio.file.{Files, Path, Paths, StandardCopyOption}
+import java.nio.file.{Files, Path, Paths}
 import java.nio.{ByteBuffer, CharBuffer}
 import java.util.Arrays
 import java.util.jar.JarFile
@@ -69,24 +69,31 @@ private[psi] object Source {
   /** How long reading a URL waits for its next bytes, in milliseconds (`format.md` §6). */
   def ReadTimeout: Int = 30000
 
-  /** Reads `url` as UTF-8; an unreadable source and one that is not UTF-8 are errors, and so is one that keeps the
-    * connection or its next bytes waiting past the timeouts.
+  /** Reads `url` as UTF-8, under the load's `budget`: an unreadable source and one that is not UTF-8 are errors, and so
+    * is one that keeps the connection or its next bytes waiting past the timeouts; nothing when the budget is gone, by
+    * this read or one before it, which the budget holds as its error.
     */
-  def read(name: String, url: URL): Either[PsiError, Source] = read(name, url, ConnectTimeout, ReadTimeout)
-
-  private[psi] def read(name: String, url: URL, connectTimeout: Int, readTimeout: Int): Either[PsiError, Source] =
-    try
-      decode(name, bytes(url, connectTimeout, readTimeout))
-        .map(source => new Source(name, source.text, Some(url), key(url)))
-    catch { case e: IOException => Left(SourceUnreadable(name, e)) }
-
-  private def bytes(url: URL, connectTimeout: Int, readTimeout: Int): Array[Byte] =
-    if (url.getProtocol == "jar") entry(url, connectTimeout, readTimeout)
-    else {
-      val stream = connect(url, connectTimeout, readTimeout).getInputStream
-      try stream.readAllBytes()
-      finally stream.close()
-    }
+  def read(
+      name: String,
+      url: URL,
+      budget: ReadBudget,
+      connectTimeout: Int = ConnectTimeout,
+      readTimeout: Int = ReadTimeout): Either[PsiError, Option[Source]] =
+    if (budget.exhausted) Right(None)
+    else
+      try
+        decode(name, new Reading(name, budget, connectTimeout, readTimeout).bytes(url))
+          .map(source => Some(new Source(name, source.text, Some(url), key(url))))
+      catch {
+        case _: ReadBudget.Exceeded => Right(None)
+        // a wait the time left cut short, which ends when it is gone
+        case e: SocketTimeoutException =>
+          try {
+            val _ = budget.timeout(name, readTimeout)
+            Left(SourceUnreadable(name, e))
+          } catch { case _: ReadBudget.Exceeded => Right(None) }
+        case e: IOException => Left(SourceUnreadable(name, e))
+      }
 
   /** A connection to `url`, not yet made, with the timeouts set: a URL connection has none of its own, and a server
     * that never answers would hold the load forever.
@@ -98,40 +105,78 @@ private[psi] object Source {
     connection
   }
 
-  /** The entry of a jar `url` names, read from the jar itself rather than through the connection a `jar:` URL opens:
-    * that one keeps a jar it opened in the JVM's cache, and gives every later load what the jar held then, and fetches
-    * a remote jar with no timeouts at all. A remote jar is fetched whole into a temporary file, as the JVM does.
+  /** Reading the source `name`, every byte counted against `budget` and every wait cut to the time it has left. A
+    * connection takes its timeouts once, when it is made, so a wait already begun runs its course: the time may be gone
+    * past by one wait, at most the read timeout.
     */
-  private def entry(url: URL, connectTimeout: Int, readTimeout: Int): Array[Byte] = {
-    // opening no connection: a `JarURLConnection` parses the URL, and connects only once asked to
-    val connection = url.openConnection().asInstanceOf[JarURLConnection]
-    val name = Option(connection.getEntryName).getOrElse(throw new IOException(url.toString + " names no entry"))
-    val archive = connection.getJarFileURL
-    if (archive.getProtocol == "file") {
-      val file =
-        try path(archive).toFile
-        catch { case e: IllegalArgumentException => throw new IOException(archive.toString + " is no path", e) }
-      entry(file, name, url)
-    } else {
-      val temporary = Files.createTempFile("psi", ".jar")
-      try {
-        val stream = connect(archive, connectTimeout, readTimeout).getInputStream
-        try { val _ = Files.copy(stream, temporary, StandardCopyOption.REPLACE_EXISTING) }
-        finally stream.close()
-        entry(temporary.toFile, name, url)
-      } finally Files.delete(temporary)
-    }
-  }
+  private final class Reading(name: String, budget: ReadBudget, connectTimeout: Int, readTimeout: Int) {
+    def bytes(url: URL): Array[Byte] =
+      if (url.getProtocol == "jar") entry(url)
+      else {
+        val out = new ByteArrayOutputStream
+        fetch(url, out)
+        out.toByteArray
+      }
 
-  /** The entry `name` of the jar `file`; one not there is not found, as the JVM reports it. */
-  private def entry(file: File, name: String, url: URL): Array[Byte] = {
-    val jar = open(file, url)
-    try {
-      val entry = Option(jar.getEntry(name)).getOrElse(throw new FileNotFoundException(url.toString + " is not found"))
-      val stream = jar.getInputStream(entry)
-      try stream.readAllBytes()
+    /** Copies what `url` gives to `out`. */
+    private def fetch(url: URL, out: OutputStream): Unit = {
+      val stream =
+        connect(url, budget.timeout(name, connectTimeout), budget.timeout(name, readTimeout)).getInputStream
+      try copy(stream, out)
       finally stream.close()
-    } finally jar.close()
+    }
+
+    /** Copies `in` to `out` a buffer at a time, counting each and looking at the time before each wait. */
+    private def copy(in: InputStream, out: OutputStream): Unit = {
+      val buffer = new Array[Byte](8192)
+      var n = in.read(buffer)
+      while (n >= 0) {
+        budget.count(name, n)
+        out.write(buffer, 0, n)
+        val _ = budget.timeout(name, readTimeout)
+        n = in.read(buffer)
+      }
+    }
+
+    /** The entry of a jar `url` names, read from the jar itself rather than through the connection a `jar:` URL opens:
+      * that one keeps a jar it opened in the JVM's cache, and gives every later load what the jar held then, and
+      * fetches a remote jar with no timeouts at all. A remote jar is fetched whole into a temporary file, as the JVM
+      * does, every byte of it counted.
+      */
+    private def entry(url: URL): Array[Byte] = {
+      // opening no connection: a `JarURLConnection` parses the URL, and connects only once asked to
+      val connection = url.openConnection().asInstanceOf[JarURLConnection]
+      val entry = Option(connection.getEntryName).getOrElse(throw new IOException(url.toString + " names no entry"))
+      val archive = connection.getJarFileURL
+      if (archive.getProtocol == "file") {
+        val file =
+          try path(archive).toFile
+          catch { case e: IllegalArgumentException => throw new IOException(archive.toString + " is no path", e) }
+        this.entry(file, entry, url)
+      } else {
+        val temporary = Files.createTempFile("psi", ".jar")
+        try {
+          val out = Files.newOutputStream(temporary)
+          try fetch(archive, out)
+          finally out.close()
+          this.entry(temporary.toFile, entry, url)
+        } finally Files.delete(temporary)
+      }
+    }
+
+    /** The entry `entry` of the jar `file`; one not there is not found, as the JVM reports it. */
+    private def entry(file: File, entry: String, url: URL): Array[Byte] = {
+      val jar = open(file, url)
+      try {
+        val found =
+          Option(jar.getEntry(entry)).getOrElse(throw new FileNotFoundException(url.toString + " is not found"))
+        val stream = jar.getInputStream(found)
+        val out = new ByteArrayOutputStream
+        try copy(stream, out)
+        finally stream.close()
+        out.toByteArray
+      } finally jar.close()
+    }
   }
 
   /** The path of a jar's `file:` URL, as a `JarURLConnection` gives it: with the fragment of the `jar:` URL, which

@@ -20,7 +20,8 @@ private[psi] final class Expand private (
     directives: Map[String, Directive],
     disabled: Set[String],
     markers: Map[String, Marker],
-    limit: Int) {
+    limit: Int,
+    budget: ReadBudget) {
   import Expand.*
 
   private val errors = mutable.ListBuffer.empty[PsiError]
@@ -196,8 +197,11 @@ private[psi] final class Expand private (
     def url: Option[URL] = stack.head.url
 
     def parse(url: URL): Either[IOException, Fragment] =
-      Source.read(url.toString, url) match {
-        case Right(source) => Right(nested(source))
+      Source.read(url.toString, url, budget) match {
+        case Right(Some(source)) => Right(nested(source))
+        // the load's budget gone, which the load reports: nothing to give, and no error of the fragment's
+        case Right(None) =>
+          Right(Fragment.Parsed(Ast.Document(Vector.empty), SourceLocation(url.toString, 1, 1), Nil, Nil))
         case Left(SourceUnreadable(_, cause)) => Left(cause)
         case Left(error) =>
           Right(Fragment.Parsed(Ast.Document(Vector.empty), SourceLocation(url.toString, 1, 1), error :: Nil, Nil))
@@ -214,7 +218,7 @@ private[psi] final class Expand private (
       } else if (stack.length >= MaxDepth)
         Fragment.Parsed(Ast.Document(Vector.empty), root, DirectiveTooDeep(call.location, MaxDepth) :: Nil, Nil)
       else {
-        val expand = new Expand(directives, disabled, markers, limit)
+        val expand = new Expand(directives, disabled, markers, limit, budget)
         val document = expand.document(source, stack, base)
         Fragment.Parsed(document, root, expand.errors.toList, source.name :: expand.included.toList)
       }
@@ -252,8 +256,9 @@ private[psi] object Expand {
       directives: Map[String, Directive],
       disabled: Set[String],
       markers: Map[String, Marker],
-      limit: Int): Result[(Ast.Document, List[String])] = {
-    val expand = new Expand(directives, disabled, markers, limit)
+      limit: Int,
+      budget: ReadBudget): Result[(Ast.Document, List[String])] = {
+    val expand = new Expand(directives, disabled, markers, limit, budget)
     val document = expand.document(source, Nil, 0)
     Result((document, expand.included.toList), expand.errors.toList)
   }
