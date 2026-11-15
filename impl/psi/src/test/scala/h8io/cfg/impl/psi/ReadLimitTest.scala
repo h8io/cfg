@@ -69,15 +69,18 @@ class ReadLimitTest extends AnyFlatSpec with Matchers {
     errors(loader(3)(entry)) shouldBe List(ReadLimitExceeded(entry.toString, 3))
   }
 
-  "Includes of includes, ten each and six deep" should "go past the default limit, not run out of memory" in {
+  "Includes of includes, ten each and six deep" should "go past the default byte limit, not run out of memory" in {
+    // the source at the bottom large, so that the byte limit is reached in a hundred reads or so, and long before the
+    // time, however slow the machine: tiny sources reach it only after tens of thousands, and the time may come first
     val dir = Files.createTempDirectory("psi")
-    write(dir, "f0.psi", "x: 1")
+    write(dir, "f0.psi", "x: " + "y" * 100000)
     for (i <- 1 to 6)
       write(
         dir,
         "f" + i.toString + ".psi",
         (0 until 10).map(k => "k" + k.toString + ": #include(file: \"f" + (i - 1).toString + "\")").mkString("\n"))
-    errors(Psi(url(dir.resolve("f6.psi")))).map(_.getClass) shouldBe List(classOf[ReadLimitExceeded])
+    errors(loader(ReadBudget.DefaultBytes, Duration.ofHours(1))(url(dir.resolve("f6.psi")))).map(_.getClass) shouldBe
+      List(classOf[ReadLimitExceeded])
   }
 
   "A load" should "stop reading once its time is gone, the source being read reported alone" in {
