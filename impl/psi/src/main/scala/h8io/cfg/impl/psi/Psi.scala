@@ -50,13 +50,31 @@ object Psi {
   def parse(name: String, text: String): Either[PsiErrors, Node.IMap[Id.Root]] = loader.parse(name, text)
 
   private def loader: PsiLoader =
-    new PsiLoader(Map.empty, Set.empty, Map.empty, None, PsiLoader.DefaultDepthLimit, PsiLoader.DefaultNodeLimit,
-      PsiLoader.DefaultCharacterLimit)
+    new PsiLoader(
+      Map.empty,
+      Set.empty,
+      Map.empty,
+      None,
+      PsiLoader.DefaultDepthLimit,
+      PsiLoader.DefaultNodeLimit,
+      PsiLoader.DefaultCharacterLimit,
+      ReadBudget.DefaultBytes,
+      ReadBudget.DefaultTime
+    )
 
   /** Loads `sources` with no directive of its own, their values overridden by `properties`. */
   private[psi] def load(
       sources: Seq[Either[PsiError, Source]],
       properties: Map[String, String]): Either[PsiErrors, Node.IMap[Id.Root]] =
-    new PsiLoader(Map.empty, Set.empty, Map.empty, Some(properties), PsiLoader.DefaultDepthLimit,
-      PsiLoader.DefaultNodeLimit, PsiLoader.DefaultCharacterLimit).load(sources)
+    new PsiLoader(
+      Map.empty,
+      Set.empty,
+      Map.empty,
+      Some(properties),
+      PsiLoader.DefaultDepthLimit,
+      PsiLoader.DefaultNodeLimit,
+      PsiLoader.DefaultCharacterLimit,
+      ReadBudget.DefaultBytes,
+      ReadBudget.DefaultTime
+    ).load(sources, new ReadBudget(ReadBudget.DefaultBytes, ReadBudget.DefaultTime))
 }

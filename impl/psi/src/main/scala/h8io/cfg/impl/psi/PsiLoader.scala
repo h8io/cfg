@@ -3,6 +3,7 @@ package h8io.cfg.impl.psi
 import h8io.cfg.{Id, Node}
 
 import java.net.URL
+import java.time.Duration
 import scala.collection.mutable
 
 /** A Psi loader with the directives and markers it was built with (`format.md` §5, §6); [[Psi]] is the one with nothing
@@ -15,27 +16,43 @@ final class PsiLoader private[psi] (
     properties: Option[Map[String, String]],
     depthLimit: Int,
     nodeLimit: Int,
-    characterLimit: Int) {
+    characterLimit: Int,
+    readBytes: Int,
+    readTime: Duration) {
 
   /** The directives with the built-in `#include` among them. */
   private val handlers: Map[String, Directive] = directives.updated(Include.name, Include)
 
   /** Loads and merges the sources at `urls`, in order, each named in locations by its URL as given (§10). */
-  def apply(urls: URL*): Either[PsiErrors, Node.IMap[Id.Root]] = load(urls.map(url => Source.read(url.toString, url)))
+  def apply(urls: URL*): Either[PsiErrors, Node.IMap[Id.Root]] = {
+    val budget = new ReadBudget(readBytes, readTime)
+    load(
+      urls.flatMap(url =>
+        Source.read(url.toString, url, budget) match {
+          case Right(source) => source.map(Right(_)).toList
+          case Left(error) => Left(error) :: Nil
+        }),
+      budget
+    )
+  }
 
   /** Loads a source held as `text`, named `name` in locations. */
-  def parse(name: String, text: String): Either[PsiErrors, Node.IMap[Id.Root]] = load(Right(Source(name, text)) :: Nil)
+  def parse(name: String, text: String): Either[PsiErrors, Node.IMap[Id.Root]] =
+    load(Right(Source(name, text)) :: Nil, new ReadBudget(readBytes, readTime))
 
-  private[psi] def load(sources: Seq[Either[PsiError, Source]]): Either[PsiErrors, Node.IMap[Id.Root]] = {
+  private[psi] def load(
+      sources: Seq[Either[PsiError, Source]],
+      budget: ReadBudget): Either[PsiErrors, Node.IMap[Id.Root]] = {
     val parsed = Result.sequence(sources.map {
       case Right(source) =>
-        Expand(source, handlers, disabled, markers, depthLimit).map { case (document, included) =>
+        Expand(source, handlers, disabled, markers, depthLimit, budget).map { case (document, included) =>
           Some((document, source.name, included))
         }
       case Left(error) => Result.failed(None, error)
     })
     for {
-      documents <- parsed.copy(errors = PsiLoader.distinct(parsed.errors)).toEither
+      // the read that went past the budget, its source and every read after it dropped
+      documents <- parsed.copy(errors = PsiLoader.distinct(parsed.errors) ++ budget.error).toEither
       root <- (documents.flatten.toList match {
         case (document, name, included) :: rest =>
           val located = rest.map { case (document, name, _) => (document, SourceLocation(name, 1, 1)) }

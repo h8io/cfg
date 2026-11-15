@@ -4,6 +4,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import java.io.IOException
+import java.time.Duration
 
 class LexicalMessageTest extends AnyFlatSpec with Matchers {
   private val at = SourceLocation("s", 1, 1)
@@ -13,6 +14,20 @@ class LexicalMessageTest extends AnyFlatSpec with Matchers {
   "An unreadable source" should "say why" in {
     text(SourceUnreadable("s", new IOException("gone"))) shouldBe
       (("the source cannot be read: java.io.IOException: gone", None))
+  }
+
+  "Reading past the load's limits" should "say which, and how to raise it" in {
+    ReadLimitExceeded("s", 10).location shouldBe at
+    ReadTimeExceeded("s", Duration.ZERO).location shouldBe at
+    text(ReadLimitExceeded("s", 10)) shouldBe
+      ((
+        "reading the sources of this load takes more than 10 bytes, a source read twice counted twice",
+        Some("include fewer or smaller sources, or build the loader with a higher withReadLimit")))
+    val hint = Some("make the sources quicker to reach, or build the loader with a longer withReadLimit")
+    text(ReadTimeExceeded("s", Duration.ofSeconds(60))) shouldBe
+      (("reading the sources of this load takes longer than 60 s", hint))
+    text(ReadTimeExceeded("s", Duration.ofMillis(1500))) shouldBe
+      (("reading the sources of this load takes longer than 1500 ms", hint))
   }
 
   "Characters" should "be named, with what to do about them" in {

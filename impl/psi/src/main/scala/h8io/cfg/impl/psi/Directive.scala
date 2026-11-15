@@ -52,7 +52,8 @@ trait DirectiveContext {
 
   /** Reads and parses the source at `url`, named by the URL in locations, its own directives expanded. A source that
     * cannot be read is handed back; every other error in it, and a cycle — parsing a source already being expanded —
-    * goes with the fragment, which holds what was read, and is reported where the fragment is used.
+    * goes with the fragment, which holds what was read, and is reported where the fragment is used. Once the load's
+    * read limit is gone, by this read or one before it, the fragment is empty: the load reports the limit itself.
     */
   def parse(url: URL): Either[IOException, Fragment]
 

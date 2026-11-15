@@ -563,7 +563,8 @@ when not given (session 20):
 - **Reading a URL times out** (session 24), whether `#include` reads it or the loader is given it:
   10 seconds to connect, 30 for each wait for the next bytes. A target that goes past either is
   unreadable, an error, optional or not; with no timeout, a server that never answers held the load
-  forever. The read timeout bounds a wait, not the whole read.
+  forever. The read timeout bounds a wait, not the whole read; what bounds the whole read is the
+  read limit (§11).
 - **A `file` or a `resource` with no extension** — no `.` in its last segment — is looked for as
   `.Ψ`, `.ψ` and `.psi` in that order, and the first found is read; they are one format under
   three names, so nothing is merged. A `url` is never extended.
@@ -906,6 +907,22 @@ mistake is worse than stopping.
   loader's marker builds, being a handler's. The first graft or concatenation to go past either
   limit is reported, as `ResolutionTooLarge` or `ConcatenationTooLong`, at its reference or its
   concatenation; nothing is built after it, and the load fails.
+- **Reading the sources of a load is limited, to 10 000 000 bytes and 60 seconds unless the
+  loader is built with others**, `withReadLimit(bytes, time)`, the bytes at least 0 and the time
+  not negative (session 25). The limit is the load's, not a source's: every read is counted, a
+  source read twice twice, since an include is read and parsed again wherever it is called, and
+  seven files of 300 bytes, each including the one before ten times, made 10⁶ reads and ran out
+  of a 1 GB heap; a limit on each source bounds none of them. Counted are the bytes read: of a
+  file, of the entry of a local jar, of the whole of a jar fetched from elsewhere; a source given
+  as text is not read, and not counted. The time runs from the start of the load and is looked at
+  before each connection and each wait, which it cuts to what is left; a connection takes its
+  timeouts once, when it is made (measured: a read timeout set later is not applied), so a wait
+  already begun runs its course and the time may be outrun by one wait, the read timeout at most.
+  A source that blocks without a timeout, a named pipe, the time does not stop. The first read to
+  go past either is reported, as `ReadLimitExceeded` or `ReadTimeExceeded`, at the source being
+  read; every read after it gives nothing and is not reported, and the load fails. The error is
+  the load's, not the fragment's, so that a directive of the program's own that drops the fragment
+  does not drop it: to such a directive, the read gives an empty fragment.
 
 **Messages and the report** (session 21):
 
@@ -2079,3 +2096,12 @@ the user; the last, the growth of a tree by substitutions, is still to be discus
   `Resolve`, the views and the locations; a limit on the substitutions grafting containers, as
   SnakeYAML's `maxAliasesForCollections`, which bounds size only roughly and fails a config
   grafting a common block a hundred times.
+- **Reading the sources of a load is limited: 10 000 000 bytes and 60 seconds** (§6, §11), the
+  user's choices on my proposal: a limit on the load, not on each source, the defaults, one
+  builder method, `withReadLimit(bytes, time)`, and the first read past reported alone. Measured
+  first: an include read again wherever it is called, seven files of 300 bytes, each including the
+  one before ten times, ran out of a 1 GB heap in 31 s, which a limit on each source does not
+  bound, nor a cache of what was parsed, the fragment being placed at every call all the same; and
+  a read timeout set on a connection already made is not applied, so the time may be outrun by one
+  wait. The error is held by the load, not by the fragment of the read, which a directive of the
+  program's own may drop.
