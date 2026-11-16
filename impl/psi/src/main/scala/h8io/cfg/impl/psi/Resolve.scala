@@ -123,20 +123,27 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
   /** `map`, which has steps, completed once: each injection resolved and merged in turn with what is written after it,
     * as if what it found were written there (§9). Its children are resolved apart, after it, so that one may refer to
     * another; only what an injection refers to through the map itself leads back to it.
+    *
+    * An injection that fails fails the map, but the steps after it are taken all the same, so that each reports its own
+    * errors (§11).
     */
   private def completed(id: Id, map: Tree.Map): Either[Failure, Tree.Map] =
     once(id, map.steps.collectFirst { case Tree.Step.Injection(path, _, at) => new Following(at, path) }) {
-      map.steps
-        .foldLeft[Either[Failure, Tree.Map]](Right(map.copy(steps = Vector.empty))) { (done, step) =>
-          done.flatMap { current =>
-            step match {
-              case Tree.Step.Injection(path, optional, at) => fields(id, current, path, optional, at)
-              case Tree.Step.Statements(statements) => Right(merging.block(current, statements))
-              case Tree.Step.Graft(content) => Right(over(current, content))
-            }
-          }
+      val failures = mutable.ListBuffer.empty[Either[Failure, Unit]]
+      val done = map.steps.foldLeft(map.copy(steps = Vector.empty)) { (current, step) =>
+        step match {
+          case Tree.Step.Injection(path, optional, at) =>
+            fields(id, current, path, optional, at).fold(
+              failure => {
+                failures += Left(failure)
+                current
+              },
+              identity)
+          case Tree.Step.Statements(statements) => merging.block(current, statements)
+          case Tree.Step.Graft(content) => over(current, content)
         }
-        .map(Some(_))
+      }
+      failure(failures.toList).toLeft(Some(done))
       // a completion always gives a map
     }.map(_.get.asInstanceOf[Tree.Map])
 
@@ -204,7 +211,10 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
           map.copy(tags = map.tags ++ content.tags, location = Merge.again(content.location, map.location)), content))
       // a map with injections of its own takes this one after them
       case (map: Tree.Map, content: Tree.Map) =>
-        Some(map.copy(tags = map.tags ++ content.tags, steps = map.steps :+ Tree.Step.Graft(content)))
+        Some(map.copy(
+          tags = map.tags ++ content.tags,
+          location = Merge.again(content.location, map.location),
+          steps = map.steps :+ Tree.Step.Graft(content)))
       case (substitution: Tree.Substitution, content: Tree.Map) =>
         errors += MergeWithSubstitution(content.location, substitution.location)
         None

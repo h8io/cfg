@@ -155,6 +155,23 @@ class InjectionTest extends AnyFlatSpec with Matchers {
       List(TaggedDirectiveInjection(at(1, 8), "seq"))
   }
 
+  "Injections into one block" should "each report their own errors" in {
+    errors("b { $missing1, x: 1, $missing2 }") shouldBe
+      List(UnresolvedSubstitution(at(1, 5), "missing1"), UnresolvedSubstitution(at(1, 22), "missing2"))
+  }
+
+  "A block with an injection of its own, merged with one an injection brings" should "keep where each came from" in {
+    loaded("a { c { u: 1 } }\nd { c { v: 2 } }\nb { c { $d.c }, $a }")("b") match {
+      case b: Node.IMap[?] =>
+        b("c") match {
+          case c: Node.IMap[?] =>
+            c.location shouldBe MergedLocation(ReferenceLocation(at(3, 17), "a.c", at(1, 7)), ::(at(3, 7), Nil))
+          case other => fail(other.toString)
+        }
+      case other => fail(other.toString)
+    }
+  }
+
   "An injection of a field's fields that is no map" should "be an error naming what it found" in {
     errors("a: 5\nb { $a }") shouldBe List(InjectionNotMap(at(2, 5), "a", at(1, 4)))
     errors("b { $nope }") shouldBe List(UnresolvedSubstitution(at(1, 5), "nope"))

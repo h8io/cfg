@@ -210,6 +210,6 @@ class DepthTest extends AnyFlatSpec with Matchers {
       )
       thread.start()
       thread.join()
-      report.map(_.length > n) shouldBe Right(true)
+      report.map(_.length > PsiLocation.DescriptionLimit) shouldBe Right(true)
     }
 }

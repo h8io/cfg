@@ -883,6 +883,13 @@ variable get a location of their own instead of a fake file position, behind the
 A part of a concatenation is rendered without its own site, which shares the concatenation's line;
 the part's `ReferenceLocation` still holds it.
 
+**A description is cut off at 10 000 characters**, an ellipsis after it (session 27). A location
+shares the locations it refers to, so its size is linear in the source; but a concatenation that
+refers twice to one built the same way, and so on, describes in a length exponential in the chain's
+— 297 bytes of source, 2.4 million characters — and the size limit (§11) counts what values hold,
+not what locations describe. The beginning, the site the reader goes to first, is always there.
+The hash of a location is computed once, for the same reason.
+
 **Grafted containers.** With `a: ${server}`, *every* node in the grafted subtree gets a
 `ReferenceLocation` — the reference site of `a`, the path it was taken by (`server.port`), and that
 node's own origin. Marking only the root would leave an error at `a.port` pointing at `server`'s
@@ -2249,3 +2256,18 @@ the user; the last, the growth of a tree by substitutions, is still to be discus
   injections before the element it names, so that `a: [x, $a[0]]` is no cycle, as it was none
   before. Breaks `[x, $a, z]` nesting a sequence, and every `*`: before 1.0, compatibility is not
   kept.
+
+### Session 27 — 2026-11-16
+
+- **A description is cut off at 10 000 characters** (§10), the user's choice of the three I put,
+  on a review finding: `a0: ""`, `a1: "${a0}${a0}"`, … `a16` loaded in 297 bytes, its values empty,
+  and described in 2 425 181 characters, any error naming it as large. Rejected: describing a part
+  of a concatenation by its site and path alone, which loses where the text came from; counting a
+  description against the size limit, which fails a load for what only a message would hold. The
+  hash of a composite location is cached, the hash of a case class walking every path to what it
+  shares.
+- Fixed with it, on the same review, the format unchanged: the injections of one block each report
+  their own errors, the first that fails no longer hiding the rest (§11); a map with injections of
+  its own, merged with one an injection brings, takes its location (§10), as a map with none
+  already did; and `impl/yaml` merges a pair of mappings once, its result shared, where aliases
+  made it copy a shared node once for every path to it.

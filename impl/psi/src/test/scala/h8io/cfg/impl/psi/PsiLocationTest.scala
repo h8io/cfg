@@ -51,6 +51,28 @@ class PsiLocationTest extends AnyFlatSpec with Matchers {
     MergedLocation(app, ::(base, Nil)).description shouldBe "file:/etc/app/app.psi:12:9 (also base.psi:3:7)"
   }
 
+  "A location sharing those it refers to" should "be cut off at the limit, and hash in time linear in its size" in {
+    // each link concatenates the one before twice: a description of 2^40 parts
+    val link = (1 to 40).foldLeft[PsiLocation](SourceLocation("s", 1, 1)) { (before, i) =>
+      val part = ReferenceLocation(SourceLocation("s", i + 1, 5), "a", before)
+      ConcatenationLocation(SourceLocation("s", i + 1, 4), ::(part, part :: Nil))
+    }
+    val description = link.description
+    description.length shouldBe PsiLocation.DescriptionLimit + 1
+    description should startWith("s:41:4 (${a} from s:40:4 (${a} from")
+    description should endWith("…")
+    link.hashCode shouldBe link.hashCode
+    MergedLocation(link, ::(link, Nil)).description.length shouldBe PsiLocation.DescriptionLimit + 1
+    MergedLocation(link, ::(link, Nil)).hashCode shouldBe MergedLocation(link, ::(link, Nil)).hashCode
+    DirectiveLocation(app, "d", link).hashCode shouldBe DirectiveLocation(app, "d", link).hashCode
+  }
+
+  it should "be whole up to the limit" in {
+    val long = SourceLocation("x" * (PsiLocation.DescriptionLimit - 4), 1, 1)
+    long.description.length shouldBe PsiLocation.DescriptionLimit
+    MergedLocation(long, ::(base, Nil)).description shouldBe long.description + "…"
+  }
+
   "NoSourceLocation" should "say there was no source" in {
     NoSourceLocation.description shouldBe "no source"
   }
