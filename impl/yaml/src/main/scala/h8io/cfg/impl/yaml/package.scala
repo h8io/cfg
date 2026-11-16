@@ -134,6 +134,9 @@ package object yaml {
   private[yaml] def mergeMappings(base: MappingNode, overlay: MappingNode): MappingNode =
     new Merging().mappings(base, overlay)
 
-  private[yaml] def render(node: YamlNode): String =
-    new Present(DumpOptions).emitToString(new Serialize(DumpOptions).serializeOne(node).iterator)
+  /** `node` as YAML, every tag written in the source written again ([[Written]]). */
+  private[yaml] def render(node: YamlNode): String = {
+    val events = new Serialize(DumpOptions).serializeOne(node).asScala.toVector
+    new Present(DumpOptions).emitToString(Written(node, events).iterator.asJava)
+  }
 }
