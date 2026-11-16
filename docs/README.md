@@ -23,7 +23,7 @@ Every loader depends on `cfg`, so one of them is all a project needs:
 libraryDependencies += "io.h8" %% "cfg-yaml" % "@VERSION@"
 ```
 
-Every artifact is built for Scala 2.13, 2.12 and 3.
+Every artifact is built for Scala 2.13 and 3.
 
 ## Loading a file
 
