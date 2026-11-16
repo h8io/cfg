@@ -20,7 +20,7 @@ package object yaml {
   /** YAML 1.2 core schema: `~`, `Null` and `NULL` are nulls and `<<` merge keys are supported. */
   private[yaml] val CoreSchemaInstance: Schema = new CoreSchema
 
-  private[yaml] val DumpOptions: DumpSettings = DumpSettings.builder().build()
+  private[yaml] val DumpOptions: DumpSettings = DumpSettings.builder().setSchema(CoreSchemaInstance).build()
 
   private[yaml] def settings(label: String): LoadSettings =
     LoadSettings.builder().setLabel(label).setSchema(CoreSchemaInstance).build()

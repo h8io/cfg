@@ -2267,10 +2267,13 @@ the user; the last, the growth of a tree by substitutions, is still to be discus
   hash of a composite location is cached, the hash of a case class walking every path to what it
   shares.
 - Fixed with it, on the same review, the format unchanged: the injections of one block each report
-  their own errors, the first that fails no longer hiding the rest (§11); a map with injections of
+  their own errors, the first that fails no longer hiding the rest (§11), though nothing is merged
+  into the block past a failed one, a conflict with what it would have brought being no root cause; a map with injections of
   its own, merged with one an injection brings, takes its location (§10), as a map with none
   already did; `impl/yaml` merges a pair of mappings once, its result shared, where aliases
   made it copy a shared node once for every path to it; and its `toString` writes every tag
   written in the source, the user's choice to fix it there: snakeyaml-engine's serializer leaves
   out any tag its resolver would infer, `!!str` on `hello`, `!!seq` and `!!map` always, never
-  asking whether it was written, so the text read back without the tags `tagOf` reported.
+  asking whether it was written, so the text read back without the tags `tagOf` reported; the
+  serializer now resolves by the core schema the loader reads with, so that `Null`, `0x10` or `~`,
+  which the core schema infers, are not written with a tag either.

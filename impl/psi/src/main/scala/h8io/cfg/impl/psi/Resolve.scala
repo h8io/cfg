@@ -124,8 +124,9 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     * as if what it found were written there (§9). Its children are resolved apart, after it, so that one may refer to
     * another; only what an injection refers to through the map itself leads back to it.
     *
-    * An injection that fails fails the map, but the steps after it are taken all the same, so that each reports its own
-    * errors (§11).
+    * An injection that fails fails the map. The injections after it are resolved all the same, so that each reports its
+    * own errors (§11), but nothing more is merged into the map: what the failed one would have brought is unknown, and
+    * a conflict with what follows it would be no root cause.
     */
   private def completed(id: Id, map: Tree.Map): Either[Failure, Tree.Map] =
     once(id, map.steps.collectFirst { case Tree.Step.Injection(path, _, at) => new Following(at, path) }) {
@@ -133,12 +134,16 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       val done = map.steps.foldLeft(map.copy(steps = Vector.empty)) { (current, step) =>
         step match {
           case Tree.Step.Injection(path, optional, at) =>
-            fields(id, current, path, optional, at).fold(
-              failure => {
+            // after a failure, into nothing, for its own errors alone
+            val into = if (failures.isEmpty) current else Tree.Map.empty(Set.empty, at)
+            fields(id, into, path, optional, at) match {
+              case Right(merged) if failures.isEmpty => merged
+              case Right(_) => current
+              case Left(failure) =>
                 failures += Left(failure)
                 current
-              },
-              identity)
+            }
+          case _ if failures.nonEmpty => current
           case Tree.Step.Statements(statements) => merging.block(current, statements)
           case Tree.Step.Graft(content) => over(current, content)
         }
