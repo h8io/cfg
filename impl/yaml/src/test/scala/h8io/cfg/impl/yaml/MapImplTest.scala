@@ -125,6 +125,19 @@ a: 1
     MapImpl(Id.Root, yaml"{a: 1, b: [c, d]}").toString shouldBe "{a: 1, b: [c, d]}\n"
   }
 
+  it should "render every tag written in the source, and no other, so that it reads back with the same tags" in {
+    // the serializer would leave out a tag the resolver infers: `!!str` on `hello`, `!!seq` and `!!map` on any
+    val text =
+      "{a: !!str hello, b: !!int 1, c: !!seq [x], d: !!map {e: f}, g: !postgres h, i: 2, j: [k], l: &m {n: o}, " +
+        "p: !!map &q {r: s}, t: *m, u: *q}"
+    val tags = (node: Node.IMap[?]) => node.iterator.map(child => child.id.key -> child.tags).toList
+    val shown = MapImpl(Id.Root, yaml"$text").toString
+    shown should include("&q")
+    tags(MapImpl(Id.Root, yaml"$shown")) shouldBe tags(MapImpl(Id.Root, yaml"$text"))
+    tags(MapImpl(Id.Root, yaml"$text")).collect { case (name, written) if written.nonEmpty => name } shouldBe
+      List("a", "b", "c", "d", "g", "p", "u")
+  }
+
   it should "render the entries sharing a key only once" in {
     MapImpl(Id.Root, yaml"{a: 1, a: 2}").toString shouldBe "{a: 2}\n"
   }
