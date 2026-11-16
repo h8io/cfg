@@ -13,7 +13,6 @@ import org.snakeyaml.engine.v2.schema.{CoreSchema, Schema}
 
 import java.io.Reader
 import java.util.{Collections, IdentityHashMap, List as JList, Optional}
-import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
 
 package object yaml {
@@ -115,14 +114,8 @@ package object yaml {
   @inline private[yaml] def wrap[I <: Id](id: I, mapping: MappingNode): Node.IMap[I] = MapImpl(id, mapping)
 
   /** The entries of a mapping in source order, with duplicate keys collapsed to their last occurrence. */
-  private[yaml] def entriesOf(mapping: MappingNode): Vector[(String, NodeTuple)] = {
-    val seen = mutable.Set.empty[String]
-    mapping.getValue.asScala.reverseIterator
-      .map(tuple => keyOf(tuple) -> tuple)
-      .filter(entry => seen.add(entry._1))
-      .toVector
-      .reverse
-  }
+  private[yaml] def entriesOf(mapping: MappingNode): Vector[(String, NodeTuple)] =
+    mapping.getValue.asScala.reverseIterator.map(tuple => keyOf(tuple) -> tuple).distinctBy(_._1).toVector.reverse
 
   /** A mapping with the tag, style and location of `source` but a different set of entries. */
   private[yaml] def copyOf(source: MappingNode, tuples: JList[NodeTuple]): MappingNode =

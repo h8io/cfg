@@ -3,7 +3,6 @@ package h8io.cfg.impl.psi
 import h8io.cfg.{Id, Node}
 
 import java.net.URL
-import scala.collection.mutable
 
 /** A Psi loader with the directives and markers it was built with (`format.md` §5, §6); [[Psi]] is the one with nothing
   * added.
@@ -91,10 +90,7 @@ private[psi] object PsiLoader {
   /** `errors` with each reported once: a fragment used more than once, or one source parsed by two, reports the same
     * errors.
     */
-  def distinct(errors: List[PsiError]): List[PsiError] = {
-    val reported = mutable.HashSet.empty[Any]
-    errors.filter(error => reported.add(key(error)))
-  }
+  def distinct(errors: List[PsiError]): List[PsiError] = errors.distinctBy(key)
 
   /** What tells `error` from another: the error itself, but for the exception one carries, which equals none but itself
     * while each parse of a source that cannot be read throws one of its own; it is told apart by its class and message.

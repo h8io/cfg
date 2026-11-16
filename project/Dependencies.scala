@@ -5,8 +5,6 @@ object Dependencies {
 
   val SnakeYaml = "org.snakeyaml" % "snakeyaml-engine" % "3.2"
 
-  val ScalaCollectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % "2.14.0"
-
   val TestBundle: Seq[ModuleID] =
     Seq(
       "org.scalatest" %% "scalatest" % "3.2.20",

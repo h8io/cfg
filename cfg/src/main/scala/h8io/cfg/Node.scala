@@ -101,11 +101,6 @@ object Node {
       Some((node.id, node.tags, node.value, node.location))
   }
 
-  // TODO Drop it when we drop Scala 2.12 support
-  private[Node] trait Iterable[+A] extends scala.Iterable[A] {
-    def knownSize: Int
-  }
-
   /** A container node (map or sequence): an iterable over its present children.
     *
     * A child is looked up by its segment alone — a key or an index — and the container builds the child's id from its

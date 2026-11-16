@@ -1025,9 +1025,7 @@ mistake is worse than stopping.
 - Unlike the hocon and yaml backends, which wrap a foreign structure lazily, this module owns its
   data: phase 6 builds immutable `Map`/`Vector` structures once, and `MapImpl`/`SeqImpl` are thin
   views over them.
-- Cross-built for 2.13, 2.12 and 3.9, from one source tree in Scala 2 style that Scala 3 accepts. A
-  hand-written lexer is exactly the kind of code that reaches for 2.13-only collection methods;
-  `scala-collection-compat` is already wired in for 2.12.
+- Cross-built for 2.13 and 3.9, from one source tree in Scala 2 style that Scala 3 accepts.
 - Warnings are fatal on every version (`-Xfatal-warnings` on 2.x, `-Werror` on 3), so exhaustiveness
   in the parser's pattern matches is enforced rather than merely intended.
 - **Compatibility, while the version is 0.x** (session 22). The errors are case classes, for
