@@ -23,14 +23,18 @@ sealed trait PsiLocation extends Location {
 
 private[psi] object PsiLocation {
 
+  /** The longest description, past which it is cut off with an ellipsis (`format.md` §10). */
+  val DescriptionLimit: Int = 10000
+
   /** The description of `location`, built with a stack of its own rather than by recursion: a chain of substitutions
-    * nests a location in another for every link, as deep as the chain is long, and no depth limit bounds a chain
-    * written in order.
+    * nests a location in another for every link, as deep as the chain is long. It is cut off at [[DescriptionLimit]]
+    * characters: locations share the locations they refer to, and a concatenation referring twice to one built the same
+    * way, and so on, describes in a length exponential in the chain's.
     */
   def describe(location: Location): String = {
     val out = new java.lang.StringBuilder
     var stack: List[Part] = Right(location) :: Nil
-    while (stack.nonEmpty) {
+    while (stack.nonEmpty && out.length <= DescriptionLimit) {
       val head = stack.head
       stack = stack.tail
       head match {
@@ -38,7 +42,7 @@ private[psi] object PsiLocation {
         case Right(next) => stack = parts(next) ::: stack
       }
     }
-    out.toString
+    if (out.length <= DescriptionLimit) out.toString else out.substring(0, DescriptionLimit) + "…"
   }
 
   /** A part of a description: text as it is, or a location to describe in turn. */
@@ -88,6 +92,9 @@ final case class SourceLocation(source: String, line: Int, column: Int) extends 
   *   the location of the node the value was taken from; a chain of substitutions nests further references here
   */
 final case class ReferenceLocation(at: SourceLocation, path: String, origin: Location) extends PsiLocation {
+  // a location shares those it refers to, which the hash of a case class would compute again for every path to them
+  override lazy val hashCode: Int = scala.util.hashing.MurmurHash3.caseClassHash(this)
+
   def description: String = PsiLocation.describe(this)
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
@@ -97,6 +104,9 @@ final case class ReferenceLocation(at: SourceLocation, path: String, origin: Loc
 
 /** A scalar built at `at` by concatenation, with one reference per `\${…}` in the order written. */
 final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLocation]) extends PsiLocation {
+  // a location shares those it refers to, which the hash of a case class would compute again for every path to them
+  override lazy val hashCode: Int = scala.util.hashing.MurmurHash3.caseClassHash(this)
+
   def description: String = PsiLocation.describe(this)
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
@@ -108,6 +118,9 @@ final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLo
   * the places before, the latest first.
   */
 final case class MergedLocation(at: PsiLocation, earlier: ::[PsiLocation]) extends PsiLocation {
+  // a location shares those it refers to, which the hash of a case class would compute again for every path to them
+  override lazy val hashCode: Int = scala.util.hashing.MurmurHash3.caseClassHash(this)
+
   def description: String = PsiLocation.describe(this)
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
@@ -132,6 +145,9 @@ case object NoSourceLocation extends PsiLocation {
   *   the location the node had
   */
 final case class DirectiveLocation(at: SourceLocation, directive: String, origin: Location) extends PsiLocation {
+  // a location shares those it refers to, which the hash of a case class would compute again for every path to them
+  override lazy val hashCode: Int = scala.util.hashing.MurmurHash3.caseClassHash(this)
+
   def description: String = PsiLocation.describe(this)
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)

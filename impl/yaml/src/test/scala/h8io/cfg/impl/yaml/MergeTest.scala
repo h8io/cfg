@@ -7,6 +7,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.snakeyaml.engine.v2.nodes.ScalarNode
 
+import scala.jdk.CollectionConverters.*
+
 class MergeTest extends AnyFlatSpec with Matchers with Inside {
   private def merged(previous: String, next: String): Node.ISome[Id.Root] =
     wrap(Id.Root, merge(parse(previous), parse(next)))
@@ -64,6 +66,22 @@ class MergeTest extends AnyFlatSpec with Matchers with Inside {
       map.location.description shouldBe s"$Label: 1:1"
     }
     merged("{a: 1}", "{a: 2}").tags shouldBe Set.empty
+  }
+
+  it should "merge a pair of mappings that aliases share once, its result shared too" in {
+    // each level refers to the one below twice: merged path by path, 2^20 copies of the bottom
+    def chain(levels: Int): String =
+      ("a0: &a0 {x: 1}" +: (1 to levels).map { i =>
+        val below = "*a" + (i - 1).toString
+        "a" + i.toString + ": &a" + i.toString + " {l: " + below + ", r: " + below + "}"
+      }).mkString("\n")
+    inside(merge(parse(chain(20)), parse(chain(20)))) { case root: org.snakeyaml.engine.v2.nodes.MappingNode =>
+      def child(node: org.snakeyaml.engine.v2.nodes.Node, key: String) =
+        node.asInstanceOf[org.snakeyaml.engine.v2.nodes.MappingNode].getValue.asScala
+          .find(tuple => keyOf(tuple) == key).get.getValueNode
+      val top = child(root, "a20")
+      child(top, "l") should be theSameInstanceAs child(top, "r")
+    }
   }
 
   "entriesOf" should "collapse the entries sharing a key onto the last one" in {

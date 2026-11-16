@@ -128,26 +128,11 @@ package object yaml {
       source.getEndMark)
 
   /** Overlays `next` onto `previous`: mappings are merged key by key, anything else is replaced outright. */
-  private[yaml] def merge(previous: YamlNode, next: YamlNode): YamlNode =
-    (previous, next) match {
-      case (base: MappingNode, overlay: MappingNode) => mergeMappings(base, overlay)
-      case _ => next
-    }
+  private[yaml] def merge(previous: YamlNode, next: YamlNode): YamlNode = new Merging().merge(previous, next)
 
   /** Overlays the mapping `overlay` onto `base`, key by key. */
-  private[yaml] def mergeMappings(base: MappingNode, overlay: MappingNode): MappingNode = {
-    val original = entriesOf(base)
-    val overrides = entriesOf(overlay)
-    val index = overrides.toMap
-    val defined = original.iterator.map(_._1).toSet
-    val updated = original.map { case (key, tuple) =>
-      index.get(key).fold(tuple) { other =>
-        new NodeTuple(other.getKeyNode, merge(tuple.getValueNode, other.getValueNode))
-      }
-    }
-    val added = overrides.collect { case (key, tuple) if !defined(key) => tuple }
-    copyOf(overlay, (updated ++ added).asJava)
-  }
+  private[yaml] def mergeMappings(base: MappingNode, overlay: MappingNode): MappingNode =
+    new Merging().mappings(base, overlay)
 
   private[yaml] def render(node: YamlNode): String =
     new Present(DumpOptions).emitToString(new Serialize(DumpOptions).serializeOne(node).iterator)
