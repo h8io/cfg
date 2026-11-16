@@ -442,7 +442,8 @@ A directive may appear in two positions:
 
 - **statement position**, inside any block or at the top of a file — it must produce a map, which is
   merged into the enclosing block at the point where it appears, so fields below it override it;
-- **value position**, on the right of `:` or as a sequence element — it produces a single node.
+- **value position**, on the right of `:` or as a sequence element — it produces a single node;
+  as an element, a sequence it gives puts its elements there, an injection (§9).
 
 A directive name follows the key rule, as a tag name does (§5): bare if it matches
 `Id.SafeKeyPattern`, in backticks otherwise — ``#`my.directive`(…)``. One rule covers every name
@@ -530,7 +531,8 @@ two ways:
   as a reference keeps them behind its site (§10): `app.psi:1:4 (#yaml from db.yaml:3:8)`.
 
 In statement position the fragment must be a map, merged into the block where the call stands as
-the fields it holds would be if written there; in value position any node. *Nothing* adds no field
+the fields it holds would be if written there; in value position any node, a sequence among the
+elements of a sequence putting its elements there (§9). *Nothing* adds no field
 in statement position and, in value position, drops the field or the element, as `${?…}` with
 nothing to graft does (§9).
 
@@ -543,7 +545,9 @@ an error, as a backstop for a key that changes on every step (`?n=1`, `?n=2`, �
 source parsed twice not through itself, a diamond, is no cycle: it is parsed again each time.
 
 **Tags before a directive in value position** are added to the tags of the node it produces, as
-tags before a whole-value `${…}` are added to the grafted node's (§9): `a: @t #include(…)`.
+tags before a whole-value `${…}` are added to the grafted node's (§9): `a: @t #include(…)`. Among
+the elements of a sequence, a tag before a call that gives a sequence is an error, its elements
+keeping their own tags (§9).
 
 `#include` is the only built-in, reserved and possibly disabled (above):
 
@@ -703,7 +707,7 @@ cannot be expressed any other way.
 2. Expand directives depth-first. `#include` parses the referenced source recursively and merges it
    positionally. Cycle detection lives here.
 3. Merge the input sources, last wins.
-4. Resolve substitutions over the merged tree, merge what each spread finds into the block it
+4. Resolve substitutions over the merged tree, merge what each injection finds into the block it
    stands in, and run the loader's own markers over the blocks that have them (§5, §9).
 5. Wrap the result as `Node.IMap[Id.Root]`.
 
@@ -717,7 +721,7 @@ from a substitution.
 ## 9. Substitutions
 
 - `${path}` in place of a whole value grafts the referenced node, whatever it is — scalar, block or
-  sequence.
+  sequence; as an element of a sequence it is an injection (below), a sequence putting its elements.
 - **A path is written as `Id.path` renders one** (§3), right after `${` or `${?` and right up to
   `}`, with no whitespace: keys joined by dots, quoted in backticks when
   not bare, and indices into sequences in brackets — `${x.y[7].z}`, `${a[0][1]}`,
@@ -762,32 +766,42 @@ from a substitution.
 - Cycles are an error naming the path. Self-reference (`a: ${a}" x"` reading the pre-merge value) is
   **not** supported in v1; it is reported as a cycle.
 
-**Spreads** (session 25) put the contents of a node where a node would stand: the fields of a map
-among the fields of a block, the elements of a sequence among the elements of a sequence.
+**Injections** (sessions 25 and 26) put what a node holds where a node would stand: the fields of
+a map among the fields of a block, the elements of a sequence among the elements of a sequence.
+An injection is a substitution, `$a` or `${a}`, `$?a` or `${?a}` optional, standing alone among the
+fields of a block or as an element of a sequence; nothing marks it but where it stands (session 26).
+As a field's value a substitution grafts, and in a string or a concatenation it concatenates.
 
-- **A `*` after the path marks a spread**: `$a*` and `${a*}`, `$?a*` and `${?a*}` optional. Among
-  the fields of a block it may be left out, nothing but a spread standing there: `$a`, `$a*`,
-  `${a}` and `${a*}` are one spread. Among the elements of a sequence it is required, `$a` and
-  `${a}` grafting the sequence whole as one element. Anywhere else a spread is an error: as a
-  field's value, in a string, in a concatenation, or with tags before it.
 - **Among the fields of a block, as if the map's fields were written there**: what stands after the
-  spread overrides it, what stands before it is overridden, and they merge as `:` merges (§7),
+  injection overrides it, what stands before it is overridden, and they merge as `:` merges (§7),
   maps deep and anything else replaced; a `:=` after it replaces. With `a { x: 1, y: 2 }`,
   `b { $a, x: 3, z: 4 }` is `{ x: 3, y: 2, z: 4 }`. A map over a substitution is the error `:` gives
-  there (§7), the substitution maybe no map.
+  there (§7), the substitution maybe no map. A scalar holding more than the substitution there,
+  `b { $a/x }`, is an error.
 - **What it finds is the map as it ends up**, merged from every source and resolved, as every
   substitution finds; what is merged into the block after it, from a later block or a later
-  source, comes after it. Its fields keep where they came from behind the spread (§10), and their
-  own tags; the map's tags are not brought along.
-- **Among the elements of a sequence, the sequence's elements in its place**: with `a: [x, y]`,
-  `[a, $a*, z]` is `[a, x, y, z]`. An index into a sequence counts the elements a spread put.
-- **What it finds must be a map among fields and a sequence among elements**, an error naming
-  where it is defined otherwise; an optional one finding nothing puts nothing.
-- **Not at the root, nor into the block it stands in**: every path goes through the root, so a spread
-  among its fields would refer to the tree it builds, an error of its own; one that refers to the
-  block it stands in, or one around it, is a cycle. A source included in a block puts its spreads
-  in that block. A field of the block may refer to another of it, the spreads merged before
-  either is resolved.
+  source, comes after it. Its fields keep where they came from behind the injection (§10), and
+  their own tags; the map's tags are not brought along. It must be a map, an error naming where it
+  is defined otherwise.
+- **Among the elements of a sequence, a sequence it finds puts its elements in its place, and
+  anything else stands there as one element**: with `a: [x, y]`, `[p, $a, z]` is `[p, x, y, z]`,
+  and with `a: x` it is `[p, x, z]`. A sequence written around it nests the sequence whole:
+  `[p, [$a], z]` is `[p, [x, y], z]`. The shape of a sequence thus depends on what its injections
+  find, the cost of the rule, taken knowingly (session 26).
+- **Tags before it go to the one element it puts**, as a graft's do; before one that finds a
+  sequence they have no node to go to, its elements keeping their own, and are an error.
+- **An index into a sequence counts the elements its injections put**, and resolves only those
+  before the element it names: in `a: [x, $a[0]]`, `$a[0]` is `x`.
+- **A directive among the elements of a sequence is an injection too** (§6): a sequence it gives
+  puts its elements there, anything else stands there as one element, `[#d(…)]` nests the sequence,
+  and a tag before one that gives a sequence is an error. In statement position a directive puts
+  the fields of a map, as an injection among fields does.
+- An optional injection finding nothing puts nothing, among fields and among elements alike.
+- **Not at the root, nor into the block it stands in**: every path goes through the root, so an
+  injection among its fields would refer to the tree it builds, an error of its own; one that refers
+  to the block it stands in, or one around it, is a cycle. A source included in a block puts its
+  injections in that block. A field of the block may refer to another of it, the injections merged
+  before either is resolved.
 - It copies what it puts, and counts against the size limit as a graft does, and against the depth
   limit where its contents stand (§11).
 
@@ -1042,8 +1056,8 @@ mistake is worse than stopping.
 1. **Value expressions**, e.g. `${b} + ${c}` for sequence concatenation — the replacement for an
    append operator (§7). Not in v1. Whitespace never joins values (§3), so `${b} + ${c}` is an error
    today and the syntax stays free. **Parked** by the user as hard from every angle — do not reopen
-   it until it is raised again. Spreads (§9, session 25) do the jobs that came first:
-   `[${b*}, ${c*}]` concatenates sequences, and `b { $a, x: 3 }` extends a map.
+   it until it is raised again. Injections (§9, sessions 25 and 26) do the jobs that came first:
+   `[$b, $c]` concatenates sequences, and `b { $a, x: 3 }` extends a map.
 2. **Indentation as an alternative to braces**, Scala 3 style — both forms allowed. Not in v1; v1 is
    braces only. **Parked until implementation of indentation starts** — do not reopen it before then.
 
@@ -2217,3 +2231,21 @@ the user; the last, the growth of a tree by substitutions, is still to be discus
   so that "as if written there" is the same code; the merge is memoized as a substitution is, its
   height counted (session 25, above), and a block's fields are resolved after it, so that one may
   refer to another. Covers the first jobs of §13 item 1, which stays parked.
+
+### Session 26 — 2026-11-16
+
+- **Spreads become injections, and the `*` is gone** (§6, §9, §13 item 1), the user's decisions:
+  `$a`, `${a}`, `$?a` and `${?a}` are the only forms, and where one stands says what it does. Among
+  the fields of a block nothing changes. Among the elements of a sequence a sequence found puts its
+  elements there and anything else stands as one element, the user's pick, variant B, over
+  requiring a sequence there; `[$a]` nests a sequence whole. The cost, told to the user: the shape
+  of a sequence depends on what its injections find. A directive follows the same rule, the user's
+  point that `$a` among fields does what a directive in statement position already did: among the
+  elements of a sequence, a sequence it gives puts its elements, and `[#d(…)]` nests. A tag before
+  an injection that finds a sequence, or a directive that gives one, is an error, the user's
+  choice of the three I put, over adding it to each element or forbidding a tag there outright; it
+  goes to the one element otherwise, as a graft's. "Spread" is renamed "injection" throughout, the
+  code and its errors included. Mine, in the code: an index into a sequence resolves only the
+  injections before the element it names, so that `a: [x, $a[0]]` is no cycle, as it was none
+  before. Breaks `[x, $a, z]` nesting a sequence, and every `*`: before 1.0, compatibility is not
+  kept.

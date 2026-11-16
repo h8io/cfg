@@ -26,15 +26,15 @@ private[psi] final class Merge {
   /** The errors found so far. */
   private[psi] def reported: List[PsiError] = errors.toList
 
-  /** Merges the statements of a block into `map`, in order: from a spread on, they are kept as its steps, merged once
-    * the spread is resolved (§9).
+  /** Merges the statements of a block into `map`, in order: from an injection on, they are kept as its steps, merged
+    * once the injection is resolved (§9).
     */
   private[psi] def block(map: Tree.Map, statements: Vector[Ast.Statement]): Tree.Map =
     statements.foldLeft(map) {
       case (map, statement) if map.steps.nonEmpty => map.copy(steps = Merge.step(map.steps, statement))
       case (map, Ast.Field(keys, operator, value, _)) => field(map, keys, operator, value)
-      case (map, Ast.SpreadStatement(path, optional, location, _)) =>
-        map.copy(steps = Vector(Tree.Step.Spread(path, optional, location)))
+      case (map, Ast.InjectionStatement(path, optional, location, _)) =>
+        map.copy(steps = Vector(Tree.Step.Injection(path, optional, location)))
       case (_, Ast.DirectiveStatement(call, _)) => unexpanded(call)
     }
 
@@ -85,13 +85,18 @@ private[psi] final class Merge {
       case Ast.Scalar(text, tags, location) => Tree.Scalar(text, tags, location)
       case Ast.Null(tags, location) => Tree.Null(tags, location)
       case Ast.Block(statements, tags, location) => block(Tree.Map.empty(tags, location), statements)
-      case Ast.Sequence(elements, tags, location) => Tree.Sequence(elements.map(e => tree(e.value)), tags, location)
+      case Ast.Sequence(elements, tags, location) => Tree.Sequence(elements.map(e => element(e.value)), tags, location)
       case Ast.Substitution(path, optional, tags, location) => Tree.Substitution(path, optional, tags, location)
-      // the parser takes a spread as an element of a sequence only, and with no tags
-      case Ast.Spread(path, optional, _, location) => Tree.Splice(path, optional, location)
       case Ast.Concatenation(parts, tags, location) => Tree.Concatenation(parts, tags, location)
       case Ast.Marked(value, markers) => Tree.Marked(tree(value), markers)
       case Ast.DirectiveValue(call, _) => unexpanded(call)
+    }
+
+  /** An element of a sequence, where a substitution is an injection (§9). */
+  private def element(value: Ast.Value): Tree.Value =
+    value match {
+      case Ast.Substitution(path, optional, tags, location) => Tree.Injection(path, optional, tags, location)
+      case _ => tree(value)
     }
 
   private def unexpanded(call: Ast.Call): Nothing =
@@ -100,12 +105,13 @@ private[psi] final class Merge {
 
 private[psi] object Merge {
 
-  /** `steps` with `statement` after them: a spread a step of its own, any other statement among those after the last.
+  /** `steps` with `statement` after them: an injection a step of its own, any other statement among those after the
+    * last.
     */
   private def step(steps: Vector[Tree.Step], statement: Ast.Statement): Vector[Tree.Step] =
     (statement, steps.last) match {
-      case (Ast.SpreadStatement(path, optional, location, _), _) =>
-        steps :+ Tree.Step.Spread(path, optional, location)
+      case (Ast.InjectionStatement(path, optional, location, _), _) =>
+        steps :+ Tree.Step.Injection(path, optional, location)
       case (_, Tree.Step.Statements(statements)) => steps.init :+ Tree.Step.Statements(statements :+ statement)
       case _ => steps :+ Tree.Step.Statements(Vector(statement))
     }

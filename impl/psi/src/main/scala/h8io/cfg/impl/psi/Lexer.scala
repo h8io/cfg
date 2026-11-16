@@ -245,7 +245,7 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
         val kind = if (at(offset + 1, '=')) advance(2, Replace) else advance(1, Colon)
         if (has(offset) && !isBreak(offset)) report(ColonWithoutSpace.apply, start)
         kind
-      // a substitution among the fields of a block: a spread, which the parser takes (§9)
+      // a substitution among the fields of a block: an injection, which the parser takes (§9)
       case '$' if startsWith("${") || startsBare(offset) => unquoted()
       case _ =>
         while (has(offset) && !endsKey(offset)) offset += 1
@@ -623,14 +623,10 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
     offset += 2
     val optional = at(offset, '?')
     if (optional) offset += 1
-    path(Id.Root).flatMap { path =>
-      val spread = at(offset, '*')
-      if (spread) offset += 1
-      if (at(offset, '}')) Some(path -> spread) else None
-    } match {
-      case Some((path, spread)) =>
+    path(Id.Root).filter(_ => at(offset, '}')) match {
+      case Some(path) =>
         offset += 1
-        Some(part(path, optional, spread, start))
+        Some(Reference(path, optional, source.location(start)))
       case None if !ended =>
         if (has(offset) && isSpace(text.charAt(offset)))
           report(WhitespaceInSubstitution.apply, offset)
@@ -659,17 +655,8 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
     offset += 1
     val optional = at(offset, '?')
     if (optional) offset += 1
-    key(Id.Root).map { key =>
-      val path = greedy(key)
-      val spread = at(offset, '*')
-      if (spread) offset += 1
-      part(path, optional, spread, start)
-    }
+    key(Id.Root).map(key => Reference(greedy(key), optional, source.location(start)))
   }
-
-  /** A substitution from its `$` at `start`: a spread when a `*` ends its path (§9). */
-  private def part(path: Id.Branch, optional: Boolean, spread: Boolean, start: Int): Part =
-    if (spread) Spread(path, optional, source.location(start)) else Reference(path, optional, source.location(start))
 
   /** The segments of a path with no braces after `current`, as many as there are. */
   @tailrec private def greedy(current: Id.Branch): Id.Branch =

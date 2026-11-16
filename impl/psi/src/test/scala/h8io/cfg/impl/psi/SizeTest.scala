@@ -13,10 +13,11 @@ class SizeTest extends AnyFlatSpec with Matchers {
       .build
       .fold(e => fail(e.toString), identity)
 
-  /** `a0` a sequence of `width` scalars, each next key a sequence of `width` grafts of the one before. */
+  /** `a0` a sequence of `width` scalars, each next key a map of `width` grafts of the one before. */
   private def fanOut(levels: Int, width: Int): String =
     (("a0: " + Seq.fill(width)("x").mkString("[", ", ", "]")) +: (1 to levels).map { i =>
-      "a" + i.toString + ": " + Seq.fill(width)("$" + "{a" + (i - 1).toString + "}").mkString("[", ", ", "]")
+      val grafts = (0 until width).map(k => "k" + k.toString + ": $" + "{a" + (i - 1).toString + "}")
+      "a" + i.toString + " " + grafts.mkString("{ ", ", ", " }")
     }).mkString("\n")
 
   /** `a0` a scalar of `text`, each next key the one before concatenated twice. */
@@ -37,7 +38,7 @@ class SizeTest extends AnyFlatSpec with Matchers {
     // a0 holds 3 nodes, a1 grafts it twice, 6, and holds 7; a2 grafts a1 twice, 14, 20 in all; a3, 15 more, 35
     loader(20, 0).parse("s", fanOut(2, 2)).isRight shouldBe true
     loader(25, 0).parse("s", fanOut(3, 2)).left.map(_.errors) shouldBe
-      Left(List(ResolutionTooLarge(at(4, 6), "a2", 25)))
+      Left(List(ResolutionTooLarge(at(4, 10), "a2", 25)))
   }
 
   they should "count the nodes they copy, not those the sources hold" in {

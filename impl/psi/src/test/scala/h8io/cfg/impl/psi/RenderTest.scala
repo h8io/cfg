@@ -1,7 +1,7 @@
 package h8io.cfg.impl.psi
 
 import h8io.cfg.{Id, Node}
-import h8io.cfg.impl.psi.Token.{Reference, Spread, Text}
+import h8io.cfg.impl.psi.Token.{Reference, Text}
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import org.scalatest.flatspec.AnyFlatSpec
@@ -31,12 +31,11 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
       case Tree.Null(tags, _) => Tree.Null(tags, nowhere)
       case Tree.Sequence(elements, tags, _) => Tree.Sequence(elements.map(located), tags, nowhere)
       case Tree.Substitution(path, optional, tags, _) => Tree.Substitution(path, optional, tags, nowhere)
-      case Tree.Splice(path, optional, _) => Tree.Splice(path, optional, nowhere)
+      case Tree.Injection(path, optional, tags, _) => Tree.Injection(path, optional, tags, nowhere)
       case Tree.Concatenation(parts, tags, _) =>
         Tree.Concatenation(
           parts.map {
             case Reference(path, optional, _) => Reference(path, optional, nowhere)
-            case Spread(path, optional, _) => Spread(path, optional, nowhere)
             case text: Text => text
           },
           tags,
@@ -168,9 +167,16 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
             n <- Gen.choose(0, 4)
             es <- Gen.listOfN(n, values(depth - 1))
             g <- tagSets
-          } yield Tree.Sequence(es.toVector, g, nowhere))
+          } yield Tree.Sequence(es.toVector.map(element), g, nowhere))
       )
   }
+
+  /** An element of a sequence, where a substitution is an injection. */
+  private def element(value: Tree.Value): Tree.Value =
+    value match {
+      case Tree.Substitution(path, optional, tags, location) => Tree.Injection(path, optional, tags, location)
+      case other => other
+    }
 
   private def maps(depth: Int): Gen[Tree.Map] =
     for {

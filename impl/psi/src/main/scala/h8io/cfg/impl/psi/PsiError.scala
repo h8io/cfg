@@ -559,45 +559,53 @@ final case class NonScalarInConcatenation(location: SourceLocation, path: String
     "'${" + Message.cut(path) + "}' in a string is not a scalar; it is defined at " + origin.description
 }
 
-/** A spread, `\$path*` or `\${path*}`, where it has nothing to put its contents among: as a field's value, in a string,
-  * or among the fields of a block with more than the substitution written (`format.md` §9).
+/** Among the fields of a block, an unquoted scalar holding a substitution and more than it: an injection stands alone
+  * there (`format.md` §9).
   */
-final case class MisplacedSpread(location: SourceLocation) extends PsiError {
-  def message: String = "a spread stands alone, among the fields of a block or the elements of a sequence"
+final case class MisplacedInjection(location: SourceLocation) extends PsiError {
+  def message: String = "an injection stands alone among the fields of a block"
 
-  override def hint: Option[String] = Some("to graft the node whole, write the substitution without '*'")
+  override def hint: Option[String] = Some("write a key and ':' before a value")
 }
 
-/** A spread among the fields of the root, which every path goes through, so that it would refer to the tree it builds
-  * (`format.md` §9); a source included in a block puts its spreads in the block.
+/** An injection among the fields of the root, which every path goes through, so that it would refer to the tree it
+  * builds (`format.md` §9); a source included in a block puts its injections in the block.
   */
-final case class SpreadAtRoot(location: SourceLocation) extends PsiError {
-  def message: String = "a spread at the root, which every path goes through, refers to the tree it builds"
+final case class InjectionAtRoot(location: SourceLocation) extends PsiError {
+  def message: String = "an injection at the root, which every path goes through, refers to the tree it builds"
 
-  override def hint: Option[String] = Some("spread into a block, or include the source at the root with #include")
+  override def hint: Option[String] = Some("inject into a block, or include the source at the root with #include")
 }
 
-/** A tag before a spread in a sequence, whose elements keep their own (`format.md` §9). */
-final case class TaggedSpread(location: SourceLocation) extends PsiError {
-  def message: String = "a tag before a spread, which puts elements with tags of their own"
-
-  override def hint: Option[String] = Some("remove the tag")
+/** An injection among the fields of a block, at `location`, of `\${path}`, which is not a map; `found` is where its
+  * node is defined (`format.md` §9).
+  */
+final case class InjectionNotMap(location: SourceLocation, path: String, found: PsiLocation) extends PsiError {
+  def message: String =
+    "'${" + Message.cut(path) + "}' injected among fields is not a map; it is defined at " + found.description
 }
 
-/** A spread among the fields of a block, at `location`, of `\${path}`, which is not a map; `found` is where its node is
+/** A tag before an injection among the elements of a sequence, at `location`, of `\${path}`, which is a sequence: its
+  * elements stand there with tags of their own, and the tag has no node to go to; `found` is where the sequence is
   * defined (`format.md` §9).
   */
-final case class SpreadNotMap(location: SourceLocation, path: String, found: PsiLocation) extends PsiError {
+final case class TaggedInjection(location: SourceLocation, path: String, found: PsiLocation) extends PsiError {
   def message: String =
-    "'${" + Message.cut(path) + "}' spread among fields is not a map; it is defined at " + found.description
+    "a tag before '${" + Message.cut(path) + "}', a sequence injected among elements, whose elements keep their own " +
+      "tags; it is defined at " + found.description
+
+  override def hint: Option[String] = Some("remove the tag, or nest the sequence whole: [${" + Message.cut(path) + "}]")
 }
 
-/** A spread among the elements of a sequence, at `location`, of `\${path}`, which is not a sequence; `found` is where
-  * its node is defined (`format.md` §9).
+/** A tag before a call among the elements of a sequence that gave a sequence: its elements stand there with tags of
+  * their own, and the tag has no node to go to (`format.md` §6, §9).
   */
-final case class SpreadNotSequence(location: SourceLocation, path: String, found: PsiLocation) extends PsiError {
+final case class TaggedDirectiveInjection(location: SourceLocation, name: String) extends PsiError {
   def message: String =
-    "'${" + Message.cut(path) + "}' spread among elements is not a sequence; it is defined at " + found.description
+    "a tag before " + Message.directive(name) + ", which gave a sequence among elements, whose elements keep their " +
+      "own tags"
+
+  override def hint: Option[String] = Some("remove the tag, or nest the sequence whole: [#…]")
 }
 
 /** A loader's marker that failed on a block's value, with its handler's error (`format.md` §5); the block stands for
