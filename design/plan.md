@@ -16,7 +16,7 @@ new session reads to find out where things stand.
 - **A step that turns out too big** is split here, in this file, into `NNa`/`NNb`, and only the first
   part is finished in the current PR. Unfinished work is not left uncommitted at the end of a
   session: push what compiles and passes, and write in *Progress* what is left.
-- **Every PR is green on `./test.sh`**: formatting, cross-build for 2.13, 2.12 and 3.9, and **100%
+- **Every PR is green on `./test.sh`**: formatting, cross-build for 2.13 and 3.9, and **100%
   statement and branch coverage** — the build enforces it (`coverageSummary{Stmt,Branch}LowThreshold`),
   so tests are written in the same step as the code, never later.
 - **Spec gaps.** Each step lists the questions the spec does not answer yet. They are decided with
