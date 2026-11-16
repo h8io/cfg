@@ -158,6 +158,12 @@ class InjectionTest extends AnyFlatSpec with Matchers {
   "Injections into one block" should "each report their own errors" in {
     errors("b { $missing1, x: 1, $missing2 }") shouldBe
       List(UnresolvedSubstitution(at(1, 5), "missing1"), UnresolvedSubstitution(at(1, 22), "missing2"))
+    // the injections after one that failed still report theirs, and nothing is merged past what it would have brought
+    errors("x { q: 1 }\nb { $missing, $x, $nope }") shouldBe
+      List(UnresolvedSubstitution(at(2, 5), "missing"), UnresolvedSubstitution(at(2, 19), "nope"))
+    errors("x { q: 1 }\nb { c: $x, $missing, c { r: 2 } }") shouldBe
+      List(UnresolvedSubstitution(at(2, 12), "missing"))
+    errors("a { c { u: 1 } }\nb { c { $missing }, $a }") shouldBe List(UnresolvedSubstitution(at(2, 9), "missing"))
   }
 
   "A block with an injection of its own, merged with one an injection brings" should "keep where each came from" in {

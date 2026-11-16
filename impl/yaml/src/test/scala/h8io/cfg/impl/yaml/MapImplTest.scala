@@ -138,6 +138,12 @@ a: 1
       List("a", "b", "c", "d", "g", "p", "u")
   }
 
+  it should "render a scalar the core schema resolves with no tag" in {
+    val shown = MapImpl(Id.Root, yaml"{a: Null, b: 0x10, c: TRUE, d: ~, e: 'Null', f: 1e3}").toString
+    shown shouldBe "{a: Null, b: 0x10, c: TRUE, d: ~, e: 'Null', f: 1e3}\n"
+    MapImpl(Id.Root, yaml"$shown").iterator.map(_.tags).toSet shouldBe Set(NoTags)
+  }
+
   it should "render the entries sharing a key only once" in {
     MapImpl(Id.Root, yaml"{a: 1, a: 2}").toString shouldBe "{a: 2}\n"
   }
