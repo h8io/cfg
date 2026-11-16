@@ -29,10 +29,10 @@ private[psi] object Ast {
     */
   final case class DirectiveStatement(call: Call, doc: Option[String]) extends Statement
 
-  /** `$path` or `${path}`, a `*` after the path or not, among the fields of a block: the fields of the map at `path`,
-    * merged there as if written there (§7, §9).
+  /** An injection, `$path` or `${path}` among the fields of a block: the fields of the map at `path`, merged there as
+    * if written there (§7, §9).
     */
-  final case class SpreadStatement(path: Id.Branch, optional: Boolean, location: SourceLocation, doc: Option[String])
+  final case class InjectionStatement(path: Id.Branch, optional: Boolean, location: SourceLocation, doc: Option[String])
       extends Statement
 
   /** `#name(arguments)`, or `#name` alone with none, at `location`, the `#`. */
@@ -80,14 +80,11 @@ private[psi] object Ast {
   /** `[ … ]`. */
   final case class Sequence(elements: Vector[Element], tags: Set[String], location: PsiLocation) extends Value
 
-  /** `\${path}` or `\${?path}` unquoted and alone: the node it refers to, grafted whole (§9). */
+  /** `\${path}` or `\${?path}` unquoted and alone: the node it refers to, grafted whole as a field's value; as an
+    * element of a sequence, an injection, which puts the elements of a sequence it finds in its place (§9).
+    */
   final case class Substitution(path: Id.Branch, optional: Boolean, tags: Set[String], location: SourceLocation)
       extends Value
-
-  /** `$path*` or `${path*}` as an element of a sequence: the elements of the sequence at `path`, in its place (§9). The
-    * parser takes it nowhere else.
-    */
-  final case class Spread(path: Id.Branch, optional: Boolean, tags: Set[String], location: SourceLocation) extends Value
 
   /** A scalar with `\${…}` inside it, or quoted around one alone, such as `"\${a}"`: always a scalar (§9).
     *

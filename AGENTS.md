@@ -115,7 +115,7 @@ the system properties and the environment `#prop` and `#env` read from maps rath
 other limits, and `build` reports every error of that configuration at once. A load runs in phases (`format.md` §8):
 each source is lexed and parsed (`Lexer`, `Parser` → `Ast`) and its directives expanded (`Expand`), `#include`, `#prop`
 and `#env` among them (`Include`, `Launch`), then the sources are merged (`Merge` → `Tree`; a map keeps what follows its
-first spread as `steps`) and their substitutions resolved (`Resolve`, which merges each spread's map by `Merge`'s
+first injection as `steps`) and their substitutions resolved (`Resolve`, which merges each injection's map by `Merge`'s
 rules); nothing set at launch overrides a value; `MapImpl` and `SeqImpl` are the `Node` views over the result, and
 `Render` writes a tree back as Psi, which is their `toString`.
 

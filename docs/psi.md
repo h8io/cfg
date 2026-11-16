@@ -135,7 +135,8 @@ a { port: 2 }
 indexes in brackets: `${servers[0].host}`. Substitutions are resolved once every source is merged, so a value refers
 to its final state, whichever source set it.
 
-- `${path}` alone, unquoted, puts the node there whatever it is: a block, a sequence, a value.
+- `${path}` alone, unquoted, puts the node there whatever it is: a block, a sequence, a value. As an element of a
+  sequence it is an [injection](#injections).
 - Inside a value, `jdbc:${host}/db` or `"jdbc:${host}/db"`, it builds a string, and the node has to be a value.
 - `${?path}` is optional: with nothing at `path`, the field is left out, an element of a sequence is dropped, and a
   part of a string is empty.
@@ -161,16 +162,19 @@ raw: '${not.a.path}'
 """)
 ```
 
-### Spreads
+### Injections
 
-A `*` after a substitution's path puts the node's contents in its place: the fields of a map among the fields of a
-block, the elements of a sequence among the elements of a sequence.
+A substitution standing alone among the fields of a block, or as an element of a sequence, puts what the node holds
+in its place: an injection.
 
-- Among fields, as if the map's fields were written there: what follows overrides them, what comes before is
-  overridden, and blocks merge deep. Nothing but a spread stands alone among fields, so the `*` may be left out there.
-- Among elements, the `*` is needed: without it the sequence is grafted whole, as one element.
-- The map or the sequence is taken as it ends up, every source merged. A spread at the top of a source is an error,
-  unless the source is included in a block.
+- Among fields, the node must be a map, and its fields stand there as if written there: what follows overrides them,
+  what comes before is overridden, and blocks merge deep.
+- Among elements, a sequence puts its elements there, and anything else stands as one element. To put a sequence as
+  one element, nest it: `[$hosts]`. Tags before an injection go to the one element; before a sequence they are an
+  error, its elements keeping their own.
+- A directive among elements does the same with what it gives: a sequence puts its elements, and `[#d(…)]` nests it.
+- The node is taken as it ends up, every source merged. An injection at the top of a source is an error, unless the
+  source is included in a block.
 
 ```scala mdoc:passthrough
 example("""
@@ -181,7 +185,8 @@ db {
   pool { size: 20 }
 }
 hosts: [a, b]
-all: [primary, $hosts*, backup]
+all: [primary, $hosts, backup]
+groups: [[$hosts], [backup]]
 """)
 ```
 
