@@ -47,7 +47,7 @@ loader path.
 
 | Decision | Value |
 |---|---|
-| Syntax shape | Nested blocks with braces (HOCON/JSON-like), not indentation |
+| Syntax shape | Nested blocks with braces (HOCON/JSON-like) or significant indentation, mixed freely, as in Scala 3 (§4) |
 | Explicit tags | Yes, on scalars **and** containers |
 | Substitutions | Yes, `${…}`, HOCON-style lookup order |
 | Includes | Yes, but as a **directive**, not a keyword |
@@ -175,7 +175,7 @@ loader path.
   sequences and blocks alike.
 
   The rule also frees `- ` (dash, space) at the start of an indented line for the sequence element
-  marker (§13): `- 5` can never be a scalar, `-5` and `"- 5"` always are.
+  marker (§4): `- 5` can never be a scalar, `-5` and `"- 5"` always are.
 - **`null`** — the one reserved word. An unquoted scalar whose trimmed text is exactly `null`
   becomes `Node.INull`; `"null"` in quotes stays a scalar. Tags are kept: `@secret null` is an
   `INull` with `tags = Set("secret")`. `true`, `false` and every other word remain plain scalars.
@@ -199,7 +199,7 @@ scalar     = null | bare-scalar | quoted-scalar | triple-quoted
 
 Fields are separated by a newline or a `,` (§3). `key { … }` needs no `:`, and the `{` must be on the
 same line as the key: `key` followed by `{` on the next line is an error. That keeps a key at the end
-of a line free for the indentation syntax (§13). For the same reason a value starts on the line of
+of a line free for the indentation syntax (below). For the same reason a value starts on the line of
 its `:` or `:=`, and the value a tag precedes on the line of the tag: `a:⏎5` and `a: @t⏎{ … }` are
 errors in v1, whatever the indentation of the next line. Lifting this later breaks no v1 file
 (§14, session 12).
@@ -212,6 +212,68 @@ block form `key { … }` means `key: { … }`, so it merges; replacing a block i
 
 Every syntax error names the fix where there is one, as these do: the error for `key @t { … }`
 shows `key: @t { … }`, the one for `a:⏎5` says to move the value up.
+
+### Indentation
+
+**Decided in session 28, not implemented yet.** Until it is, the paragraphs above hold as written,
+and leading whitespace means nothing.
+
+A source can be written in two ways, with braces or with significant indentation, as in Scala 3, and
+the two mix freely, in one file and in one block. Indentation is always significant: there is no
+switch to turn it off, as there is no warning for a switch to fall back to.
+
+```
+server:
+  host: example.com
+  ports:
+    - 80
+    - 443
+  tls { enabled: true, protocols: [TLSv1.3] }
+```
+
+- **Where it counts:** at the top level of a source and inside `{…}`, as Scala 3 has it in braces.
+  Inside a `{…}` the first field that starts a line sets the block's width, and no line of the block
+  starts left of it. Inside `[…]` and a directive's `(…)` it means nothing, as in Scala 3's
+  parentheses, until a `{` opens a block there. A `}` closes every indented block opened inside its
+  own.
+- **What opens a block:** `key:` or `key :=` at the end of a line, tags allowed after it
+  (`routes: @ordered`), followed by a line indented deeper. The block is a map or a sequence, as its
+  first line says: fields, directives and injections make a map (`block-body`, §4), `- ` elements a
+  sequence (below), and mixing the two in one block is an error. It merges or replaces as `{…}`
+  after the same `:` or `:=` would (§7). A line indented deeper than the one before it, where nothing
+  opens a block, is an error: Psi has no continuation lines. A bare key alone on a line stays one.
+- **Any deeper indent opens a block**, no step fixed per file, as in Scala 3. A line indented less
+  must land exactly on the width of a block still open; one that does not is an error, and every
+  following line is reported until one lands on such a width again (§11).
+- **A sequence element is `- ` at the start of a line.** Unquoted scalars hold no whitespace (§3),
+  so `- 5` is always an element holding `5`, while `-5` and `"- 5"` are scalars, and bare keys
+  cannot start with `-`, so the marker is never a key. The elements sit deeper than their key, as a
+  block does in Scala 3: YAML's `a:⏎- x`, with the marker in the key's column, is an error. A map
+  element is written as in YAML, its first field on the marker's line and the rest aligned under that
+  field's key; the column after `- ` is the element's width.
+
+  ```
+  servers:
+    - host: a
+      port: 1
+    - host: b
+      port: 2
+  ```
+- **Blank lines and comment-only lines** take no part in indentation. A tab in indentation is an
+  error (§3). Inside `"""…"""` leading whitespace is content (§5).
+- **No `end` markers** for now. A line shifted by exactly one level is still valid and changes
+  parent, a mistake braces make loud and the width rule above catches only when the line is
+  misaligned; Scala 3 answers it with optional `end` markers, which may come later.
+
+Breaks a braced source whose lines do not keep to its blocks' widths: before 1.0, compatibility is
+not kept.
+
+Open:
+
+- **A value on the line after its `:`.** Whether `a:⏎  x`, `a:⏎  """…"""` or `a:⏎  [x, y]`, a
+  block holding one value, is allowed, as YAML and Scala 3 both allow it, or a block after `key:` is
+  only ever a map or a sequence of `- ` elements, the value otherwise staying on the line of its `:`.
+  Braces are not needed for a map there either way.
 
 ## 5. Values
 
@@ -1075,56 +1137,9 @@ mistake is worse than stopping.
    today and the syntax stays free. **Parked** by the user as hard from every angle — do not reopen
    it until it is raised again. Injections (§9, sessions 25 and 26) do the jobs that came first:
    `[$b, $c]` concatenates sequences, and `b { $a, x: 3 }` extends a map.
-2. **Indentation as an alternative to braces**, Scala 3 style — both forms allowed. Not in v1; v1 is
-   braces only. **Parked until implementation of indentation starts** — do not reopen it before then.
-
-   Settled:
-   - The lexer turns indentation into virtual `{` / `}` from a stack of widths; the grammar in §4 and
-     the parser stay unchanged, which is why it can be added later.
-   - A tab in indentation is an error — already in v1 (§3), so no v1 file holds one.
-   - A dedent must land exactly on a width in the stack. Recovery (§11): every line is reported as an
-     error until one lands on a width from the stack again.
-   - **Sequences use a `- ` element marker.** Unquoted scalars contain no whitespace (§3), so a line
-     starting with `- ` is always an element: `- 5` is an element holding `5`, while `-5` and
-     `"- 5"` are scalars. Bare keys cannot start with `-` either, so the marker is never a key.
-     Whether a block opened by indentation is a map or a sequence is decided by its first line;
-     mixing fields and `- ` elements in one block is an error.
-   - **A map element is written as in YAML:** its first field on the marker's line, the rest aligned
-     under that field's key. The column after `- ` becomes the element's indentation baseline.
-
-     ```
-     servers:
-       - host: a
-         port: 1
-       - host: b
-         port: 2
-     ```
-
-   Proposed, not confirmed:
-   - `key:` at the end of a line, followed by a deeper-indented line, opens a block — the Scala 3
-     rule for `:` at the end of a line, and what `key:` would lead a reader to expect anyway. A bare
-     key alone on a line stays an error.
-   - A container tag goes after `:`: `routes: @ordered`, block on the next line.
-   - Blank lines and comment-only lines do not take part in indentation.
-
-   Open:
-   - **Backward compatibility with v1 files.** Session 2 sketched indentation as significant at file
-     level and inside `{…}`. That breaks any v1 file with sloppy indentation inside braces — the
-     dedent rule would reject it. The alternative: indentation is significant only inside a block
-     that was *opened* by indentation, and an explicit `{` switches it off until its `}`. Then no v1
-     file changes meaning, but a braced block cannot contain an indented one.
-   - **Mixing styles** in one file, and in one block.
-   - **Indent width** — any deeper indent opens a block, or one step fixed per file (which would also
-     catch some shifted lines).
-   - **Silently shifted lines.** A line moved by exactly one level is still valid and changes parent.
-     Braces make that mistake loud; the stack rule catches only misaligned lines. Accept, or find a
-     mitigation (fixed width above is one).
-   - **Opt-in.** Enabled everywhere automatically, or per file (a directive, or a separate extension).
-
-   Constraint on v1 meanwhile: leading whitespace must carry no meaning for the structure, so that
-   indentation can claim it later without changing what a v1 file means. Inside a triple-quoted
-   string it is content (§5); the explicit width reads the indent of its opening line, which keeps
-   meaning the same under either syntax.
+2. ~~**Indentation as an alternative to braces**~~ — settled in session 28 as in Scala 3 (§4,
+   Indentation), not implemented yet. One point is still open there: a value on the line after
+   its `:`.
 3. ~~**Multi-line strings**~~ — closed in session 7: reopened by the user and settled point by
    point (§5, §14).
 4. **Templates in the direction of StringTemplate 4.** Raised by the user in session 7: substitutions
@@ -2287,6 +2302,18 @@ the user; the last, the growth of a tree by substitutions, is still to be discus
   asking whether it was written, so the text read back without the tags `tagOf` reported; the
   serializer now resolves by the core schema the loader reads with, so that `Null`, `0x10` or `~`,
   which the core schema infers, are not written with a tag either.
+
+### Session 28 — 2026-11-17
+
+- **Indentation, as in Scala 3** (§4, Indentation; §13 item 2 closed), the user's decisions: two
+  ways to write a source, braces and significant indentation, mixed freely; compatibility with
+  sources written so far is no concern before 1.0, so indentation counts everywhere, inside `{…}`
+  too, and session 2's alternative, indentation only inside blocks it opened, is dropped with the
+  question it answered. Not inside `[…]`: an indented sequence is written with `- `, as in YAML. No
+  `end` markers for now. Mine, following Scala 3 as asked, and put to the user: any deeper indent
+  opens a block, with no step fixed per file; no switch to turn indentation off, Psi having no
+  warnings for one to fall back to; `- ` deeper than its key, YAML's marker in the key's column
+  being an error. Open: whether a block after `key:` may hold a single value.
 
 ### Session 29 — 2026-11-17
 
