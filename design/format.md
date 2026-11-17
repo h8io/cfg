@@ -254,6 +254,11 @@ server:
   element is written as in YAML, its first field on the marker's line and the rest aligned under that
   field's key; the column after `- ` is the element's width.
 
+  After `- ` stands any value: a scalar, `[…]`, `{…}`, a substitution, a map written as above, or
+  another element, `- - x` a sequence in a sequence, as in YAML. A tag goes before the value, and a
+  map element has no place for one before its first key: `- @t host: a` is an error, its hint
+  showing `- @t { host: a }` or `- @t` with the map in a block below, deeper than the marker.
+
   ```
   servers:
     - host: a
@@ -266,6 +271,15 @@ server:
 - **No `end` markers** for now. A line shifted by exactly one level is still valid and changes
   parent, a mistake braces make loud and the width rule above catches only when the line is
   misaligned; Scala 3 answers it with optional `end` markers, which may come later.
+- **`key:` at the end of a line with nothing deeper after it** is an error, as a missing value is:
+  an empty map or sequence is written `{}` or `[]`.
+- **The top level starts at column 1.** A source whose first line is indented is an error, the shift
+  most likely an accident; Scala 3 takes the first line's width instead, which would hide it.
+- **Separators** stay `,` and newline (§3): `a: 1, b: 2` on one line of an indented block is two
+  fields, and `- ` elements are separated by their newlines.
+- **`Render`, and so `toString`, writes indentation**: a map as fields in a block, a sequence as
+  `- ` elements, braces left for the empty `{}` and `[]`, so that what a tree prints looks as a
+  source is usually written.
 
 Breaks a braced source whose lines do not keep to its blocks' widths: before 1.0, compatibility is
 not kept.
@@ -2310,7 +2324,10 @@ the user; the last, the growth of a tree by substitutions, is still to be discus
   `end` markers for now. A block after `key:` may hold one value, as in YAML and Scala 3. Proposed
   by me after Scala 3 and confirmed by the user: any deeper indent opens a block, with no step
   fixed per file; no switch to turn indentation off, Psi having no warnings for one to fall back
-  to; `- ` deeper than its key, YAML's marker in the key's column being an error.
+  to; `- ` deeper than its key, YAML's marker in the key's column being an error; any value after
+  `- `, `- - x` included, and a tagged map element written `- @t { … }` or `- @t` with a block
+  below; `key:` with nothing deeper an error; the top level at column 1; `,` still a separator;
+  `Render` writing indentation, braces only for what is empty.
 
 ### Session 29 — 2026-11-17
 
