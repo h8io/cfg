@@ -237,9 +237,11 @@ server:
   parentheses, until a `{` opens a block there. A `}` closes every indented block opened inside its
   own.
 - **What opens a block:** `key:` or `key :=` at the end of a line, tags allowed after it
-  (`routes: @ordered`), followed by a line indented deeper. The block is a map or a sequence, as its
-  first line says: fields, directives and injections make a map (`block-body`, §4), `- ` elements a
-  sequence (below), and mixing the two in one block is an error. It merges or replaces as `{…}`
+  (`routes: @ordered`), followed by a line indented deeper. The block is a map, a sequence or one
+  value, as its first line says: fields, directives and injections make a map (`block-body`, §4),
+  `- ` elements a sequence (below), and anything else is the value of the key, alone in the block,
+  as YAML and Scala 3 both allow — `a:⏎  x`, `a:⏎  """…"""`, `a:⏎  [x, y]`. Mixing fields and
+  `- ` elements in one block is an error, and so is a second value. It merges or replaces as `{…}`
   after the same `:` or `:=` would (§7). A line indented deeper than the one before it, where nothing
   opens a block, is an error: Psi has no continuation lines. A bare key alone on a line stays one.
 - **Any deeper indent opens a block**, no step fixed per file, as in Scala 3. A line indented less
@@ -268,12 +270,8 @@ server:
 Breaks a braced source whose lines do not keep to its blocks' widths: before 1.0, compatibility is
 not kept.
 
-Open:
-
-- **A value on the line after its `:`.** Whether `a:⏎  x`, `a:⏎  """…"""` or `a:⏎  [x, y]`, a
-  block holding one value, is allowed, as YAML and Scala 3 both allow it, or a block after `key:` is
-  only ever a map or a sequence of `- ` elements, the value otherwise staying on the line of its `:`.
-  Braces are not needed for a map there either way.
+A value on the line of its `:`, the rule of the braced syntax above, stays allowed: the next line is
+only one more place for it.
 
 ## 5. Values
 
@@ -1138,8 +1136,7 @@ mistake is worse than stopping.
    it until it is raised again. Injections (§9, sessions 25 and 26) do the jobs that came first:
    `[$b, $c]` concatenates sequences, and `b { $a, x: 3 }` extends a map.
 2. ~~**Indentation as an alternative to braces**~~ — settled in session 28 as in Scala 3 (§4,
-   Indentation), not implemented yet. One point is still open there: a value on the line after
-   its `:`.
+   Indentation), not implemented yet.
 3. ~~**Multi-line strings**~~ — closed in session 7: reopened by the user and settled point by
    point (§5, §14).
 4. **Templates in the direction of StringTemplate 4.** Raised by the user in session 7: substitutions
@@ -2310,10 +2307,10 @@ the user; the last, the growth of a tree by substitutions, is still to be discus
   sources written so far is no concern before 1.0, so indentation counts everywhere, inside `{…}`
   too, and session 2's alternative, indentation only inside blocks it opened, is dropped with the
   question it answered. Not inside `[…]`: an indented sequence is written with `- `, as in YAML. No
-  `end` markers for now. Mine, following Scala 3 as asked, and put to the user: any deeper indent
-  opens a block, with no step fixed per file; no switch to turn indentation off, Psi having no
-  warnings for one to fall back to; `- ` deeper than its key, YAML's marker in the key's column
-  being an error. Open: whether a block after `key:` may hold a single value.
+  `end` markers for now. A block after `key:` may hold one value, as in YAML and Scala 3. Proposed
+  by me after Scala 3 and confirmed by the user: any deeper indent opens a block, with no step
+  fixed per file; no switch to turn indentation off, Psi having no warnings for one to fall back
+  to; `- ` deeper than its key, YAML's marker in the key's column being an error.
 
 ### Session 29 — 2026-11-17
 
