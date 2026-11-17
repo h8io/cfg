@@ -241,7 +241,17 @@ server:
   value, as its first line says: fields, directives and injections make a map (`block-body`, §4),
   `- ` elements a sequence (below), and anything else is the value of the key, alone in the block,
   as YAML and Scala 3 both allow — `a:⏎  x`, `a:⏎  """…"""`, `a:⏎  [x, y]`. Mixing fields and
-  `- ` elements in one block is an error, and so is a second value. It merges or replaces as `{…}`
+  `- ` elements in one block is an error, and so is a second value.
+- **The tags after `key:` are the block's value's**: of the map, of the sequence, as here, or of
+  the one value, which may have tags of its own written before it, the two adding up as tags
+  written together do (§5): `a: @s⏎  @t x` is `a: @s @t x`.
+
+  ```
+  key: @tag
+    - x
+    - y
+    - z
+  ``` It merges or replaces as `{…}`
   after the same `:` or `:=` would (§7). A line indented deeper than the one before it, where nothing
   opens a block, is an error: Psi has no continuation lines. A bare key alone on a line stays one.
 - **Any deeper indent opens a block**, no step fixed per file, as in Scala 3. A line indented less
