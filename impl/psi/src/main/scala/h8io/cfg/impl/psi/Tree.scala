@@ -86,7 +86,7 @@ private[psi] object Tree {
     final case class Injection(path: Id.Branch, optional: Boolean, location: SourceLocation) extends Step
 
     /** Statements written after an injection, merged as they would have been. */
-    final case class Statements(statements: Vector[Ast.Statement]) extends Step
+    final case class Statements(statements: Vector[AST.Statement]) extends Step
 
     /** A map an injection around this one brought in, already resolved, merged as an injection's is. */
     final case class Graft(map: Map) extends Step

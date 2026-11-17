@@ -1,7 +1,7 @@
 package h8io.cfg.impl.psi
 
 import h8io.cfg.Id
-import h8io.cfg.impl.psi.Ast.*
+import h8io.cfg.impl.psi.AST.*
 import h8io.cfg.impl.psi.Token.{Reference, Text}
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen

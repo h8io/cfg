@@ -3,7 +3,7 @@ package h8io.cfg.impl.psi
 import h8io.cfg.Id
 
 /** The syntax tree of one source (`format.md` §4): fields in source order with their operators, nothing merged yet. */
-private[psi] object Ast {
+private[psi] object AST {
 
   /** A whole source: the fields of its top-level block. */
   final case class Document(statements: Vector[Statement])

@@ -113,7 +113,7 @@ Unlike the HOCON loader this one sets `tags` — but only when the tag was *writ
 `Psi.builder` builds a `PsiLoader` (from a `Settings`) with directives and markers of its own, a built-in one disabled,
 the system properties and the environment `#prop` and `#env` read from maps rather than `sys.props` and `sys.env`, or
 other limits, and `build` reports every error of that configuration at once. A load runs in phases (`format.md` §8):
-each source is lexed and parsed (`Lexer`, `Parser` → `Ast`) and its directives expanded (`Expand`), `#include`, `#prop`
+each source is lexed and parsed (`Lexer`, `Parser` → `AST`) and its directives expanded (`Expand`), `#include`, `#prop`
 and `#env` among them (`Include`, `Launch`), then the sources are merged (`Merge` → `Tree`; a map keeps what follows its
 first injection as `steps`) and their substitutions resolved (`Resolve`, which merges each injection's map by `Merge`'s
 rules); nothing set at launch overrides a value; `MapImpl` and `SeqImpl` are the `Node` views over the result, and
