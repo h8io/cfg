@@ -84,4 +84,19 @@ class YAMLTest extends AnyFlatSpec with Matchers with Inside {
     the[YamlEngineException] thrownBy YAML(resource("port.yaml"), url, url) should have message
       s"An alias makes the MAPPING at ${url.toString}: 1:1 contain itself"
   }
+
+  it should "fail on a server that never answers, after the read timeout, and read with the timeouts given" in {
+    // the connection is taken by the backlog and never answered
+    val server = new java.net.ServerSocket(0, 50, java.net.InetAddress.getLoopbackAddress)
+    try {
+      val url = java.net.URI.create("http://127.0.0.1:" + server.getLocalPort.toString + "/a.yaml").toURL
+      val started = System.nanoTime
+      a[java.net.SocketTimeoutException] should be thrownBy YAML.load(Seq(url), 1000, 200)
+      (System.nanoTime - started) should be < 10000000000L
+    } finally server.close()
+    YAML.load(Seq(resource("base.yaml")), 1000, 1000)("source") should matchPattern {
+      case Node.Scalar(_, NoTags, "base", _) =>
+    }
+    (YAML.ConnectTimeout, YAML.ReadTimeout) shouldBe ((10000, 30000))
+  }
 }
