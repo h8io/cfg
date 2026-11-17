@@ -888,7 +888,10 @@ shares the locations it refers to, so its size is linear in the source; but a co
 refers twice to one built the same way, and so on, describes in a length exponential in the chain's
 — 297 bytes of source, 2.4 million characters — and the size limit (§11) counts what values hold,
 not what locations describe. The beginning, the site the reader goes to first, is always there.
-The hash of a location is computed once, for the same reason.
+`toString` is cut off at the same length, and written the way a case class writes itself (session
+29): the one a case class generates writes a location shared once for every path to it, 10.6
+million characters for the same 297 bytes. The hash of a location is computed once, for the same
+reason.
 
 **Grafted containers.** With `a: ${server}`, *every* node in the grafted subtree gets a
 `ReferenceLocation` — the reference site of `a`, the path it was taken by (`server.port`), and that
@@ -943,7 +946,13 @@ mistake is worse than stopping.
   batch was empty, as the next.
 - **Substitution errors report root causes only.** Every unresolved reference, cycle and
   concatenation of a non-scalar is reported, but a node that depends on an already failed node is
-  dropped silently: with `a: ${missing}` and `b: ${a}`, only `missing` is named.
+  dropped silently: with `a: ${missing}` and `b: ${a}`, only `missing` is named. An injection
+  that fails fails its block, and nothing more is merged into it, but what follows it in the block
+  still reports its own errors: the injections after it, each on its own, and the fields, merged
+  apart from the block and, between two injections, from each other, what an injection would have
+  brought being unknown; `b { $missing, x := $other }` names both. A field that refers into the
+  failed block fails with it, silently. An error found twice is reported once, as in every phase
+  (§6): a source included in two blocks resolves twice.
 - **Depth is limited, to 256 unless the loader is built with another**, `withDepthLimit(n)`, `n` at
   least 1 (session 22), so that no input overflows the stack: a
   `StackOverflowError` thrown while a class is being initialised leaves that class broken for the
@@ -1002,7 +1011,8 @@ mistake is worse than stopping.
   as text is not read, and not counted. The time runs from the start of the load and is looked at
   before each connection and each wait, which it cuts to what is left; a connection takes its
   timeouts once, when it is made (measured: a read timeout set later is not applied), so a wait
-  already begun runs its course and the time may be outrun by one wait, the read timeout at most.
+  already begun runs its course and the time may be outrun by one wait, the read timeout at most;
+  the read then fails all the same, the time looked at once more after the wait that found the end.
   A source that blocks without a timeout, a named pipe, the time does not stop. The first read to
   go past either is reported, as `ReadLimitExceeded` or `ReadTimeExceeded`, at the source being
   read; every read after it gives nothing and is not reported, and the load fails. The error is
@@ -2277,3 +2287,22 @@ the user; the last, the growth of a tree by substitutions, is still to be discus
   asking whether it was written, so the text read back without the tags `tagOf` reported; the
   serializer now resolves by the core schema the loader reads with, so that `Null`, `0x10` or `~`,
   which the core schema infers, are not written with a tag either.
+
+### Session 29 — 2026-11-17
+
+Fixed on a review, the format unchanged, nothing put to the user to decide:
+
+- **`toString` of a location is cut off as its description is** (§10): the one a case class
+  generates wrote `a0: ""`, `a1: "${a0}${a0}"`, … `a16` in 10 683 117 characters, and the next
+  doubling would run a logger out of memory.
+- **What follows a failed injection reports its own errors** (§11), fields as well as
+  injections: `b { $missing, x := $other }` named `missing` alone. Fields between two injections
+  are merged apart, a conflict with what the one between would have brought being no root cause.
+- **Errors of resolution are reported once** (§6, §11), as those of the syntax already were: a
+  source with `x: $missing` included in two blocks reported it twice, at the same position.
+- **`#include(url: …)` reads a `file:` URL with a fragment**, as a source given so is read: asking
+  whether the file is there passed the fragment to the path, and the include failed as an invalid
+  target.
+- **A read whose last wait went past the time fails** (§11): the time was looked at before each
+  wait, never after the one that found the end, so a load of 605 ms succeeded under a limit of
+  500.

@@ -100,6 +100,32 @@ class ReadLimitTest extends AnyFlatSpec with Matchers {
     } finally server.close()
   }
 
+  it should "fail a read whose last wait, finding the end, went past the time" in {
+    // each wait within the read timeout the connection was made with, the end found after the time is gone
+    val server = new ServerSocket(0, 50, InetAddress.getLoopbackAddress)
+    val serving = new Thread(() => {
+      val socket = server.accept()
+      try {
+        val out = socket.getOutputStream
+        out.write("HTTP/1.0 200 OK\r\n\r\n".getBytes(StandardCharsets.US_ASCII))
+        out.flush()
+        Thread.sleep(200)
+        out.write("a: 1\n".getBytes(StandardCharsets.US_ASCII))
+        out.flush()
+        Thread.sleep(250)
+      } finally socket.close()
+    })
+    serving.start()
+    try {
+      val target = "http://127.0.0.1:" + server.getLocalPort.toString + "/a.psi"
+      val time = Duration.ofMillis(300)
+      errors(loader(100, time)(URI.create(target).toURL)) shouldBe List(ReadTimeExceeded(target, time))
+    } finally {
+      serving.join()
+      server.close()
+    }
+  }
+
   it should "take a time too long for nanoseconds as forever" in {
     val a = write(Files.createTempDirectory("psi"), "a.psi", "a: 1")
     loader(100, Duration.ofSeconds(Long.MaxValue))(url(a)).map(_.size) shouldBe Right(1)

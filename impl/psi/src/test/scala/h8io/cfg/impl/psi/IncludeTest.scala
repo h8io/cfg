@@ -320,6 +320,23 @@ class IncludeTest extends AnyFlatSpec with Matchers {
     } finally Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("rwx------"))
   }
 
+  "An error resolving a source included twice" should "be reported once" in {
+    val dir = Files.createTempDirectory("psi")
+    write(dir, "common.psi", "x: $missing")
+    val main = write(dir, "main.psi", "a { #include(file: \"common.psi\") }\nb { #include(file: \"common.psi\") }")
+    errors(main) shouldBe List(UnresolvedSubstitution(SourceLocation(url(dir.resolve("common.psi")), 1, 4), "missing"))
+  }
+
+  "#include(url: …)" should "read a file: URL with a fragment, as a source given so is read" in {
+    val dir = Files.createTempDirectory("psi")
+    val target = url(write(dir, "a.psi", "v: 1")) + "#fragment"
+    scalar(loaded(write(dir, "main.psi", "#include(url: \"" + target + "\")")), "v") match {
+      case Node.IScalar(_, _, value, _) => value shouldBe "1"
+      case other => fail(other.toString)
+    }
+    loader(new java.net.URI(target).toURL).map(_.size) shouldBe Right(1)
+  }
+
   "An error in a source two sources include" should "be reported once" in {
     val dir = Files.createTempDirectory("psi")
     write(dir, "common.psi", "a: [")

@@ -56,6 +56,11 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     */
   private val merging = new Merge
 
+  /** By position, the fields written after an injection that failed, merged into nothing, those between two injections
+    * apart: resolved once the map has failed, for their own errors alone.
+    */
+  private val abandoned = mutable.Map.empty[Id, List[Tree.Map]]
+
   def tree: Result[Tree.Map] = {
     // every path goes through the root: an injection there would refer to the tree it is building (§9)
     errors ++= root.steps.collect { case Tree.Step.Injection(_, _, at) => InjectionAtRoot(at) }
@@ -67,7 +72,13 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
   private def resolve(id: Id, value: Tree.Value): Resolution =
     value match {
       case _: Tree.Scalar | _: Tree.Null => Right(Some(value))
-      case map: Tree.Map if map.steps.nonEmpty => step(completed(id, map).flatMap(this.map(id, _)).map(Some(_)))
+      case map: Tree.Map if map.steps.nonEmpty =>
+        step(completed(id, map) match {
+          case Right(done) => this.map(id, done).map(Some(_))
+          case Left(failure) =>
+            abandoned.remove(id).foreach(_.foreach(fields => this.map(id, fields)))
+            Left(failure)
+        })
       case map: Tree.Map => step(this.map(id, map).map(Some(_)))
       case sequence: Tree.Sequence => step(this.sequence(id, sequence).map(Some(_)))
       case injection: Tree.Injection =>
@@ -124,30 +135,41 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     * as if what it found were written there (§9). Its children are resolved apart, after it, so that one may refer to
     * another; only what an injection refers to through the map itself leads back to it.
     *
-    * An injection that fails fails the map. The injections after it are resolved all the same, so that each reports its
-    * own errors (§11), but nothing more is merged into the map: what the failed one would have brought is unknown, and
-    * a conflict with what follows it would be no root cause.
+    * An injection that fails fails the map. What follows it is resolved all the same, so that it reports its own errors
+    * (§11), but nothing more is merged into the map: what the failed one would have brought is unknown, and a conflict
+    * with what follows it would be no root cause. The injections after it are resolved into nothing, and the fields
+    * between two of them are merged into nothing and kept in `abandoned`, to be resolved once the map has failed, as
+    * its children would be: what an injection between them would have brought is no more known.
     */
   private def completed(id: Id, map: Tree.Map): Either[Failure, Tree.Map] =
     once(id, map.steps.collectFirst { case Tree.Step.Injection(path, _, at) => new Following(at, path) }) {
       val failures = mutable.ListBuffer.empty[Either[Failure, Unit]]
+      val nothing = Tree.Map.empty(Set.empty, map.location)
+      var rest = List.empty[Tree.Map]
       val done = map.steps.foldLeft(map.copy(steps = Vector.empty)) { (current, step) =>
         step match {
           case Tree.Step.Injection(path, optional, at) =>
             // after a failure, into nothing, for its own errors alone
             val into = if (failures.isEmpty) current else Tree.Map.empty(Set.empty, at)
-            fields(id, into, path, optional, at) match {
+            val next = fields(id, into, path, optional, at) match {
               case Right(merged) if failures.isEmpty => merged
               case Right(_) => current
               case Left(failure) =>
                 failures += Left(failure)
                 current
             }
+            // the fields after it, once one has failed, apart from those before it
+            if (failures.nonEmpty) rest = nothing :: rest
+            next
+          case Tree.Step.Statements(statements) if failures.nonEmpty =>
+            rest = merging.block(rest.head, statements) :: rest.tail
+            current
           case _ if failures.nonEmpty => current
           case Tree.Step.Statements(statements) => merging.block(current, statements)
           case Tree.Step.Graft(content) => over(current, content)
         }
       }
+      if (failures.nonEmpty) abandoned(id) = rest
       failure(failures.toList).toLeft(Some(done))
       // a completion always gives a map
     }.map(_.get.asInstanceOf[Tree.Map])
