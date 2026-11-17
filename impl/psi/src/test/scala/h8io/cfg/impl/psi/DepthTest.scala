@@ -31,7 +31,7 @@ class DepthTest extends AnyFlatSpec with Matchers {
 
   private def loads(text: String, directives: Directive*): Boolean = loader(3, directives*).parse("s", text).isRight
 
-  private def parsed(text: String): Result[Ast.Document] = Parser.parse(Source("s", text), Map.empty, 0, 3)
+  private def parsed(text: String): Result[AST.Document] = Parser.parse(Source("s", text), Map.empty, 0, 3)
 
   "A depth limit" should "be at least 1" in {
     Psi.builder.withDepthLimit(0).build shouldBe Left(PsiBuildErrors(::(InvalidDepthLimit(0), Nil)))
@@ -57,8 +57,8 @@ class DepthTest extends AnyFlatSpec with Matchers {
   it should "keep what was read before it ended" in {
     parsed("x: 1\na: [[[[]]]]\nb: 2") shouldBe
       Result(
-        Ast.Document(Vector(Ast.Field(::(Ast.Key("x", at(1, 1)), Nil), Ast.Operator.Merge,
-          Ast.Scalar("1", Set.empty, at(1, 4)), None))),
+        AST.Document(Vector(AST.Field(::(AST.Key("x", at(1, 1)), Nil), AST.Operator.Merge,
+          AST.Scalar("1", Set.empty, at(1, 4)), None))),
         List(beyond(2, 7)))
   }
 

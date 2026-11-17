@@ -114,7 +114,7 @@ loader path.
   giving them one later breaks no v1 file. That
   will take a field such as `doc: Option[String]` on `ISome` — a change to `cfg`, for a higher level
   to read (generated reference docs, error messages) — so the lexer emits a doc comment as a token
-  and the Ast keeps it on the node it precedes from the start.
+  and the AST keeps it on the node it precedes from the start.
 - **Bare keys** match `Id.SafeKeyPattern` exactly — `^[\p{L}_][\p{L}\p{N}_-]*$`. Anything else is
   written as a quoted key. A key that would pass bare may be quoted too: `` `port` `` and `port` are
   the same key.

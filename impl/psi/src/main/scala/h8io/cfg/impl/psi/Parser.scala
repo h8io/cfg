@@ -51,9 +51,9 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     finally dots -= levels
   }
 
-  def document(): Result[Ast.Document] = {
+  def document(): Result[AST.Document] = {
     val statements = items(KeyMode, None, documented = true)(statement)
-    Result(Ast.Document(statements), lexer.errors)
+    Result(AST.Document(statements), lexer.errors)
   }
 
   private def next(mode: Mode): Token = {
@@ -337,13 +337,13 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
       case _ => false
     }
 
-  private def statement(first: Token, doc: Option[String]): Ast.Statement =
+  private def statement(first: Token, doc: Option[String]): AST.Statement =
     first.kind match {
-      case Name(name, _) => keys(Ast.Key(name, first.location), Nil, doc)
-      case Directive(name) => Ast.DirectiveStatement(call(first, name), doc)
+      case Name(name, _) => keys(AST.Key(name, first.location), Nil, doc)
+      case Directive(name) => AST.DirectiveStatement(call(first, name), doc)
       // among the fields of a block a substitution is an injection (§9)
       case Scalar(Vector(Reference(path, optional, _)), false, _) =>
-        Ast.InjectionStatement(path, optional, first.location, doc)
+        AST.InjectionStatement(path, optional, first.location, doc)
       case Scalar(_, false, _) => fail(first, MisplacedInjection(first.location))
       case Tag(_) => fail(first, TagBeforeKey(first.location))
       case Scalar(parts, _, _) => fail(first, QuotedKey(first.location, written(parts)))
@@ -351,7 +351,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     }
 
   /** The rest of a field after its first key; `rest` holds the keys after the first, last first. */
-  @tailrec private def keys(head: Ast.Key, rest: List[Ast.Key], doc: Option[String]): Ast.Field = {
+  @tailrec private def keys(head: AST.Key, rest: List[AST.Key], doc: Option[String]): AST.Field = {
     def path = ::(head, rest.reverse)
     val mark = lexer.mark()
     val token = next(KeyMode)
@@ -360,10 +360,10 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
         within(rest.size)(enter(token))
         keys(head, dotted(token) :: rest, doc)
       case Colon =>
-        Ast.Field(path, Ast.Operator.Merge, within(rest.size)(value(next(ValueMode), Set.empty)), doc)
+        AST.Field(path, AST.Operator.Merge, within(rest.size)(value(next(ValueMode), Set.empty)), doc)
       case Replace =>
-        Ast.Field(path, Ast.Operator.Replace, within(rest.size)(value(next(ValueMode), Set.empty)), doc)
-      case LeftBrace => Ast.Field(path, Ast.Operator.Merge, within(rest.size)(block(token, Set.empty)), doc)
+        AST.Field(path, AST.Operator.Replace, within(rest.size)(value(next(ValueMode), Set.empty)), doc)
+      case LeftBrace => AST.Field(path, AST.Operator.Merge, within(rest.size)(block(token, Set.empty)), doc)
       case Tag(_) => fail(token, TagAfterKey(token.location))
       case Newline =>
         val after = skipNewlines(KeyMode)
@@ -376,13 +376,13 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
   }
 
   /** The key after `dot`, which touches it on both sides. */
-  private def dotted(dot: Token): Ast.Key = {
+  private def dotted(dot: Token): AST.Key = {
     if (dot.spaced) fail(dot, SpaceAroundDot(dot.location))
     val token = next(KeyMode)
     token.kind match {
       case Name(name, _) =>
         if (token.spaced) fail(token, SpaceAroundDot(dot.location))
-        Ast.Key(name, token.location)
+        AST.Key(name, token.location)
       // a substitution, which key mode reads as one for an injection: a key is never computed
       case Scalar(parts, false, _) => fail(token, InvalidKey(token.location, written(parts)))
       case Scalar(parts, _, _) => fail(token, QuotedKey(token.location, written(parts)))
@@ -391,19 +391,19 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
   }
 
   /** A value from `token`, after the tags already read before it. */
-  @tailrec private def value(token: Token, tags: Set[String]): Ast.Value =
+  @tailrec private def value(token: Token, tags: Set[String]): AST.Value =
     token.kind match {
       case Tag(name) => value(next(ValueMode), tags + name)
       case Scalar(parts, quoted, markers) =>
         val value = scalar(token, parts, quoted, tags)
-        if (markers.isEmpty) value else Ast.Marked(value, markers)
+        if (markers.isEmpty) value else AST.Marked(value, markers)
       case LeftBrace => block(token, tags)
       case LeftBracket =>
         enter(token)
         val elements = items(ValueMode, Some(Closing(RightBracket, token.location)), documented = true)(element)
         ended()
-        Ast.Sequence(elements, tags, token.location)
-      case Directive(name) => Ast.DirectiveValue(call(token, name), tags)
+        AST.Sequence(elements, tags, token.location)
+      case Directive(name) => AST.DirectiveValue(call(token, name), tags)
       case Name(_, _) => fail(token, BacktickedValue(token.location))
       case Newline =>
         val after = skipNewlines(ValueMode)
@@ -420,23 +420,23 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
   /** A scalar: a substitution when it is one unquoted `${…}` and nothing else, a concatenation when it holds any other,
     * `null` when it is that word unquoted (§3, §9).
     */
-  private def scalar(token: Token, parts: Vector[Part], quoted: Boolean, tags: Set[String]): Ast.Value = {
+  private def scalar(token: Token, parts: Vector[Part], quoted: Boolean, tags: Set[String]): AST.Value = {
     unquoted = !quoted
     substituted = parts.exists(_.isInstanceOf[Reference])
     parts match {
-      case Vector(Reference(path, optional, _)) if !quoted => Ast.Substitution(path, optional, tags, token.location)
-      case _ if substituted => Ast.Concatenation(parts, tags, token.location)
+      case Vector(Reference(path, optional, _)) if !quoted => AST.Substitution(path, optional, tags, token.location)
+      case _ if substituted => AST.Concatenation(parts, tags, token.location)
       case _ =>
         val value = text(parts)
-        if (!quoted && value == "null") Ast.Null(tags, token.location) else Ast.Scalar(value, tags, token.location)
+        if (!quoted && value == "null") AST.Null(tags, token.location) else AST.Scalar(value, tags, token.location)
     }
   }
 
-  private def block(open: Token, tags: Set[String]): Ast.Block = {
+  private def block(open: Token, tags: Set[String]): AST.Block = {
     enter(open)
     val statements = items(KeyMode, Some(Closing(RightBrace, open.location)), documented = true)(statement)
     ended()
-    Ast.Block(statements, tags, open.location)
+    AST.Block(statements, tags, open.location)
   }
 
   /** After a container or a directive, a word that follows is no second word of a scalar. */
@@ -445,7 +445,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     substituted = false
   }
 
-  private def element(first: Token, doc: Option[String]): Ast.Element = Ast.Element(value(first, Set.empty), doc)
+  private def element(first: Token, doc: Option[String]): AST.Element = AST.Element(value(first, Set.empty), doc)
 
   /** A directive from its `#name` token, the last one read: with its arguments when a `(` touches the name, with none
     * when nothing does — a `(` apart from the name, on its line or a later one, is an error (§6).
@@ -453,7 +453,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     * A call with any error in it, its name's or its arguments', is read to its end and then left out, its item with it:
     * a handler must not run on arguments that are not what was meant (§11).
     */
-  private def call(directive: Token, name: String): Ast.Call = {
+  private def call(directive: Token, name: String): AST.Call = {
     val before = reportedBefore
     val mark = lexer.mark()
     val token = next(KeyMode)
@@ -473,13 +473,13 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     }
     ended()
     if (lexer.errorCount > before) throw Dropped
-    Ast.Call(name, read, directive.location)
+    AST.Call(name, read, directive.location)
   }
 
   /** The arguments after `open`, positional ones first and no name twice (§6). Each one out of place is reported as it
     * is read, so that an error further on that ends the source does not hide it.
     */
-  private def arguments(open: Token): Vector[Ast.Argument] = {
+  private def arguments(open: Token): Vector[AST.Argument] = {
     var named = Set.empty[String]
     items(ArgumentMode, Some(Closing(RightParen, open.location)), documented = false) { (first, _) =>
       val read = argument(first)
@@ -494,7 +494,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
   }
 
   /** `name: literal`, or a literal alone; `name = literal` is an error that says to write `:` (§6). */
-  private def argument(first: Token): Ast.Argument =
+  private def argument(first: Token): AST.Argument =
     first.kind match {
       case Name(name, _) =>
         val mark = lexer.mark()
@@ -502,13 +502,13 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
         token.kind match {
           case Colon =>
             val value = next(ArgumentMode)
-            Ast.Argument(Some(name), literal(value), first.location, value.location)
+            AST.Argument(Some(name), literal(value), first.location, value.location)
           case Equals => fail(token, EqualsInArgument(token.location))
           case _ =>
             rewind(mark)
-            Ast.Argument(None, literal(first), first.location, first.location)
+            AST.Argument(None, literal(first), first.location, first.location)
         }
-      case Integer(_) | Scalar(_, _, _) => Ast.Argument(None, literal(first), first.location, first.location)
+      case Integer(_) | Scalar(_, _, _) => AST.Argument(None, literal(first), first.location, first.location)
       case _ => fail(first, ExpectedArgument(first.location, describe(first.kind)))
     }
 
@@ -538,7 +538,7 @@ private[psi] object Parser {
       source: Source,
       markers: Map[String, Marker] = Map.empty,
       base: Int = 0,
-      limit: Int = PsiLoader.DefaultDepthLimit): Result[Ast.Document] =
+      limit: Int = PsiLoader.DefaultDepthLimit): Result[AST.Document] =
     new Parser(new Lexer(source, markers), base, limit).document()
 
   /** The bracket that closes a container, and where the one that opened it stands. */

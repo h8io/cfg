@@ -137,7 +137,7 @@ class MarkerTest extends AnyFlatSpec with Matchers {
     the[IllegalStateException] thrownBy Resolve.graft(marked, at(2, 4), Id.Key("b", Id.Root), NoTags) should
       have message "An unresolved substitution at s:1:4 grafted"
     the[IllegalStateException] thrownBy Render.value(marked) should have message "Unresolved markers at s:1:4"
-    val written = Ast.Marked(Ast.Scalar("v", Set("t"), at(1, 4)), Vector.empty)
+    val written = AST.Marked(AST.Scalar("v", Set("t"), at(1, 4)), Vector.empty)
     (written.tags, written.location) shouldBe ((Set("t"), at(1, 4)))
     val onNull = Tree.Marked(Tree.Null(NoTags, at(1, 4)), Vector.empty)
     the[IllegalStateException] thrownBy

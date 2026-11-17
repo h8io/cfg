@@ -9,7 +9,7 @@ import org.scalatest.matchers.should.Matchers
 import scala.collection.immutable
 
 class MergeTest extends AnyFlatSpec with Matchers {
-  private def document(name: String, text: String): (Ast.Document, SourceLocation) = {
+  private def document(name: String, text: String): (AST.Document, SourceLocation) = {
     val parsed = Parser.parse(Source(name, text))
     parsed.errors shouldBe Nil
     (parsed.value, SourceLocation(name, 1, 1))

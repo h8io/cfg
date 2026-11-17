@@ -31,7 +31,7 @@ The pipeline follows the phase order in `format.md` §8. Everything is private t
 the loader, the location types, the error types and the directive extension API.
 
 ```
-URL ──read──▶ Source ──lex/parse──▶ Ast ──expand directives──▶ Ast ──merge──▶ Tree ──override -D──▶ Tree ──resolve ${}──▶ Tree ──wrap──▶ Node.IMap[Id.Root]
+URL ──read──▶ Source ──lex/parse──▶ AST ──expand directives──▶ AST ──merge──▶ Tree ──override -D──▶ Tree ──resolve ${}──▶ Tree ──wrap──▶ Node.IMap[Id.Root]
                                     (per source, with recovery)       (N sources)   (phase-gated)
 ```
 
@@ -43,7 +43,7 @@ URL ──read──▶ Source ──lex/parse──▶ Ast ──expand directi
 | Handler API | `Directive`, `DirectiveContext`, `Fragment`, `DirectiveError` (§6); `Marker`, `MarkerError` (§5); `Parameter` | public, since steps 10a, 10b |
 | Source | the text of one URL, with offset → line/column | private |
 | Lexer | mode-driven: the parser asks for the next token *in key mode* or *in value mode* | private |
-| Ast | syntax tree of one source: fields with key path and operator (`:`/`:=`/block), values, `${…}`, concatenations, directives, every node with a `SourceLocation`, or a `DirectiveLocation` when a directive built it from a `Node` | private |
+| AST | syntax tree of one source: fields with key path and operator (`:`/`:=`/block), values, `${…}`, concatenations, directives, every node with a `SourceLocation`, or a `DirectiveLocation` when a directive built it from a `Node` | private |
 | Tree | merged, operator-free tree; leaves may still be `${…}` | private |
 | Node views | `MapImpl`/`SeqImpl` over immutable `Map`/`Vector` (§12) | private |
 
@@ -66,7 +66,7 @@ at the phase gate.
 | 2b | Source and lexer | done |
 | 2c | Lexer: triple-quoted and raw strings | done |
 | 2d | Rename DEF to Ψ (Psi) | done |
-| 3 | Ast and parser: core syntax | done |
+| 3 | AST and parser: core syntax | done |
 | 4 | Parser: substitutions and directives | done |
 | 5 | Parser: error recovery | done |
 | 6 | Merge | done |
@@ -170,18 +170,18 @@ code is the lexer alone and nothing is published.
   which the spec states (`format.md` §14, session 10).
 - **Spec gaps:** none.
 
-### 3. Ast and parser: core syntax
+### 3. AST and parser: core syntax
 
 - Recursive descent over the lexer: document, block, fields, dotted keys (backticked keys indivisible),
   `:`/`:=`/`key { … }`, `{` on the key's line, sequences, separators (`,`/newline, trailing allowed,
   empty element an error, whitespace never separates), tags on every value, `null` in value position
   only, `a: foo bar` an error. Doc comments only before a field, an element or a directive,
-  kept on that node in the Ast (§3).
+  kept on that node in the AST (§3).
 - A value on the line of its `:`/`:=` and of its tag; `key @t { … }` an error with a hint; no
   whitespace around the dots of a key; a leading `,` separates as a trailing one does (§3, §4).
 - `${…}` and directives are reported as not supported yet, until step 4.
 - In this step the parser stops at the first error; recovery is step 5.
-- The Ast keeps operators and source order — merging is step 6.
+- The AST keeps operators and source order — merging is step 6.
 - **Spec gaps:** none left — settled in session 12 (`format.md` §3, §4, §14).
 
 ### 4. Parser: substitutions and directives
@@ -190,14 +190,14 @@ code is the lexer alone and nothing is published.
   `"jdbc:${host}/db"`); two values side by side, `"jdbc:"${host}`, are an error with a hint (§9).
 - Directives in statement and value position, arguments `name: literal` separated by `,`/newline,
   literals: strings, bare identifiers, `true`/`false`, integers; `${…}` in an argument is an error
-  (§6). The Ast only — nothing is expanded yet.
+  (§6). The AST only — nothing is expanded yet.
 - Paths inside `${…}` are `Id.path` syntax, indices included (`${x.y[7].z}`, settled in session 7,
   `format.md` §9). Property test: `Id.path` of any `Id` below the root parses back to the same `Id`.
 - `#name` without parentheses is a call with no arguments; the `(` touches the name; arguments
   separated by a block's rules; a named one `name: literal`, `=` an error with a hint (session 12);
   parameter names bare or in backticks; strings in `"…"` or `'…'`
   only; integers as markers' (§6). A duplicate named argument and a positional one after a named
-  one are parser errors; tags before a value-position directive are kept in the Ast.
+  one are parser errors; tags before a value-position directive are kept in the AST.
 - **Spec gaps:** none left — settled in session 12 (`format.md` §4, §6, §14).
 
 ### 5. Parser: error recovery
@@ -212,7 +212,7 @@ code is the lexer alone and nothing is published.
 
 ### 6. Merge
 
-- Ast → Tree for one source: duplicate keys merge in order, dotted keys merge into nested blocks,
+- AST → Tree for one source: duplicate keys merge in order, dotted keys merge into nested blocks,
   `:=` drops the earlier value, block form merges (§4, §7).
 - Tags in a merge: merged maps take the union of their tags; a replaced value keeps only its own
   (§7).

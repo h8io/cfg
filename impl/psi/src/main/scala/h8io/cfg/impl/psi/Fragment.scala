@@ -19,7 +19,7 @@ object Fragment {
     * wherever the fragment is used, and `sources` the names of it and of the sources it parsed, in the order parsed.
     */
   private[psi] final case class Parsed(
-      document: Ast.Document,
+      document: AST.Document,
       root: SourceLocation,
       errors: List[PsiError],
       sources: List[String])
