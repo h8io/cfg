@@ -64,12 +64,12 @@ private[psi] object Message {
   /** The escape that writes `c` in a string. */
   def escape(c: Char): String = "\\u%04X".format(c.toInt)
 
-  /** Said by an error after which the rest of its source is not read. */
   /** A duration as a reader takes it: in seconds when it is a whole number of them, in milliseconds otherwise. */
   def duration(duration: java.time.Duration): String =
     if (duration.toMillis % 1000 == 0) (duration.toMillis / 1000).toString + " s"
     else duration.toMillis.toString + " ms"
 
+  /** Said by an error after which the rest of its source is not read. */
   def Fatal: String = "; the rest of this source is not read"
 
   /** A directive's name as written after `#`. */

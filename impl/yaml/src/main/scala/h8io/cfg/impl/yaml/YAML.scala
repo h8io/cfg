@@ -31,6 +31,12 @@ import java.net.URL
   * snakeyaml-engine composes a document by recursion with no limit of its own, and a deeper one would overflow the
   * stack. Past it, the load fails before the composer goes there.
   *
+  * ==Reading==
+  * A URL is read with a timeout of 10 seconds for the connection and 30 seconds for each wait for its next bytes, so
+  * that a server that never answers fails the load rather than holding it forever. A `jar:` URL of a jar elsewhere than
+  * in a file is fetched by the JVM, with no timeouts. How much a stream may hold is snakeyaml-engine's limit, 3 MB of
+  * code points by default.
+  *
   * ==Duplicate keys==
   * A mapping that repeats a key keeps the last occurrence, matching the last-wins rule used for merging.
   *
@@ -49,13 +55,33 @@ object YAML {
     * @note
     *   a `YamlEngineException` is thrown if a stream cannot be parsed, holds more than one document, is rooted at
     *   something other than a mapping, has a key that is not a scalar, has a node that an alias makes contain itself,
-    *   or nests deeper than 256 levels, aliases followed; every URL is checked on its own, before any overlaying
+    *   or nests deeper than 256 levels, aliases followed; every URL is checked on its own, before any overlaying. An
+    *   `IOException` is thrown if a URL cannot be read, a `SocketTimeoutException` if it keeps the connection or its
+    *   next bytes waiting past the timeouts.
     */
-  def apply(urls: URL*): Node.IMap[Id.Root] =
-    wrap(Id.Root, urls.iterator.map(url => rootOf(read(url))).reduceOption(mergeMappings).getOrElse(emptyMapping))
+  def apply(urls: URL*): Node.IMap[Id.Root] = load(urls, ConnectTimeout, ReadTimeout)
 
-  private def read(url: URL): YamlNode = {
-    val stream = url.openStream()
+  /** How long reading a URL waits for a connection, in milliseconds. */
+  private[yaml] def ConnectTimeout: Int = 10000
+
+  /** How long reading a URL waits for its next bytes, in milliseconds. */
+  private[yaml] def ReadTimeout: Int = 30000
+
+  /** `apply` with the timeouts given, in milliseconds. */
+  private[yaml] def load(urls: Seq[URL], connectTimeout: Int, readTimeout: Int): Node.IMap[Id.Root] =
+    wrap(
+      Id.Root,
+      urls.iterator
+        .map(url => rootOf(read(url, connectTimeout, readTimeout)))
+        .reduceOption(mergeMappings)
+        .getOrElse(emptyMapping))
+
+  /** `url` composed, read with the timeouts set: a URL connection has none of its own. */
+  private def read(url: URL, connectTimeout: Int, readTimeout: Int): YamlNode = {
+    val connection = url.openConnection()
+    connection.setConnectTimeout(connectTimeout)
+    connection.setReadTimeout(readTimeout)
+    val stream = connection.getInputStream
     try compose(settings(url.toString), new YamlUnicodeReader(stream))
     finally stream.close()
   }
