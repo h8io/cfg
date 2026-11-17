@@ -45,6 +45,36 @@ private[psi] object PsiLocation {
     if (out.length <= DescriptionLimit) out.toString else out.substring(0, DescriptionLimit) + "…"
   }
 
+  /** `location` written as a case class writes itself, with the same stack and cut off at the same limit as
+    * [[describe]]: the `toString` a case class generates would write every location shared as many times as there are
+    * paths to it.
+    */
+  def show(location: PsiLocation): String = {
+    val out = new java.lang.StringBuilder
+    var stack: List[Either[String, Any]] = Right(location) :: Nil
+    while (stack.nonEmpty && out.length <= DescriptionLimit) {
+      val head = stack.head
+      stack = stack.tail
+      head match {
+        case Left(text) => val _ = out.append(text)
+        case Right(composite @ (_: ReferenceLocation | _: ConcatenationLocation | _: MergedLocation |
+            _: DirectiveLocation)) =>
+          val product = composite.asInstanceOf[Product]
+          stack = Left(product.productPrefix + "(") :: fields(product.productIterator.toList) ::: stack
+        case Right(list: List[?]) => stack = Left("List(") :: fields(list) ::: stack
+        case Right(other) => val _ = out.append(other.toString)
+      }
+    }
+    if (out.length <= DescriptionLimit) out.toString else out.substring(0, DescriptionLimit) + "…"
+  }
+
+  /** `values` separated by commas, as a case class separates its fields, and the parenthesis closed. */
+  private def fields(values: List[Any]): List[Either[String, Any]] =
+    values.zipWithIndex.flatMap { case (value, i) =>
+      if (i == 0) Right(value) :: Nil else Left(",") :: Right(value) :: Nil
+    } :::
+      Left(")") :: Nil
+
   /** A part of a description: text as it is, or a location to describe in turn. */
   private type Part = Either[String, Location]
 
@@ -97,6 +127,8 @@ final case class ReferenceLocation(at: SourceLocation, path: String, origin: Loc
 
   def description: String = PsiLocation.describe(this)
 
+  override def toString: String = PsiLocation.show(this)
+
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
 
   private[psi] def anchor: Option[SourceLocation] = Some(at)
@@ -108,6 +140,8 @@ final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLo
   override lazy val hashCode: Int = scala.util.hashing.MurmurHash3.caseClassHash(this)
 
   def description: String = PsiLocation.describe(this)
+
+  override def toString: String = PsiLocation.show(this)
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
 
@@ -122,6 +156,8 @@ final case class MergedLocation(at: PsiLocation, earlier: ::[PsiLocation]) exten
   override lazy val hashCode: Int = scala.util.hashing.MurmurHash3.caseClassHash(this)
 
   def description: String = PsiLocation.describe(this)
+
+  override def toString: String = PsiLocation.show(this)
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
 
@@ -149,6 +185,8 @@ final case class DirectiveLocation(at: SourceLocation, directive: String, origin
   override lazy val hashCode: Int = scala.util.hashing.MurmurHash3.caseClassHash(this)
 
   def description: String = PsiLocation.describe(this)
+
+  override def toString: String = PsiLocation.show(this)
 
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
 

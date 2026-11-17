@@ -107,7 +107,7 @@ private[psi] object Source {
 
   /** Reading the source `name`, every byte counted against `budget` and every wait cut to the time it has left. A
     * connection takes its timeouts once, when it is made, so a wait already begun runs its course: the time may be gone
-    * past by one wait, at most the read timeout.
+    * past by one wait, at most the read timeout, and the read then fails all the same.
     */
   private final class Reading(name: String, budget: ReadBudget, connectTimeout: Int, readTimeout: Int) {
     def bytes(url: URL): Array[Byte] =
@@ -126,7 +126,9 @@ private[psi] object Source {
       finally stream.close()
     }
 
-    /** Copies `in` to `out` a buffer at a time, counting each and looking at the time before each wait. */
+    /** Copies `in` to `out` a buffer at a time, counting each and looking at the time before each wait and after the
+      * last: the wait that found the end may have gone past it.
+      */
     private def copy(in: InputStream, out: OutputStream): Unit = {
       val buffer = new Array[Byte](8192)
       var n = in.read(buffer)
@@ -136,6 +138,7 @@ private[psi] object Source {
         val _ = budget.timeout(name, readTimeout)
         n = in.read(buffer)
       }
+      val _ = budget.timeout(name, readTimeout)
     }
 
     /** The entry of a jar `url` names, read from the jar itself rather than through the connection a `jar:` URL opens:
@@ -179,10 +182,11 @@ private[psi] object Source {
     }
   }
 
-  /** The path of a jar's `file:` URL, as a `JarURLConnection` gives it: with the fragment of the `jar:` URL, which
-    * names no part of the path. A `file:` URL with a host, `file://host/x`, is no path: an `IllegalArgumentException`.
+  /** The path of a `file:` URL, with no fragment: a `file:` URL is read with its fragment ignored, and a jar's, as a
+    * `JarURLConnection` gives it, has the fragment of the `jar:` URL, neither naming a part of the path. A `file:` URL
+    * with a host, `file://host/x`, is no path: an `IllegalArgumentException`.
     */
-  private[psi] def path(archive: URL): Path = Paths.get(URI.create(archive.toString.takeWhile(_ != '#')))
+  private[psi] def path(file: URL): Path = Paths.get(URI.create(file.toString.takeWhile(_ != '#')))
 
   /** The jar `file` that the `jar:` URL `url` names, opened as the JVM opens it: as of the version the JVM runs when
     * the URL ends in `#runtime`, a multi-release jar giving the entry of that version, and as of its base otherwise.
@@ -200,7 +204,7 @@ private[psi] object Source {
   def key(url: URL): String =
     try {
       val uri = url.toURI.normalize
-      if (uri.getScheme == "file") Paths.get(uri).toRealPath().toString else uri.toString
+      if (uri.getScheme == "file") path(url).toRealPath().toString else uri.toString
     } catch { case NonFatal(_) => url.toString }
 
   /** Decodes `bytes` as UTF-8, pointing at the first byte that is not. */

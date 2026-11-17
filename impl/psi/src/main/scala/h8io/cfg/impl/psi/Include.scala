@@ -134,7 +134,7 @@ private[psi] object Include extends Directive {
   private def present(target: String, url: URL): Either[IncludeError, Option[Boolean]] =
     try
       url.getProtocol match {
-        case "file" => Right(Some(!Files.notExists(Paths.get(url.toURI))))
+        case "file" => Right(Some(!Files.notExists(Source.path(url))))
         case "jar" =>
           // opening no connection: a connection to a missing entry fails as one the jar cannot give
           val connection = url.openConnection().asInstanceOf[JarURLConnection]

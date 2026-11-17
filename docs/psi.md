@@ -291,5 +291,6 @@ goes at most 256 steps, each a level descended or a substitution followed, a sub
 deep as it went the first time. So a chain of substitutions goes 256 links, whatever order its keys are written in.
 Resolving substitutions adds at most 1 000 000 nodes, those grafts copy, and 10 000 000 characters, those of the
 scalars concatenations build; a source's own size is not limited. Reading the sources of a load takes at most
-10 000 000 bytes, every read counted, and 60 seconds, give or take a wait already begun. Past any of these limits, the load reports an error.
+10 000 000 bytes, every read counted, and 60 seconds; a wait already begun runs its course, but a read that ends past
+the time fails all the same. Past any of these limits, the load reports an error.
 A program can set another limit.

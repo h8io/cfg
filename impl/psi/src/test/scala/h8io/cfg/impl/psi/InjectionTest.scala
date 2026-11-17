@@ -166,6 +166,21 @@ class InjectionTest extends AnyFlatSpec with Matchers {
     errors("a { c { u: 1 } }\nb { c { $missing }, $a }") shouldBe List(UnresolvedSubstitution(at(2, 9), "missing"))
   }
 
+  it should "leave the fields after one that failed to report their own errors" in {
+    errors("b { $missing, x := $other }") shouldBe
+      List(UnresolvedSubstitution(at(1, 5), "missing"), UnresolvedSubstitution(at(1, 20), "other"))
+    errors("b { $missing, x { y: $other } }") shouldBe
+      List(UnresolvedSubstitution(at(1, 5), "missing"), UnresolvedSubstitution(at(1, 22), "other"))
+    // a field referring into the map, which failed, fails with it
+    errors("b { $missing, x: $b.y, y: 1 }") shouldBe List(UnresolvedSubstitution(at(1, 5), "missing"))
+    // the fields between two injections are merged apart: what the one between would have brought is unknown
+    errors("a { x { p: 1 } }\nb { $missing, x: $a, $a, x { q: 2 } }") shouldBe
+      List(UnresolvedSubstitution(at(2, 5), "missing"))
+    // what is written after it merges as it is written, its errors included
+    errors("b { $missing, x: $a, x { q: 2 } }") shouldBe
+      List(UnresolvedSubstitution(at(1, 5), "missing"), MergeWithSubstitution(at(1, 24), at(1, 18)))
+  }
+
   "A block with an injection of its own, merged with one an injection brings" should "keep where each came from" in {
     loaded("a { c { u: 1 } }\nd { c { v: 2 } }\nb { c { $d.c }, $a }")("b") match {
       case b: Node.IMap[?] =>

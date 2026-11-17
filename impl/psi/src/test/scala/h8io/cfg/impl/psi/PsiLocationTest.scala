@@ -67,6 +67,28 @@ class PsiLocationTest extends AnyFlatSpec with Matchers {
     DirectiveLocation(app, "d", link).hashCode shouldBe DirectiveLocation(app, "d", link).hashCode
   }
 
+  it should "show itself as a case class does, cut off at the limit" in {
+    val link = (1 to 40).foldLeft[PsiLocation](SourceLocation("s", 1, 1)) { (before, i) =>
+      val part = ReferenceLocation(SourceLocation("s", i + 1, 5), "a", before)
+      ConcatenationLocation(SourceLocation("s", i + 1, 4), ::(part, part :: Nil))
+    }
+    val shown = link.toString
+    shown.length shouldBe PsiLocation.DescriptionLimit + 1
+    shown should startWith(
+      "ConcatenationLocation(SourceLocation(s,41,4),List(ReferenceLocation(SourceLocation(s,41,5),a,Concatenation")
+    shown should endWith("…")
+    val small = ConcatenationLocation(app, ::(ReferenceLocation(app, "a", base), Nil))
+    small.toString shouldBe
+      "ConcatenationLocation(SourceLocation(file:/etc/app/app.psi,12,9),List(ReferenceLocation(SourceLocation(" +
+      "file:/etc/app/app.psi,12,9),a,SourceLocation(base.psi,3,7))))"
+    MergedLocation(app, ::(base, NoSourceLocation :: Nil)).toString shouldBe
+      "MergedLocation(SourceLocation(file:/etc/app/app.psi,12,9),List(SourceLocation(base.psi,3,7),NoSourceLocation))"
+    ReferenceLocation(app, "a", base).toString shouldBe
+      "ReferenceLocation(SourceLocation(file:/etc/app/app.psi,12,9),a,SourceLocation(base.psi,3,7))"
+    DirectiveLocation(app, "d", base).toString shouldBe
+      "DirectiveLocation(SourceLocation(file:/etc/app/app.psi,12,9),d,SourceLocation(base.psi,3,7))"
+  }
+
   it should "be whole up to the limit" in {
     val long = SourceLocation("x" * (PsiLocation.DescriptionLimit - 4), 1, 1)
     long.description.length shouldBe PsiLocation.DescriptionLimit
