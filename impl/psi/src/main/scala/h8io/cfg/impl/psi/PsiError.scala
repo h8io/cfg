@@ -568,6 +568,57 @@ final case class MisplacedInjection(location: SourceLocation) extends PsiError {
   override def hint: Option[String] = Some("write a key and ':' before a value")
 }
 
+/** A substitution standing alone among the fields of a block, `$path` with no `*`: a graft with no key to stand at
+  * (`format.md` §9).
+  */
+final case class SubstitutionAmongFields(location: SourceLocation, path: String, optional: Boolean)
+    extends PsiError {
+  private def written(star: String): String = "'${" + (if (optional) "?" else "") + Message.cut(path) + star + "}'"
+
+  def message: String = written("") + " among the fields of a block has no key to stand at"
+
+  override def hint: Option[String] =
+    Some("write " + written("*") + " to inject the fields of the map there, or a key and ':' before it")
+}
+
+/** An injection, a substitution or a call with a `*` after it, anywhere but alone among the fields of a block or the
+  * elements of a sequence: as a field's value, in a string or a concatenation, or a call among fields (`format.md` §6,
+  * §9).
+  */
+final case class InjectionOutOfPlace(location: SourceLocation) extends PsiError {
+  def message: String = "an injection stands alone among the fields of a block or the elements of a sequence"
+
+  override def hint: Option[String] = Some("remove the '*' to put the node itself here, or quote a '*' that is text")
+}
+
+/** A tag before an injection among the elements of a sequence, whose elements keep their own tags, so that the tag
+  * has no node to go to (`format.md` §9).
+  */
+final case class TaggedInjection(location: SourceLocation) extends PsiError {
+  def message: String = "a tag before an injection, whose elements keep their own tags"
+
+  override def hint: Option[String] = Some("remove the tag, or the '*' to put the node itself as one element")
+}
+
+/** An injection among the elements of a sequence, at `location`, of `\${path}`, which is not a sequence; `found` is
+  * where its node is defined (`format.md` §9).
+  */
+final case class InjectionNotSequence(location: SourceLocation, path: String, found: PsiLocation) extends PsiError {
+  def message: String =
+    "'${" + Message.cut(path) + "}' injected among elements is not a sequence; it is defined at " + found.description
+
+  override def hint: Option[String] = Some("remove the '*' to put it as one element")
+}
+
+/** A call injected among the elements of a sequence, `#name(…)*`, whose handler gave something other than a
+  * sequence (`format.md` §6, §9).
+  */
+final case class DirectiveNotSequence(location: SourceLocation, name: String) extends PsiError {
+  def message: String = Message.directive(name) + " injected among elements gave something other than a sequence"
+
+  override def hint: Option[String] = Some("remove the '*' to put what it gives as one element")
+}
+
 /** An injection among the fields of the root, which every path goes through, so that it would refer to the tree it
   * builds (`format.md` §9); a source included in a block puts its injections in the block.
   */
@@ -583,29 +634,6 @@ final case class InjectionAtRoot(location: SourceLocation) extends PsiError {
 final case class InjectionNotMap(location: SourceLocation, path: String, found: PsiLocation) extends PsiError {
   def message: String =
     "'${" + Message.cut(path) + "}' injected among fields is not a map; it is defined at " + found.description
-}
-
-/** A tag before an injection among the elements of a sequence, at `location`, of `\${path}`, which is a sequence: its
-  * elements stand there with tags of their own, and the tag has no node to go to; `found` is where the sequence is
-  * defined (`format.md` §9).
-  */
-final case class TaggedInjection(location: SourceLocation, path: String, found: PsiLocation) extends PsiError {
-  def message: String =
-    "a tag before '${" + Message.cut(path) + "}', a sequence injected among elements, whose elements keep their own " +
-      "tags; it is defined at " + found.description
-
-  override def hint: Option[String] = Some("remove the tag, or nest the sequence whole: [${" + Message.cut(path) + "}]")
-}
-
-/** A tag before a call among the elements of a sequence that gave a sequence: its elements stand there with tags of
-  * their own, and the tag has no node to go to (`format.md` §6, §9).
-  */
-final case class TaggedDirectiveInjection(location: SourceLocation, name: String) extends PsiError {
-  def message: String =
-    "a tag before " + Message.directive(name) + ", which gave a sequence among elements, whose elements keep their " +
-      "own tags"
-
-  override def hint: Option[String] = Some("remove the tag, or nest the sequence whole: [#…]")
 }
 
 /** A loader's marker that failed on a block's value, with its handler's error (`format.md` §5); the block stands for

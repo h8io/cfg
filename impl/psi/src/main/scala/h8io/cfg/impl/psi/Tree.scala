@@ -25,11 +25,12 @@ private[psi] object Tree {
   final case class Substitution(path: Id.Branch, optional: Boolean, tags: Set[String], location: SourceLocation)
       extends Value
 
-  /** `\${path}` or `\${?path}` as an element of a sequence, an injection: the elements of the sequence it finds, in its
-    * place, or anything else as one element, grafted as a substitution grafts it (§9).
+  /** `\${path*}` or `\${?path*}` as an element of a sequence, an injection: the elements of the sequence it finds, in
+    * its place (§9). It takes no tags.
     */
-  final case class Injection(path: Id.Branch, optional: Boolean, tags: Set[String], location: SourceLocation)
-      extends Value
+  final case class Injection(path: Id.Branch, optional: Boolean, location: SourceLocation) extends Value {
+    def tags: Set[String] = Set.empty
+  }
 
   /** A scalar with `\${…}` inside it. */
   final case class Concatenation(parts: Vector[Token.Part], tags: Set[String], location: SourceLocation) extends Value
@@ -82,7 +83,7 @@ private[psi] object Tree {
 
   object Step {
 
-    /** An injection, `$path`, of the map at `path`. */
+    /** An injection, `$path*`, of the map at `path`. */
     final case class Injection(path: Id.Branch, optional: Boolean, location: SourceLocation) extends Step
 
     /** Statements written after an injection, merged as they would have been. */

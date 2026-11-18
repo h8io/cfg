@@ -202,21 +202,19 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       grow(size(value), 0, ResolutionTooLarge(at, Message.path(path), nodeLimit))
         .map(_ => Some(graft(value, at, path, tags)))
 
-  /** What an injection among elements finds: a sequence, whose elements are to stand in its place, or anything else, to
-    * stand there as one element; none when an optional one finds nothing.
+  /** What an injection among elements finds: a sequence, whose elements are to stand in its place; none when an
+    * optional one finds nothing, and anything else is an error.
     */
   private def injected(id: Id, injection: Tree.Injection): Resolution = {
-    val Tree.Injection(path, optional, tags, at) = injection
+    val Tree.Injection(path, optional, at) = injection
     reference(path, optional, at).flatMap(_.fold[Resolution](Right(None)) {
-      // the tags have no node to go to
-      case found: Tree.Sequence if tags.nonEmpty => failed(TaggedInjection(at, Message.path(path), found.location))
       case found: Tree.Sequence =>
         // its elements stand where the injection does
         if (segments(id).size - 2 + height(found) > limit) failed(DepthExceeded(at, limit, fatal = false))
         else
           grow(size(found) - 1, 0, ResolutionTooLarge(at, Message.path(path), nodeLimit))
             .map(_ => Some(graft(found, at, path, Set.empty)))
-      case found => grafted(id, found, at, path, tags)
+      case found => failed(InjectionNotSequence(at, Message.path(path), found.location))
     })
   }
 
@@ -327,8 +325,9 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
         }
     }
 
-  /** The child of `container` at `id` that `segment` names, with its position in the tree. An injection before it in a
-    * sequence is resolved, to know how many elements it puts, and one that puts several gives its own.
+  /** The child of `container` at `id` that `segment` names, with its position in the tree. An injection or an optional
+    * substitution before it in a sequence is resolved, to know how many elements it puts, and an injection that puts
+    * several gives its own position to each.
     */
   private def child(id: Id, container: Tree.Value, segment: Id.Branch): Either[Failure, Option[(Id, Tree.Value)]] =
     (container, segment) match {
@@ -344,10 +343,17 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
             sequence.elements(i) match {
               case injection: Tree.Injection =>
                 resolve(Id.Index(i, id), injection) match {
+                  case Right(found) =>
+                    // a sequence, or nothing for an optional one
+                    val elements = found.collect { case put: Tree.Sequence => put.elements }.getOrElse(Vector.empty)
+                    if (left < elements.size) Right(Some(Id.Index(i, id) -> elements(left)))
+                    else element(i + 1, left - elements.size)
+                  case Left(failure) => Left(failure)
+                }
+              // an optional one that finds nothing puts no element
+              case substitution: Tree.Substitution if substitution.optional =>
+                resolve(Id.Index(i, id), substitution) match {
                   case Right(None) => element(i + 1, left)
-                  case Right(Some(found: Tree.Sequence)) =>
-                    if (left < found.elements.size) Right(Some(Id.Index(i, id) -> found.elements(left)))
-                    else element(i + 1, left - found.elements.size)
                   case Right(Some(_)) if left > 0 => element(i + 1, left - 1)
                   case Right(Some(value)) => Right(Some(Id.Index(i, id) -> value))
                   case Left(failure) => Left(failure)
@@ -418,7 +424,7 @@ private[psi] object Resolve {
   /** The first reference of `concatenation`, where it is reported going past the limit with no substitution followed.
     */
   private def first(concatenation: Tree.Concatenation): Option[Following] =
-    concatenation.parts.collectFirst { case Token.Reference(path, _, at) => new Following(at, path) }
+    concatenation.parts.collectFirst { case Token.Reference(path, _, at, _) => new Following(at, path) }
 
   def apply(
       root: Tree.Map,

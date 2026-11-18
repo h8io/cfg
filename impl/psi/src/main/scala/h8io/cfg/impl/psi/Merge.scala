@@ -85,18 +85,13 @@ private[psi] final class Merge {
       case AST.Scalar(text, tags, location) => Tree.Scalar(text, tags, location)
       case AST.Null(tags, location) => Tree.Null(tags, location)
       case AST.Block(statements, tags, location) => block(Tree.Map.empty(tags, location), statements)
-      case AST.Sequence(elements, tags, location) => Tree.Sequence(elements.map(e => element(e.value)), tags, location)
+      case AST.Sequence(elements, tags, location) => Tree.Sequence(elements.map(e => tree(e.value)), tags, location)
       case AST.Substitution(path, optional, tags, location) => Tree.Substitution(path, optional, tags, location)
+      // the parser takes one as an element of a sequence alone
+      case AST.Injection(path, optional, location) => Tree.Injection(path, optional, location)
       case AST.Concatenation(parts, tags, location) => Tree.Concatenation(parts, tags, location)
       case AST.Marked(value, markers) => Tree.Marked(tree(value), markers)
-      case AST.DirectiveValue(call, _) => unexpanded(call)
-    }
-
-  /** An element of a sequence, where a substitution is an injection (§9). */
-  private def element(value: AST.Value): Tree.Value =
-    value match {
-      case AST.Substitution(path, optional, tags, location) => Tree.Injection(path, optional, tags, location)
-      case _ => tree(value)
+      case AST.DirectiveValue(call, _, _) => unexpanded(call)
     }
 
   private def unexpanded(call: AST.Call): Nothing =
