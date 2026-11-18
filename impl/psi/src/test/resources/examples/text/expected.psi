@@ -1,0 +1,5 @@
+server:
+  name: orders
+motd: "Welcome to orders.\n  Mind the step."
+script: "#!/bin/sh\necho \"\${HOME}\" | sed 's/\\//-/g'"
+summary: "A long sentence written over lines."

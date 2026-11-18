@@ -1,0 +1,10 @@
+// loaded first; the sources after it merge over it
+db:
+  host: localhost
+  pool:
+    min: 1
+    max: 4
+features: [search, export]
+cache:
+  size: 10
+  ttl: 60

@@ -1,0 +1,9 @@
+db:
+  host: db.prod
+  pool:
+    min: 1
+    max: 32
+features:
+  - search
+cache:
+  size: 1000

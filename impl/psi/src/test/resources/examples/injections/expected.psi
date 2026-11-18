@@ -1,0 +1,30 @@
+defaults:
+  host: localhost
+  port: 5432
+  pool:
+    size: 10
+    timeout: 30
+primary:
+  host: localhost
+  port: 6432
+  pool:
+    size: 20
+    timeout: 30
+replica:
+  host: localhost
+  port: 6432
+  pool:
+    size: 20
+    timeout: 30
+hosts:
+  - a
+  - b
+all:
+  - first
+  - a
+  - b
+  - last
+groups:
+  - - a
+    - b
+  - - backup

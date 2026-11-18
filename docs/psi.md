@@ -28,10 +28,9 @@ def example(source: String, loader: PsiLoader = Psi.builder.withSystemProperties
 ```scala mdoc:passthrough
 example("""
 // a service
-server {
+server:
   host: localhost
   port: 8080
-}
 pool.max: 16
 tags: [web, api]
 """)
@@ -58,7 +57,7 @@ backticks is never split.
 - `'…'` is raw, as Perl's single quotes: only `\'` and `\\` are escapes, so a regular expression is written as it is.
 - `null`, unquoted, is the one reserved word. `true`, `false` and every other word are plain strings.
 
-**Blocks** are `{ … }`, and `key { … }` is `key: { … }`. **Sequences** are `[ … ]`, separated as fields are.
+**Blocks** are `{ … }`, and `key { … }` is `key: { … }`, or are written by [indentation](#indentation). **Sequences** are `[ … ]`, separated as fields are.
 
 **Comments** are `//` to the end of the line and `/* … */`, which nest. `#` is not a comment: it starts a directive.
 

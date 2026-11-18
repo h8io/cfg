@@ -1,0 +1,10 @@
+4 errors in 1 source
+source.psi
+  3:5: a line indented deeper than its block, where nothing opens one
+       hint: align it with the lines of its block
+  4:7: nothing indented deeper below to be the value
+       hint: indent the value on the lines below, or write it on this line; an empty block is '{}' or '[]'
+  7:3: a line indented less than its block lands on the width of no block still open
+       hint: align it with the lines of the block it belongs to
+  10:3: a block holds '- ' elements or anything else, not both
+        hint: give the elements a key of their own, or write them all with '- '

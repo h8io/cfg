@@ -1,0 +1,10 @@
+server:
+  host: example.com
+    port: 8080
+  tls:
+db:
+    host: x
+  port: 1
+items:
+  - a
+  b: 1
