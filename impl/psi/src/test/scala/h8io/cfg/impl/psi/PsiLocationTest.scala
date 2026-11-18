@@ -121,4 +121,51 @@ class PsiLocationTest extends AnyFlatSpec with Matchers {
     EnvironmentLocation("HOME").anchor shouldBe None
   }
 
+  /** A chain of `links` concatenations, each referring twice to the one before, built apart from any other. */
+  private def doubling(links: Int, bottom: PsiLocation): PsiLocation = (1 to links).foldLeft(bottom) { (before, i) =>
+    val part = ReferenceLocation(SourceLocation("s", i + 1, 5), "a", before)
+    ConcatenationLocation(SourceLocation("s", i + 1, 4), ::(part, part :: Nil))
+  }
+
+  "A composite location" should "equal another built the same way apart, comparing each pair of locations once" in {
+    doubling(100, base) shouldEqual doubling(100, base)
+    doubling(100, base) should not equal doubling(100, app)
+    val foreign = new Location { def description: String = "elsewhere" }
+    ReferenceLocation(app, "a", foreign) shouldEqual ReferenceLocation(app, "a", foreign)
+    ReferenceLocation(app, "a", foreign) should not equal ReferenceLocation(app, "a",
+      new Location {
+        def description: String = "elsewhere"
+      })
+    ReferenceLocation(app, "a", base) should not equal ReferenceLocation(app, "b", base)
+  }
+
+  it should "equal another of its own kind alone" in {
+    val reference = ReferenceLocation(app, "a", base)
+    val concatenation = ConcatenationLocation(app, ::(reference, Nil))
+    val merged = MergedLocation(app, ::(base, Nil))
+    val directive = DirectiveLocation(app, "d", base)
+    val all = List(reference, concatenation, merged, directive)
+    for {
+      a <- all
+      b <- all
+    } (a == b) shouldBe (a eq b)
+    MergedLocation(doubling(30, app), ::(doubling(30, base), Nil)) shouldEqual
+      MergedLocation(doubling(30, app), ::(doubling(30, base), Nil))
+    merged should not equal MergedLocation(app, ::(base, base :: Nil))
+    DirectiveLocation(app, "d", doubling(30, base)) shouldEqual DirectiveLocation(app, "d", doubling(30, base))
+    directive should not equal DirectiveLocation(app, "e", base)
+    ReferenceLocation(app, "a", reference) should not equal ReferenceLocation(app, "a", concatenation)
+    ReferenceLocation(app, "a", base) should not equal ReferenceLocation(app, "a", reference)
+    ReferenceLocation(app, "a", reference) should not equal ReferenceLocation(app, "a", base)
+    reference should not equal "a"
+  }
+
+  "Two loads of one source" should "equal, however many paths lead to the locations they share" in {
+    val text =
+      ("a0: \"\"" +: (1 to 100).map(i =>
+        "a" + i.toString + ": \"$" + "{a" + (i - 1).toString + "}$" +
+          "{a" + (i - 1).toString + "}\"")).mkString("\n")
+    Psi.parse("s", text).isRight shouldBe true
+    Psi.parse("s", text) shouldEqual Psi.parse("s", text)
+  }
 }

@@ -2,6 +2,9 @@ package h8io.cfg.impl.psi
 
 import h8io.cfg.{Id, Location}
 
+import scala.annotation.tailrec
+import scala.collection.mutable
+
 /** Where a node of a Psi configuration came from.
   *
   * A node written in a source carries a [[SourceLocation]]. A node produced by a substitution carries the reference
@@ -68,6 +71,56 @@ private[psi] object PsiLocation {
     if (out.length <= DescriptionLimit) out.toString else out.substring(0, DescriptionLimit) + "…"
   }
 
+  /** Whether `location` equals `that` as the `equals` of a case class tells, with a stack of its own rather than by
+    * recursion, and each pair of locations compared once: locations share those they refer to, and two built the same
+    * way but apart, as two loads of one source build them, would otherwise be compared once for every path to each
+    * pair, in a time exponential in the length of a chain of concatenations.
+    */
+  def equal(location: PsiLocation, that: Any): Boolean = {
+    val compared = mutable.Set.empty[Pair]
+    @tailrec def loop(stack: List[(Any, Any)]): Boolean =
+      stack match {
+        case Nil => true
+        case (a, b) :: rest if same(a, b) || !compared.add(new Pair(a, b)) => loop(rest)
+        case (a, b) :: rest =>
+          (a, b) match {
+            case (a: ReferenceLocation, b: ReferenceLocation) =>
+              a.hashCode == b.hashCode && a.at == b.at && a.path == b.path && loop((a.origin, b.origin) :: rest)
+            case (a: ConcatenationLocation, b: ConcatenationLocation) =>
+              a.hashCode == b.hashCode && a.at == b.at && a.parts.size == b.parts.size &&
+              loop(a.parts.zip(b.parts) ::: rest)
+            case (a: MergedLocation, b: MergedLocation) =>
+              a.hashCode == b.hashCode && a.earlier.size == b.earlier.size &&
+              loop((a.at, b.at) :: a.earlier.zip(b.earlier) ::: rest)
+            case (a: DirectiveLocation, b: DirectiveLocation) =>
+              a.hashCode == b.hashCode && a.at == b.at && a.directive == b.directive &&
+              loop((a.origin, b.origin) :: rest)
+            // a location of one kind and another of another, or anything else
+            case _ => !composite(a) && !composite(b) && a == b && loop(rest)
+          }
+      }
+    loop((location, that) :: Nil)
+  }
+
+  private def composite(value: Any): Boolean =
+    value match {
+      case _: ReferenceLocation | _: ConcatenationLocation | _: MergedLocation | _: DirectiveLocation => true
+      case _ => false
+    }
+
+  private def same(a: Any, b: Any): Boolean = a.asInstanceOf[AnyRef] eq b.asInstanceOf[AnyRef]
+
+  /** A pair of values, told apart from another by what they are rather than by what they equal. */
+  private final class Pair(val a: Any, val b: Any) {
+    // compared with pairs alone, in the set of those compared
+    override def equals(that: Any): Boolean = {
+      val pair = that.asInstanceOf[Pair]
+      same(a, pair.a) && same(b, pair.b)
+    }
+
+    override def hashCode: Int = System.identityHashCode(a) * 31 + System.identityHashCode(b)
+  }
+
   /** `values` separated by commas, as a case class separates its fields, and the parenthesis closed. */
   private def fields(values: List[Any]): List[Either[String, Any]] =
     values.zipWithIndex.flatMap { case (value, i) =>
@@ -125,6 +178,9 @@ final case class ReferenceLocation(at: SourceLocation, path: String, origin: Loc
   // a location shares those it refers to, which the hash of a case class would compute again for every path to them
   override lazy val hashCode: Int = scala.util.hashing.MurmurHash3.caseClassHash(this)
 
+  // and would compare them again for every path to them
+  override def equals(that: Any): Boolean = PsiLocation.equal(this, that)
+
   def description: String = PsiLocation.describe(this)
 
   override def toString: String = PsiLocation.show(this)
@@ -138,6 +194,9 @@ final case class ReferenceLocation(at: SourceLocation, path: String, origin: Loc
 final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLocation]) extends PsiLocation {
   // a location shares those it refers to, which the hash of a case class would compute again for every path to them
   override lazy val hashCode: Int = scala.util.hashing.MurmurHash3.caseClassHash(this)
+
+  // and would compare them again for every path to them
+  override def equals(that: Any): Boolean = PsiLocation.equal(this, that)
 
   def description: String = PsiLocation.describe(this)
 
@@ -154,6 +213,9 @@ final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLo
 final case class MergedLocation(at: PsiLocation, earlier: ::[PsiLocation]) extends PsiLocation {
   // a location shares those it refers to, which the hash of a case class would compute again for every path to them
   override lazy val hashCode: Int = scala.util.hashing.MurmurHash3.caseClassHash(this)
+
+  // and would compare them again for every path to them
+  override def equals(that: Any): Boolean = PsiLocation.equal(this, that)
 
   def description: String = PsiLocation.describe(this)
 
@@ -183,6 +245,9 @@ case object NoSourceLocation extends PsiLocation {
 final case class DirectiveLocation(at: SourceLocation, directive: String, origin: Location) extends PsiLocation {
   // a location shares those it refers to, which the hash of a case class would compute again for every path to them
   override lazy val hashCode: Int = scala.util.hashing.MurmurHash3.caseClassHash(this)
+
+  // and would compare them again for every path to them
+  override def equals(that: Any): Boolean = PsiLocation.equal(this, that)
 
   def description: String = PsiLocation.describe(this)
 

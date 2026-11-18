@@ -163,7 +163,11 @@ private[psi] object Source {
           try fetch(archive, out)
           finally out.close()
           this.entry(temporary.toFile, entry, url)
-        } finally Files.delete(temporary)
+        } finally {
+          // a copy that cannot be deleted, as a file still held open on some systems, is left behind rather than its
+          // failure taking the place of the read's outcome
+          val _ = temporary.toFile.delete()
+        }
       }
     }
 
