@@ -649,7 +649,9 @@ when not given (session 20):
   that URL is — a file, an entry of a jar, a web page — and never against the working directory,
   with one exception: a source given as text has no URL, and a relative path in it resolves against
   the directory the application runs in. A source it includes has a URL, so the paths in that one
-  resolve against it again. An absolute path is a file of the file system.
+  resolve against it again. An absolute path is a file of the file system. Its segments are
+  separated by `/` on every system, as a URL's are, so that a config reads the same anywhere; Java
+  takes `/` on Windows too (session 30).
 - **`resource`** is a name on the class path, read through the thread's context class loader, or
   the one that loaded Psi when the thread has none.
 - **`url`** is an absolute URL, read as it is written.
@@ -2360,7 +2362,8 @@ Fixed on a review, the format unchanged, nothing put to the user to decide:
 
 ### Session 30 — 2026-11-18
 
-Fixed on a review, the format unchanged, nothing put to the user to decide:
+Fixed on a review, the format unchanged; the last item, written into the spec, the user's choice of the two I
+put (the other: take `\` as a separator everywhere, relative paths included):
 
 - **Two locations are compared each pair under them once** (§10): the `equals` of a case class
   compared two built the same way apart once for every path to each pair, so that two loads of
@@ -2369,3 +2372,7 @@ Fixed on a review, the format unchanged, nothing put to the user to decide:
   input is written: `Id.path` recursed as deep as the node, doubling the stack `graft` uses.
 - **A remote jar's copy that cannot be deleted is left behind**: the failure to delete it took
   the place of the read's outcome, a success or the error that ended it.
+- **A `file` separates its segments with `/`** (§6), written down on a review that found the last
+  segment, where an extension is looked for, cut at `/` alone: a relative path resolves against a
+  URL, where `\` is no separator, so a path with `\` was never portable; the spec now says so
+  rather than the loader taking `\` in some places and not in others.
