@@ -149,20 +149,20 @@ private[psi] object Source {
     private def entry(url: URL): Array[Byte] = {
       // opening no connection: a `JarURLConnection` parses the URL, and connects only once asked to
       val connection = url.openConnection().asInstanceOf[JarURLConnection]
-      val entry = Option(connection.getEntryName).getOrElse(throw new IOException(url.toString + " names no entry"))
+      val name = Option(connection.getEntryName).getOrElse(throw new IOException(url.toString + " names no entry"))
       val archive = connection.getJarFileURL
       if (archive.getProtocol == "file") {
         val file =
           try path(archive).toFile
           catch { case e: IllegalArgumentException => throw new IOException(archive.toString + " is no path", e) }
-        this.entry(file, entry, url)
+        fromJar(file, name, url)
       } else {
         val temporary = Files.createTempFile("psi", ".jar")
         try {
           val out = Files.newOutputStream(temporary)
           try fetch(archive, out)
           finally out.close()
-          this.entry(temporary.toFile, entry, url)
+          fromJar(temporary.toFile, name, url)
         } finally {
           // a copy that cannot be deleted, as a file still held open on some systems, is left behind rather than its
           // failure taking the place of the read's outcome
@@ -171,12 +171,12 @@ private[psi] object Source {
       }
     }
 
-    /** The entry `entry` of the jar `file`; one not there is not found, as the JVM reports it. */
-    private def entry(file: File, entry: String, url: URL): Array[Byte] = {
+    /** The entry `name` of the jar `file`; one not there is not found, as the JVM reports it. */
+    private def fromJar(file: File, name: String, url: URL): Array[Byte] = {
       val jar = open(file, url)
       try {
         val found =
-          Option(jar.getEntry(entry)).getOrElse(throw new FileNotFoundException(url.toString + " is not found"))
+          Option(jar.getEntry(name)).getOrElse(throw new FileNotFoundException(url.toString + " is not found"))
         val stream = jar.getInputStream(found)
         val out = new ByteArrayOutputStream
         try copy(stream, out)
