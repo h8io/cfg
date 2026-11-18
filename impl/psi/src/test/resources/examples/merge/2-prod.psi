@@ -1,0 +1,8 @@
+// maps merge deep, anything else is replaced
+db:
+  host: db.prod
+  pool.max: 32
+features: [search]
+// `:=` replaces a map rather than merging it
+cache :=
+  size: 1000

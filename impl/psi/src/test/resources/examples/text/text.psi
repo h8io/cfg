@@ -1,0 +1,20 @@
+server.name: orders
+
+// the common indent is stripped, and what is deeper keeps the rest of its indent
+motd:
+  """
+  Welcome to ${server.name}.
+    Mind the step.
+  """
+
+// raw: no substitutions, and backslashes as written
+script: '''
+  #!/bin/sh
+  echo "${HOME}" | sed 's/\//-/g'
+  '''
+
+// `+` folds lines into one
+summary: """+
+  A long sentence
+  written over lines.
+  """

@@ -46,6 +46,9 @@ Run commands from the repository root.
 
 - Start with the affected module, then `sbt +testFull` for anything shared across Scala versions.
 - Every PR changing `impl/psi` is green on `./test.sh`, which holds it to 100% statement and branch coverage.
+- `impl/psi/src/test/resources/examples/` holds worked examples, each a directory of sources with what they load as,
+  written back, in `expected.psi`, or their report in `expected.errors` (`ExamplesTest`). A change to `Render` or to a
+  message updates them, and a new feature of the format gets one.
 - A change to agent instructions alone needs its links and diff checked, not the Scala tests.
 - Report what was checked, and any check that could not be run.
 

@@ -1,0 +1,23 @@
+defaults:
+  host: localhost
+  port: 5432
+  pool { size: 10, timeout: 30 }
+
+// the fields of `defaults` stand here as if written here, those below override them
+primary:
+  $defaults*
+  port: 6432
+  pool.size: 20
+
+// a graft copies the node whole
+replica: $primary
+
+hosts: [a, b]
+// `$hosts*` puts the elements of `hosts`, `$hosts` the sequence as one element
+all:
+  - first
+  - $hosts*
+  - last
+groups:
+  - $hosts
+  - [backup]
