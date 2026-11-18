@@ -90,7 +90,7 @@ private[psi] object AST {
     * It takes no tags, which would have no node to go to.
     */
   final case class Injection(path: Id.Branch, optional: Boolean, location: SourceLocation) extends Value {
-    def tags: Set[String] = Set.empty
+    val tags: Set[String] = Set.empty
   }
 
   /** A scalar with `\${…}` inside it, or quoted around one alone, such as `"\${a}"`: always a scalar (§9).

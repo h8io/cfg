@@ -568,11 +568,10 @@ final case class MisplacedInjection(location: SourceLocation) extends PsiError {
   override def hint: Option[String] = Some("write a key and ':' before a value")
 }
 
-/** A substitution standing alone among the fields of a block, `$path` with no `*`: a graft with no key to stand at
+/** A substitution standing alone among the fields of a block, `\$path` with no `*`: a graft with no key to stand at
   * (`format.md` §9).
   */
-final case class SubstitutionAmongFields(location: SourceLocation, path: String, optional: Boolean)
-    extends PsiError {
+final case class SubstitutionAmongFields(location: SourceLocation, path: String, optional: Boolean) extends PsiError {
   private def written(star: String): String = "'${" + (if (optional) "?" else "") + Message.cut(path) + star + "}'"
 
   def message: String = written("") + " among the fields of a block has no key to stand at"
@@ -591,8 +590,8 @@ final case class InjectionOutOfPlace(location: SourceLocation) extends PsiError 
   override def hint: Option[String] = Some("remove the '*' to put the node itself here, or quote a '*' that is text")
 }
 
-/** A tag before an injection among the elements of a sequence, whose elements keep their own tags, so that the tag
-  * has no node to go to (`format.md` §9).
+/** A tag before an injection among the elements of a sequence, whose elements keep their own tags, so that the tag has
+  * no node to go to (`format.md` §9).
   */
 final case class TaggedInjection(location: SourceLocation) extends PsiError {
   def message: String = "a tag before an injection, whose elements keep their own tags"
@@ -610,8 +609,8 @@ final case class InjectionNotSequence(location: SourceLocation, path: String, fo
   override def hint: Option[String] = Some("remove the '*' to put it as one element")
 }
 
-/** A call injected among the elements of a sequence, `#name(…)*`, whose handler gave something other than a
-  * sequence (`format.md` §6, §9).
+/** A call injected among the elements of a sequence, `#name(…)*`, whose handler gave something other than a sequence
+  * (`format.md` §6, §9).
   */
 final case class DirectiveNotSequence(location: SourceLocation, name: String) extends PsiError {
   def message: String = Message.directive(name) + " injected among elements gave something other than a sequence"
