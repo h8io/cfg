@@ -62,6 +62,11 @@ class MarkerTest extends AnyFlatSpec with Matchers {
     value(root("b")) shouldBe "X\\TY"
   }
 
+  they should "run over a block indented below its key, which takes the tags after the key" in {
+    loaded(loader(upper), "u: @s\n  @t \"\"\"upper\n  abc\n  \"\"\"")("u") shouldBe
+      Node.IScalar(Id.Key("u", Id.Root), Set("s", "t"), "ABC", at(2, 6))
+  }
+
   they should "get the value with its escapes read and its substitutions resolved" in {
     val root = loaded(loader(upper), "h: db\nu: @t \"\"\"upper\n  jdbc:${h}\\t\n  \"\"\"\nv: ${u}")
     root("u") shouldBe

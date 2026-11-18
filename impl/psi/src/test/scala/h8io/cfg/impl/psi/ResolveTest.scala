@@ -163,12 +163,12 @@ class ResolveTest extends AnyFlatSpec with Matchers {
   "A substitution with no braces" should "graft and concatenate as one in braces does" in {
     // a `-` is part of a key, so `$a.b-y` would be the path `a.b-y`: braces end a path where it would go on
     val root = loaded("a { b: 1 }\nc: $a\nd: x$a.b/${a.b}-y\ne: [$?missing, $a.b]")
-    root("c").toString shouldBe "{\n  b: 1\n}"
+    root("c").toString shouldBe "b: 1"
     root("d") match {
       case Node.IScalar(_, _, value, _) => value shouldBe "x1/1-y"
       case other => fail(other.toString)
     }
-    root("e").toString shouldBe "[1]"
+    root("e").toString shouldBe "- 1"
   }
 
   "A graft" should "not take a substitution left unresolved, which is a bug of the loader" in {

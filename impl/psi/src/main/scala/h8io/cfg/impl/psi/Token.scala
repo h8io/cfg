@@ -5,7 +5,7 @@ import h8io.cfg.Id
 /** A token of a source.
   *
   * @param startsLine
-  *   whether no other token stands before it on its line; with its column, what the indentation syntax will need
+  *   whether no other token stands before it on its line; with its column, what the indentation syntax counts
   * @param spaced
   *   whether whitespace or a comment stands right before it, which the dots of a key may not have around them
   */
@@ -26,6 +26,11 @@ private[psi] object Token {
 
   /** `:=` */
   case object Replace extends Kind
+
+  /** `- `, the marker of a sequence's element in the indented syntax: a `-` and whitespace or the end of its line, at
+    * the start of a line or right after another marker (`format.md` §4).
+    */
+  case object Dash extends Kind
   case object Equals extends Kind
   case object Newline extends Kind
 
@@ -89,6 +94,7 @@ private[psi] object Token {
       case Dot => "'.'"
       case Colon => "':'"
       case Replace => "':='"
+      case Dash => "'- '"
       case Equals => "'='"
       case Newline => "a line break"
       case End => "the end of the source"

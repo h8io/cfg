@@ -36,7 +36,7 @@ class HardeningTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChe
     val n = 500000
     val line = "x: [ψ, 😀" + ", 1" * n + "]"
     Psi.parse("s", line).map(root => root("x").toString) match {
-      case Right(x) => x.length shouldBe line.length - "x: ".length
+      case Right(x) => x shouldBe "- ψ\n- 😀" + "\n- 1" * n
       case Left(errors) => fail(errors.toString)
     }
   }

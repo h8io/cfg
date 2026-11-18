@@ -79,10 +79,11 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   }
 
   it should "take a run of newlines with one `,` among them as one separator, wherever the `,` stands" in {
-    val expected = Vector(field(k("a", 1, 1), str("1", 1, 4)), field(k("b", 3, 3), str("2", 3, 6)))
-    statements("a: 1,\n\n  b: 2") shouldBe expected
-    statements("a: 1\n\n, b: 2") shouldBe expected
-    statements("a: 1\n,\n  b: 2,\n") shouldBe expected
+    statements("a: 1\n\n, b: 2") shouldBe
+      Vector(field(k("a", 1, 1), str("1", 1, 4)), field(k("b", 3, 3), str("2", 3, 6)))
+    val below = Vector(field(k("a", 1, 1), str("1", 1, 4)), field(k("b", 3, 1), str("2", 3, 4)))
+    statements("a: 1,\n\nb: 2") shouldBe below
+    statements("a: 1\n,\nb: 2,\n") shouldBe below
     statements("a: 1, b: 2") shouldBe Vector(field(k("a", 1, 1), str("1", 1, 4)), field(k("b", 1, 7), str("2", 1, 10)))
   }
 
@@ -233,19 +234,22 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     errors("a: [@t]") shouldBe List(MissingValue(loc(1, 7), "']'"))
   }
 
-  it should "be reported missing at the end of the line of its `:` or tag when no value follows on a later one" in {
-    errors("a:\n") shouldBe List(MissingValue(loc(1, 3), "a line break"))
-    errors("a { b:\n\n}") shouldBe List(MissingValue(loc(1, 7), "a line break"))
-    errors("a: @t\n, b: 1") shouldBe List(MissingValue(loc(1, 6), "a line break"))
+  it should "be reported missing at the end of the line of its `:` or tag when nothing is indented deeper below" in {
+    errors("a:\n") shouldBe List(NothingIndented(loc(1, 3)))
+    errors("a { b:\n\n}") shouldBe List(NothingIndented(loc(1, 7)))
+    errors("a: @t\n, b: 1") shouldBe List(NothingIndented(loc(1, 6)))
+    errors("a:\nb: 5") shouldBe List(NothingIndented(loc(1, 3)))
+    errors("a { b:\n  c: 1 }") shouldBe Nil
+    errors("a {\n  b:\n  c: 1\n}") shouldBe List(NothingIndented(loc(2, 5)))
   }
 
-  it should "be reported on a line after its `:`, `:=` or tag" in {
-    errors("a:\n5") shouldBe List(ValueOnNextLine(loc(2, 1)))
-    errors("a :=\n\n  [1]") shouldBe List(ValueOnNextLine(loc(3, 3)))
-    errors("a: @t\n{}") shouldBe List(ValueOnNextLine(loc(2, 1)))
-    errors("a:\n  @t x") shouldBe List(ValueOnNextLine(loc(2, 3)))
-    errors("a:\n  #x()") shouldBe List(ValueOnNextLine(loc(2, 3)))
-    errors("a:\n  `x`") shouldBe List(ValueOnNextLine(loc(2, 3)))
+  it should "be read on a line after its `:`, `:=` or tag, indented deeper" in {
+    statements("a :=\n\n  [1]") shouldBe
+      Vector(Field(::(k("a", 1, 1), Nil), Operator.Replace,
+        Sequence(Vector(Element(str("1", 3, 4), None)), Set.empty, loc(3, 3)), None))
+    statements("a: @s\n  @t x") shouldBe Vector(field(k("a", 1, 1), str("x", 2, 6, "s", "t")))
+    errors("a:\n  `x`") shouldBe List(BacktickedValue(loc(2, 3)))
+    // inside brackets indentation means nothing, and a value goes on the line of its tag
     errors("a: [\n  @t\n  1]") shouldBe List(ValueOnNextLine(loc(3, 3)))
   }
 
@@ -599,7 +603,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
             field(k("e", 5, 1), str("3", 5, 4)),
             field(k("g", 7, 3), str("4", 7, 6)))),
         List(
-          ExpectedColon(loc(1, 2), "a line break"), BraceOnNextLine(loc(4, 1)), MissingValue(loc(6, 6), "a line break"))
+          ExpectedColon(loc(1, 2), "a line break"), BraceOnNextLine(loc(4, 1)), NothingIndented(loc(6, 6)))
       )
   }
 

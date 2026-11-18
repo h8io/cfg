@@ -16,6 +16,7 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
   private val text = source.text
   private var offset = 0
   private var atLineStart = true
+  private var afterDash = false
   private var ended = false
   private val reported = mutable.ListBuffer.empty[PsiError]
 
@@ -26,12 +27,16 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
   def errorCount: Int = reported.length
 
   /** Where the lexer stands, to come back to with [[reset]] after reading ahead. */
-  def mark(): Mark = new Mark(offset, atLineStart, ended, reported.length)
+  def mark(): Mark = new Mark(offset, atLineStart, afterDash, ended, reported.length)
+
+  /** `mark`'s position with the errors found so far, and a fatal one: to come back to it and keep them. */
+  def remark(mark: Mark): Mark = new Mark(mark.offset, mark.atLineStart, mark.afterDash, ended, reported.length)
 
   /** Comes back to `mark`, forgetting the tokens read and the errors found since. */
   def reset(mark: Mark): Unit = {
     offset = mark.offset
     atLineStart = mark.atLineStart
+    afterDash = mark.afterDash
     ended = mark.ended
     reported.remove(mark.reported, reported.length - mark.reported)
   }
@@ -49,6 +54,25 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
     fatal.foreach(reported += _)
   }
 
+  /** Whether a field goes on from the key just read, read ahead and come back from: dotted keys, then `:` or `:=` with
+    * whitespace after it, or `{` (`format.md` §4). With none, a `:` is text of a value, as in `http://host`.
+    */
+  def fieldAhead(): Boolean = {
+    val mark = this.mark()
+    @tailrec def loop(): Boolean = {
+      val count = reported.length
+      next(KeyMode).kind match {
+        case Dot => next(KeyMode).kind.isInstanceOf[Name] && loop()
+        case Colon | Replace => reported.length == count
+        case LeftBrace => true
+        case _ => false
+      }
+    }
+    val found = loop()
+    reset(mark)
+    found
+  }
+
   /** Whether a fatal error has ended the source, so that its [[Token.End]] is no real end. */
   def halted: Boolean = ended
 
@@ -59,6 +83,7 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
     val startsLine = atLineStart
     val kind = if (ended || offset >= text.length) End else read(mode)
     atLineStart = kind == Newline
+    afterDash = kind == Dash
     Token(kind, source.location(start), startsLine, spaced = start > before)
   }
 
@@ -221,6 +246,8 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
         offset += 1
         name(MissingDirectiveName.apply, start).fold[Kind](End)(Directive.apply)
       case '@' => tag(start)
+      case '-' if mode != ArgumentMode && (atLineStart || afterDash) && (!has(offset + 1) || isBreak(offset + 1)) =>
+        advance(1, Dash)
       case c =>
         mode match {
           case KeyMode => keyMode(c, start)
@@ -768,6 +795,7 @@ private[psi] object Lexer {
   final class Mark private[Lexer] (
       val offset: Int,
       val atLineStart: Boolean,
+      val afterDash: Boolean,
       val ended: Boolean,
       val reported: Int)
 
