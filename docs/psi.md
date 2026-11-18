@@ -226,7 +226,7 @@ the fields after it override them; as a value it makes the source a block.
 
 | Argument | Reads |
 |---|---|
-| `file: "conf.d/db"` | a file, relative to the source that includes it, its path separated by `/` on every system |
+| `file: "conf.d/db"` | a file, relative to the source that includes it, |
 | `resource: "defaults"` | a resource on the program's class path |
 | `url: "https://…"` | a URL |
 | `optional: true` | nothing when the target is not there, rather than an error |
