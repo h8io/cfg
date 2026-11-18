@@ -184,6 +184,8 @@ class InjectionTest extends AnyFlatSpec with Matchers {
     shown("b: [a, #seq, z]") shouldBe "- a\n- - p\n  - @u q\n- z"
     shown("b: [a, @t #one, z]") shouldBe "- a\n- @t v\n- z"
     shown("b: #seq") shouldBe "- p\n- @u q"
+    // after a `- ` too, on its line or in a block below it
+    shown("b:\n  - a\n  - #seq*\n  -\n    #seq*") shouldBe "- a\n- p\n- @u q\n- p\n- @u q"
     def errors(text: String): List[PsiError] = by.parse("s", text).fold(_.errors, root => fail(root.toString))
     errors("b: [@t #seq*]") shouldBe List(TaggedInjection(at(1, 8)))
     errors("b: [#one*]") shouldBe List(DirectiveNotSequence(at(1, 5), "one"))
@@ -297,7 +299,7 @@ class InjectionTest extends AnyFlatSpec with Matchers {
     (InjectionOutOfPlace(at(1, 1)).message, InjectionOutOfPlace(at(1, 1)).hint) shouldBe
       ((
         "an injection stands alone among the fields of a block or the elements of a sequence",
-        Some("remove the '*' to put the node itself here, or quote a '*' that is text")))
+        Some("remove the '*' to put the node itself here; a '*' that is text goes after braces, as in '$" + "{a}*'")))
     val among = SubstitutionAmongFields(at(1, 1), "a", optional = true)
     (among.message, among.hint) shouldBe
       ((

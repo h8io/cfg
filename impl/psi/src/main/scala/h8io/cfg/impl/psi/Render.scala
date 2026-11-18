@@ -36,9 +36,10 @@ private[psi] object Render {
     ()
   }
 
-  private def fields(out: StringBuilder, map: Tree.Map, level: Int): Unit =
-    map.keys.foreach { key =>
-      indent(out, level)
+  /** The fields of `map` at `level`, the first one's indent left out when it goes on the line of a `- `. */
+  private def fields(out: StringBuilder, map: Tree.Map, level: Int, onDash: Boolean = false): Unit =
+    map.keys.zipWithIndex.foreach { case (key, i) =>
+      if (i > 0 || !onDash) indent(out, level)
       val _ = out ++= name(key) += ':'
       after(out, map.entries(key), level)
     }
@@ -64,13 +65,15 @@ private[psi] object Render {
       case _ => false
     }
 
-  /** The lines of a block at `level`: the fields of a map, the elements of a sequence, or a value alone. */
-  private def contents(out: StringBuilder, value: Tree.Value, level: Int): Unit =
+  /** The lines of a block at `level`: the fields of a map, the elements of a sequence, or a value alone; the first
+    * line's indent left out when it goes on the line of a `- `.
+    */
+  private def contents(out: StringBuilder, value: Tree.Value, level: Int, onDash: Boolean = false): Unit =
     value match {
-      case map: Tree.Map if map.keys.nonEmpty => fields(out, map, level)
+      case map: Tree.Map if map.keys.nonEmpty => fields(out, map, level, onDash)
       case sequence: Tree.Sequence if sequence.elements.nonEmpty =>
-        sequence.elements.foreach { element =>
-          indent(out, level)
+        sequence.elements.zipWithIndex.foreach { case (element, i) =>
+          if (i > 0 || !onDash) indent(out, level)
           val _ = out += '-'
           dashed(out, element, level)
         }
@@ -87,9 +90,7 @@ private[psi] object Render {
     element match {
       case _ if element.tags.isEmpty && block(element) =>
         val _ = out += ' '
-        val written = new StringBuilder
-        contents(written, element, level + 1)
-        val _ = out ++= written.result().drop(2 * (level + 1))
+        contents(out, element, level + 1, onDash = true)
       // a scalar that would read as a field after a `- ` is quoted
       case Tree.Scalar(text, _, _) if bare(text) && field(text) =>
         tags(out, element)
@@ -99,8 +100,8 @@ private[psi] object Render {
       case _ => after(out, element, level)
     }
 
-  /** Whether `text` alone reads as the start of a field, as `x:` or `x{` does. */
-  private def field(text: String): Boolean = {
+  /** Whether `text` alone reads as the start of a field, as `x:` or `x{` does: only text with a `:` or a `{` can. */
+  private def field(text: String): Boolean = (text.indexOf(':') >= 0 || text.indexOf('{') >= 0) && {
     val lexer = new Lexer(Source("", text))
     lexer.next(KeyMode).kind.isInstanceOf[Token.Name] && lexer.fieldAhead()
   }

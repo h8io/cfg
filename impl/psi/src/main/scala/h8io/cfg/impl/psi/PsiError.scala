@@ -645,7 +645,8 @@ final case class SubstitutionAmongFields(location: SourceLocation, path: String,
 final case class InjectionOutOfPlace(location: SourceLocation) extends PsiError {
   def message: String = "an injection stands alone among the fields of a block or the elements of a sequence"
 
-  override def hint: Option[String] = Some("remove the '*' to put the node itself here, or quote a '*' that is text")
+  override def hint: Option[String] =
+    Some("remove the '*' to put the node itself here; a '*' that is text goes after braces, as in '${a}*'")
 }
 
 /** A tag before an injection among the elements of a sequence, whose elements keep their own tags, so that the tag has
