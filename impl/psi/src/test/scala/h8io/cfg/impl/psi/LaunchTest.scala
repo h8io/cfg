@@ -47,7 +47,7 @@ class LaunchTest extends AnyFlatSpec with Matchers {
 
   it should "give a map of the properties under a name no property has, split at their dots" in {
     loaded("java: #prop(java)")("java").toString shouldBe
-      "{\n  version: 25\n  vm {\n    name: HotSpot\n    vendor: Oracle\n  }\n}"
+      "version: 25\nvm:\n  name: HotSpot\n  vendor: Oracle"
     // in statement position, its keys stand in the block
     loaded("x { #prop(java) }")("x").toString should include("version: 25")
   }

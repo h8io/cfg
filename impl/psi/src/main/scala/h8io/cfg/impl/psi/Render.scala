@@ -1,15 +1,17 @@
 package h8io.cfg.impl.psi
 
 import h8io.cfg.Id
-import h8io.cfg.impl.psi.Token.{Reference, Text, ValueMode}
+import h8io.cfg.impl.psi.Token.{KeyMode, Reference, Text, ValueMode}
 
 /** Writes a merged tree as Psi source, which parses and merges back to the same tree, its locations aside.
   *
-  * A field takes a line, nested maps indented by two spaces in the block form `key { … }`, or `key: @t { … }` with
-  * tags, which the block form has no place for. A sequence stands on one line, `[a, b]`, unless it holds a container,
-  * and then takes a line per element. Keys and tags are written as `Id.path` writes keys, bare when they can be and in
-  * backticks otherwise (`format.md` §3); tags in alphabetical order. A scalar is written bare when the lexer reads it
-  * back as the same scalar, in double quotes otherwise; a concatenation always in double quotes.
+  * It writes indentation, as a source is usually written (`format.md` §4): a field takes a line, and a map or a
+  * sequence that holds anything stands in a block below its key, indented by two spaces, a map as its fields and a
+  * sequence as `- ` elements; braces are left for the empty `{}` and `[]`. Tags go after the `:`, or after the `- ` of
+  * an element, with the block below them. An element that is a map has its first field on the line of its `- `, and a
+  * sequence its first element, `- - x`. Keys and tags are written as `Id.path` writes keys, bare when they can be and
+  * in backticks otherwise (`format.md` §3); tags in alphabetical order. A scalar is written bare when the lexer reads
+  * it back as the same scalar, in double quotes otherwise; a concatenation always in double quotes.
   */
 private[psi] object Render {
 
@@ -20,11 +22,13 @@ private[psi] object Render {
     out.result()
   }
 
-  /** `value` as written after a `:`, with its tags. */
+  /** `value` as it stands alone: a map as its fields and a sequence as its elements, at the top level, a block below
+    * its tags when it has any; anything else as written after a `:`.
+    */
   def value(value: Tree.Value): String = {
     val out = new StringBuilder
-    this.value(out, value, 0)
-    out.result()
+    if (value.tags.isEmpty) contents(out, value, 0) else after(out, value, 0)
+    out.result().stripPrefix(" ").stripSuffix("\n")
   }
 
   private def indent(out: StringBuilder, level: Int): Unit = {
@@ -35,52 +39,83 @@ private[psi] object Render {
   private def fields(out: StringBuilder, map: Tree.Map, level: Int): Unit =
     map.keys.foreach { key =>
       indent(out, level)
-      out ++= name(key)
-      map.entries(key) match {
-        case nested: Tree.Map if nested.tags.isEmpty =>
-          out += ' '
-          block(out, nested, level)
-        case other =>
-          out ++= ": "
-          value(out, other, level)
-      }
-      out += '\n'
+      val _ = out ++= name(key) += ':'
+      after(out, map.entries(key), level)
     }
 
-  private def block(out: StringBuilder, map: Tree.Map, level: Int): Unit =
-    if (map.keys.isEmpty) out ++= "{}"
-    else {
-      out ++= "{\n"
-      fields(out, map, level + 1)
-      indent(out, level)
-      out += '}'
+  /** A value after a `:` or a `- ` that stands at `level`, its tags first, and the line ended. */
+  private def after(out: StringBuilder, value: Tree.Value, level: Int): Unit = {
+    tags(out, value)
+    if (block(value)) {
+      val _ = out += '\n'
+      contents(out, value, level + 1)
+    } else {
+      val _ = out += ' '
+      oneLine(out, value)
+      val _ = out += '\n'
+    }
+  }
+
+  /** A map or a sequence with something in it, which stands in a block below its key. */
+  private def block(value: Tree.Value): Boolean =
+    value match {
+      case map: Tree.Map => map.keys.nonEmpty
+      case sequence: Tree.Sequence => sequence.elements.nonEmpty
+      case _ => false
     }
 
-  private def value(out: StringBuilder, value: Tree.Value, level: Int): Unit = {
-    value.tags.toVector.sorted.foreach(tag => out += '@' ++= name(tag) += ' ')
+  /** The lines of a block at `level`: the fields of a map, the elements of a sequence, or a value alone. */
+  private def contents(out: StringBuilder, value: Tree.Value, level: Int): Unit =
+    value match {
+      case map: Tree.Map if map.keys.nonEmpty => fields(out, map, level)
+      case sequence: Tree.Sequence if sequence.elements.nonEmpty =>
+        sequence.elements.foreach { element =>
+          indent(out, level)
+          val _ = out += '-'
+          dashed(out, element, level)
+        }
+      // only a value alone without tags, as `value` writes one
+      case _ =>
+        oneLine(out, value)
+        val _ = out += '\n'
+    }
+
+  /** An element after its `- `, which stands at `level`: an untagged map or sequence starts on the line of the `- `,
+    * the rest of it aligned under that start; anything else as after a `:`.
+    */
+  private def dashed(out: StringBuilder, element: Tree.Value, level: Int): Unit =
+    element match {
+      case _ if element.tags.isEmpty && block(element) =>
+        val _ = out += ' '
+        val written = new StringBuilder
+        contents(written, element, level + 1)
+        val _ = out ++= written.result().drop(2 * (level + 1))
+      // a scalar that would read as a field after a `- ` is quoted
+      case Tree.Scalar(text, _, _) if bare(text) && field(text) =>
+        tags(out, element)
+        val _ = out += ' '
+        quoted(out, Vector(Text(text)))
+        val _ = out += '\n'
+      case _ => after(out, element, level)
+    }
+
+  /** Whether `text` alone reads as the start of a field, as `x:` or `x{` does. */
+  private def field(text: String): Boolean = {
+    val lexer = new Lexer(Source("", text))
+    lexer.next(KeyMode).kind.isInstanceOf[Token.Name] && lexer.fieldAhead()
+  }
+
+  /** The tags of `value`, each after a space, as they go after a `:` or a `- `. */
+  private def tags(out: StringBuilder, value: Tree.Value): Unit =
+    value.tags.toVector.sorted.foreach(tag => out ++= " @" ++= name(tag))
+
+  /** A value on one line: a scalar, `null`, a substitution, or an empty map or sequence. */
+  private def oneLine(out: StringBuilder, value: Tree.Value): Unit = {
     value match {
       case Tree.Scalar(text, _, _) => if (bare(text)) out ++= text else quoted(out, Vector(Text(text)))
       case Tree.Null(_, _) => out ++= "null"
-      case map: Tree.Map => block(out, map, level)
-      case Tree.Sequence(elements, _, _) =>
-        if (elements.isEmpty) out ++= "[]"
-        else if (elements.forall(flat)) {
-          out += '['
-          elements.zipWithIndex.foreach { case (element, i) =>
-            if (i > 0) out ++= ", "
-            this.value(out, element, level)
-          }
-          out += ']'
-        } else {
-          out ++= "[\n"
-          elements.foreach { element =>
-            indent(out, level + 1)
-            this.value(out, element, level + 1)
-            out += '\n'
-          }
-          indent(out, level)
-          out += ']'
-        }
+      case _: Tree.Map => out ++= "{}"
+      case _: Tree.Sequence => out ++= "[]"
       case Tree.Substitution(path, optional, _, _) => reference(out, path, optional, injection = false)
       case Tree.Injection(path, optional, _) => reference(out, path, optional, injection = true)
       case Tree.Concatenation(parts, _, _) => quoted(out, parts)
@@ -90,12 +125,6 @@ private[psi] object Render {
     }
     ()
   }
-
-  private def flat(value: Tree.Value): Boolean =
-    value match {
-      case _: Tree.Map | _: Tree.Sequence => false
-      case _ => true
-    }
 
   /** A key or a tag, as `Id.path` writes a key. */
   private def name(name: String): String = Id.Key(name, Id.Root).path

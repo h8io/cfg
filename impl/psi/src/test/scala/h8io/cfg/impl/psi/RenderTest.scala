@@ -52,23 +52,31 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     located(tree(Render.document(read))) shouldBe located(read)
   }
 
-  "Render" should "write a field per line, nested maps in the block form, indented" in {
-    Render.document(tree("a: 1\nb { c: x, d { } }\ne: null")) shouldBe "a: 1\nb {\n  c: x\n  d {}\n}\ne: null\n"
+  "Render" should "write a field per line, a map's fields in a block below its key, indented" in {
+    Render.document(tree("a: 1\nb { c: x, d { } }\ne: null")) shouldBe "a: 1\nb:\n  c: x\n  d: {}\ne: null\n"
     Render.document(tree("")) shouldBe ""
   }
 
-  it should "write a tagged map after a `:`, tags sorted, and tags of every value" in {
+  it should "write tags after a `:`, the block of a map below them, tags sorted, and tags of every value" in {
     Render.document(tree("m: @z @a { k: @t v }\nn: @n null\no: @o []")) shouldBe
-      "m: @a @z {\n  k: @t v\n}\nn: @n null\no: @o []\n"
+      "m: @a @z\n  k: @t v\nn: @n null\no: @o []\n"
   }
 
-  it should "write a sequence on one line unless it holds a container" in {
-    Render.document(tree("a: [1, x, null, ${b}]\nc: [1, [2], {d: 3}, {}, @t {e: 4}]")) shouldBe
-      "a: [1, x, null, ${b}]\nc: [\n  1\n  [2]\n  {\n    d: 3\n  }\n  {}\n  @t {\n    e: 4\n  }\n]\n"
+  it should "write a sequence as `- ` elements, the first line of a map or sequence on the line of its `- `" in {
+    Render.document(
+      tree("a: [1, x, null, ${b}, ${c*}]\nc: [1, [2, 3], {d: 3, e: 4}, {}, [], @t {e: 4}, @u [5]]")) shouldBe
+      "a:\n  - 1\n  - x\n  - null\n  - ${b}\n  - ${c*}\nc:\n  - 1\n  - - 2\n    - 3\n  - d: 3\n    e: 4\n  - {}\n" +
+      "  - []\n  - @t\n    e: 4\n  - @u\n    - 5\n"
+    Render.document(tree("a: [[[{b: 1, c: 2}]]]")) shouldBe "a:\n  - - - b: 1\n        c: 2\n"
+  }
+
+  it should "quote an element that would read as a field, or as a `- `" in {
+    Render.document(tree("a: [\"x:\", \"y{\", \"b.c:=\", \"-\", \"x:y\", @t \"z:\"]")) shouldBe
+      "a:\n  - \"x:\"\n  - \"y{\"\n  - \"b.c:=\"\n  - \"-\"\n  - x:y\n  - @t \"z:\"\n"
   }
 
   it should "quote keys and tags as Id.path does" in {
-    Render.document(tree("`a b`: @`t:x` 1\n`1`.`` : 2")) shouldBe "`a b`: @`t:x` 1\n`1` {\n  ``: 2\n}\n"
+    Render.document(tree("`a b`: @`t:x` 1\n`1`.`` : 2")) shouldBe "`a b`: @`t:x` 1\n`1`:\n  ``: 2\n"
   }
 
   it should "write a scalar bare only when it reads back as itself" in {
@@ -99,6 +107,7 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
 
   it should "read back every example as the tree it was written from" in {
     roundTrip("a: 1\nb { c: x, d { } }\ne: null\nm: @z @a { k: @t v }\nc: [1, [2], {d: 3}, {}, @t {e: 4}]")
+    roundTrip("a: [\"x:\", @t \"z:\", \"-\", [[{b: 1, c: [@t {d: 2}]}]], @u [], $x*]")
     roundTrip("`a b`: @`t:x` \"q\\\"b\\\\d$x\\${y}\"\nf: x${g}y\nh: \"${i}\"\ns: \"\"")
   }
 
@@ -212,13 +221,17 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
       }
     }
 
-  "toString" should "write the root as a document and any other node as a value" in {
-    val root = Psi.parse("s", "a { b: [1, {c: 2}] }\nd: @t {}").fold(e => fail(e.toString), identity)
-    root.toString shouldBe "a {\n  b: [\n    1\n    {\n      c: 2\n    }\n  ]\n}\nd: @t {}\n"
-    root("a").toString shouldBe "{\n  b: [\n    1\n    {\n      c: 2\n    }\n  ]\n}"
+  "toString" should "write the root as a document and any other node alone, a block below its tags" in {
+    val root = Psi.parse("s", "a { b: [1, {c: 2}] }\nd: @t {}\ne: @u { f: 3 }\ng: @v [4]")
+      .fold(e => fail(e.toString), identity)
+    root.toString shouldBe "a:\n  b:\n    - 1\n    - c: 2\nd: @t {}\ne: @u\n  f: 3\ng: @v\n  - 4\n"
+    root("a").toString shouldBe "b:\n  - 1\n  - c: 2"
     root("a") match {
-      case map: Node.IMap[?] => map("b").toString shouldBe "[\n  1\n  {\n    c: 2\n  }\n]"
+      case map: Node.IMap[?] => map("b").toString shouldBe "- 1\n- c: 2"
       case other => fail(other.toString)
     }
+    root("d").toString shouldBe "@t {}"
+    root("e").toString shouldBe "@u\n  f: 3"
+    root("g").toString shouldBe "@v\n  - 4"
   }
 }

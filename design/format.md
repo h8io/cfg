@@ -201,10 +201,10 @@ scalar     = null | bare-scalar | quoted-scalar | triple-quoted
 
 Fields are separated by a newline or a `,` (§3). `key { … }` needs no `:`, and the `{` must be on the
 same line as the key: `key` followed by `{` on the next line is an error. That keeps a key at the end
-of a line free for the indentation syntax (below). For the same reason a value starts on the line of
-its `:` or `:=`, and the value a tag precedes on the line of the tag: `a:⏎5` and `a: @t⏎{ … }` are
-errors in v1, whatever the indentation of the next line. Lifting this later breaks no v1 file
-(§14, session 12).
+of a line free for the indentation syntax (below). A value after a `:`, `:=` or tag that ends its
+line stands in a block indented deeper below it (Indentation); `a:⏎5`, with nothing deeper, is an
+error. Inside `[…]`, where indentation means nothing, the value a tag precedes goes on the line of
+the tag.
 
 A dotted key (`server.tls.enabled: true`) is sugar for nested blocks. Its keys and dots touch, with
 no whitespace or comment between them, as `Id.path` writes them: `a . b` and `a. b` are errors. The
@@ -213,12 +213,11 @@ block form `key { … }` means `key: { … }`, so it merges; replacing a block i
 `key @t { … }` is an error that says so.
 
 Every syntax error names the fix where there is one, as these do: the error for `key @t { … }`
-shows `key: @t { … }`, the one for `a:⏎5` says to move the value up.
+shows `key: @t { … }`, the one for `a:⏎5` says to indent the value or move it up.
 
 ### Indentation
 
-**Decided in session 28, not implemented yet.** Until it is, the paragraphs above hold as written,
-and leading whitespace means nothing.
+Decided in session 28, implemented in session 32.
 
 A source can be written in two ways, with braces or with significant indentation, as in Scala 3, and
 the two mix freely, in one file and in one block. Indentation is always significant: there is no
@@ -1182,7 +1181,7 @@ mistake is worse than stopping.
    it until it is raised again. Injections (§9, sessions 25, 26 and 31) do the jobs that came
    first: `[$b*, $c*]` concatenates sequences, and `b { $a*, x: 3 }` extends a map.
 2. ~~**Indentation as an alternative to braces**~~ — settled in session 28 as in Scala 3 (§4,
-   Indentation), not implemented yet.
+   Indentation), implemented in session 32.
 3. ~~**Multi-line strings**~~ — closed in session 7: reopened by the user and settled point by
    point (§5, §14).
 4. **Templates in the direction of StringTemplate 4.** Raised by the user in session 7: substitutions
@@ -2432,3 +2431,23 @@ Two gaps of §4, Indentation, found implementing it and settled by the user as I
   or braces.
 - **A `-` alone on its line takes its value in a block below**, deeper than the marker, as YAML's
   does and as `- @t` already did: the same case with no tags, as `key:` with a block below.
+
+Indentation implemented (§4), with the `*` of session 31. Mine, in the code, the format unchanged:
+
+- A block below a `:` goes deeper than the block its key stands in, or than the key's line when that
+  goes deeper still: `a { b:⏎  c: 1 }` holds `b { c: 1 }`, the `{…}` having no width yet. Below a
+  `- ` it goes deeper than the marker.
+- A line holding only a doc comment takes no part in indentation, as a comment does not: the doc
+  comment goes with the item after it, wherever that stands.
+- Whether a line starts a field is read ahead: keys, then `:` or `:=` with whitespace after it, or
+  `{`. `a:⏎  http://host` and `a:⏎  example.com` are values. A value that `Render` writes after a
+  `- ` and that would read as a field, `x:` or `x{`, is quoted.
+- A line indented deeper than its block, where nothing opens one, is `UnexpectedIndent`, and one less
+  indented landing on no width `MisalignedIndent`, each skipped to its end; a line that misses
+  reports every line after it, deeper ones as `UnexpectedIndent`, until one lands. A block holding
+  elements and anything else is `MixedBlock`, a second value `SecondValue`, a value among fields
+  `ValueAmongFields`, or `SubstitutionAmongFields` for a substitution with no `*`, and a tag before
+  the first field `TagBeforeField`. A block opened by indentation that holds a map or a sequence
+  counts against the depth limit as a bracket does (§11).
+- `Render` writes indentation, and `toString` of a node other than the root writes a map as its
+  fields and a sequence as its elements, at the top level, a block below its tags when it has any.

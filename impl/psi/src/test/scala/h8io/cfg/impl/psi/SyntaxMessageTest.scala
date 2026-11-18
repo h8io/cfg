@@ -29,9 +29,34 @@ class SyntaxMessageTest extends AnyFlatSpec with Matchers {
       (("a tag between a key and its value", Some("put it after a ':', as in 'key: @tag { … }'")))
   }
 
+  "Indentation" should "say what is wrong with a line, and how to align it" in {
+    text(NothingIndented(at)) shouldBe
+      ((
+        "nothing indented deeper below to be the value",
+        Some("indent the value on the lines below, or write it on this line; an empty block is '{}' or '[]'")))
+    text(UnexpectedIndent(at)) shouldBe
+      (("a line indented deeper than its block, where nothing opens one", Some("align it with the lines of its block")))
+    text(MisalignedIndent(at)) shouldBe
+      ((
+        "a line indented less than its block lands on the width of no block still open",
+        Some("align it with the lines of the block it belongs to")))
+    text(MixedBlock(at)) shouldBe
+      ((
+        "a block holds '- ' elements or anything else, not both",
+        Some("give the elements a key of their own, or write them all with '- '")))
+    text(SecondValue(at)) shouldBe
+      (("a second value in a block that holds one", Some("write each as an element, '- value', or give each a key")))
+    text(ValueAmongFields(at)) shouldBe (("a value among the fields of a block", Some("write a key and ':' before it")))
+    text(TagBeforeField(at)) shouldBe
+      ((
+        "a tag before the first field of a map, which has no place for it",
+        Some(
+          "write the map in braces after the tag, as in '- @t { host: a }', or the fields on the lines below the tag")))
+  }
+
   "Values" should "say what was found, and how a value is written" in {
     text(MissingValue(at, "','")) shouldBe (("expected a value, found ','", None))
-    text(ValueOnNextLine(at)) shouldBe (("a value on a line after its ':'", Some("put it on the same line")))
+    text(ValueOnNextLine(at)) shouldBe (("a value on a line after its tag", Some("put it on the same line")))
     text(SpaceInValue(at, "bar")) shouldBe
       (("a second word, 'bar', after a value", Some("quote a value with whitespace in it, as in \"foo bar\"")))
     text(JoinedValues(at)) shouldBe

@@ -420,11 +420,69 @@ final case class MissingValue(location: SourceLocation, found: String) extends P
   def message: String = "expected a value, found " + found
 }
 
-/** A value on a line after its `:`, `:=` or tag: it goes on the same line (`format.md` §4). */
+/** A value on a line after its tag inside `[…]`, where indentation means nothing: it goes on the tag's line
+  * (`format.md` §4).
+  */
 final case class ValueOnNextLine(location: SourceLocation) extends PsiError {
-  def message: String = "a value on a line after its ':'"
+  def message: String = "a value on a line after its tag"
 
   override def hint: Option[String] = Some("put it on the same line")
+}
+
+/** A `:`, `:=`, tag or `- ` at the end of a line, `location`, with no line indented deeper after it to hold its value
+  * (`format.md` §4).
+  */
+final case class NothingIndented(location: SourceLocation) extends PsiError {
+  def message: String = "nothing indented deeper below to be the value"
+
+  override def hint: Option[String] =
+    Some("indent the value on the lines below, or write it on this line; an empty block is '{}' or '[]'")
+}
+
+/** A line indented deeper than the lines of its block, where nothing opens a block: Psi has no continuation lines, and
+  * the top level starts at column 1 (`format.md` §4).
+  */
+final case class UnexpectedIndent(location: SourceLocation) extends PsiError {
+  def message: String = "a line indented deeper than its block, where nothing opens one"
+
+  override def hint: Option[String] = Some("align it with the lines of its block")
+}
+
+/** A line indented less than the lines of its block, landing on the width of no block still open (`format.md` §4). */
+final case class MisalignedIndent(location: SourceLocation) extends PsiError {
+  def message: String = "a line indented less than its block lands on the width of no block still open"
+
+  override def hint: Option[String] = Some("align it with the lines of the block it belongs to")
+}
+
+/** A block opened by indentation that holds `- ` elements and anything else (`format.md` §4). */
+final case class MixedBlock(location: SourceLocation) extends PsiError {
+  def message: String = "a block holds '- ' elements or anything else, not both"
+
+  override def hint: Option[String] = Some("give the elements a key of their own, or write them all with '- '")
+}
+
+/** A second value in a block opened by indentation, which holds one value, fields or `- ` elements (`format.md` §4).
+  */
+final case class SecondValue(location: SourceLocation) extends PsiError {
+  def message: String = "a second value in a block that holds one"
+
+  override def hint: Option[String] = Some("write each as an element, '- value', or give each a key")
+}
+
+/** A value among the fields of a block opened by indentation, with no key (`format.md` §4). */
+final case class ValueAmongFields(location: SourceLocation) extends PsiError {
+  def message: String = "a value among the fields of a block"
+
+  override def hint: Option[String] = Some("write a key and ':' before it")
+}
+
+/** A tag before the first field of a map written by indentation, which has no place for one (`format.md` §4). */
+final case class TagBeforeField(location: SourceLocation) extends PsiError {
+  def message: String = "a tag before the first field of a map, which has no place for it"
+
+  override def hint: Option[String] =
+    Some("write the map in braces after the tag, as in '- @t { host: a }', or the fields on the lines below the tag")
 }
 
 /** After a value, something other than a separator or a closing bracket, such as a second field on the line; whitespace

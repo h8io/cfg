@@ -26,14 +26,14 @@ class InjectionTest extends AnyFlatSpec with Matchers {
   private def shown(text: String, key: String): String = loaded(text)(key).toString
 
   "An injection among the fields of a block" should "merge the fields of the map there, as if written there" in {
-    shown("a {\n  x: 1\n  y: 2\n}\nb {\n  $a*\n  x: 3\n  z: 4\n}", "b") shouldBe "{\n  x: 3\n  y: 2\n  z: 4\n}"
+    shown("a {\n  x: 1\n  y: 2\n}\nb {\n  $a*\n  x: 3\n  z: 4\n}", "b") shouldBe "x: 3\ny: 2\nz: 4"
     // what stands before it, it overrides
-    shown("a { x: 1, y: 2 }\nb { x: 3, $a* }", "b") shouldBe "{\n  x: 1\n  y: 2\n}"
+    shown("a { x: 1, y: 2 }\nb { x: 3, $a* }", "b") shouldBe "x: 1\ny: 2"
   }
 
   it should "be written with braces or without" in {
     for (injection <- List("$a*", "${a*}"))
-      shown("a { x: 1 }\nb { " + injection + ", y: 2 }", "b") shouldBe "{\n  x: 1\n  y: 2\n}"
+      shown("a { x: 1 }\nb { " + injection + ", y: 2 }", "b") shouldBe "x: 1\ny: 2"
   }
 
   it should "keep where each field came from, its own tags and none of the map's" in {
@@ -48,23 +48,23 @@ class InjectionTest extends AnyFlatSpec with Matchers {
 
   it should "merge deep, as ':' does, and replace where ':=' does" in {
     val a = "a { c { p: 1, q: 2 } }\n"
-    shown(a + "b { $a*, c { q: 3 } }", "b") shouldBe "{\n  c {\n    p: 1\n    q: 3\n  }\n}"
-    shown(a + "b { $a*, c := { q: 3 } }", "b") shouldBe "{\n  c {\n    q: 3\n  }\n}"
+    shown(a + "b { $a*, c { q: 3 } }", "b") shouldBe "c:\n  p: 1\n  q: 3"
+    shown(a + "b { $a*, c := { q: 3 } }", "b") shouldBe "c:\n  q: 3"
     // a block written before it merges with the one it brings in
-    shown(a + "b { c { r: 0 }, $a* }", "b") shouldBe "{\n  c {\n    r: 0\n    p: 1\n    q: 2\n  }\n}"
+    shown(a + "b { c { r: 0 }, $a* }", "b") shouldBe "c:\n  r: 0\n  p: 1\n  q: 2"
     // a value that is no map replaces one, and the other way round
-    shown(a + "b { c: 5, $a* }", "b") shouldBe "{\n  c {\n    p: 1\n    q: 2\n  }\n}"
+    shown(a + "b { c: 5, $a* }", "b") shouldBe "c:\n  p: 1\n  q: 2"
   }
 
   it should "take the map as it ends up, merged from every source, and what is merged after the injection too" in {
-    shown("a { x: 1 }\nb { $a* }\na.y: 2\nb { z: 3 }\nb.x: 4", "b") shouldBe "{\n  x: 4\n  y: 2\n  z: 3\n}"
+    shown("a { x: 1 }\nb { $a* }\na.y: 2\nb { z: 3 }\nb.x: 4", "b") shouldBe "x: 4\ny: 2\nz: 3"
   }
 
   it should "inject a map that holds injections of its own, and one into a block that holds its own" in {
-    shown("a { x: 1 }\nm { $a*, y: 2 }\nn { $m*, z: 3 }", "n") shouldBe "{\n  x: 1\n  y: 2\n  z: 3\n}"
+    shown("a { x: 1 }\nm { $a*, y: 2 }\nn { $m*, z: 3 }", "n") shouldBe "x: 1\ny: 2\nz: 3"
     // `c` has an injection of its own when `$a` brings a `c` in, which is merged after it
     shown("a { c { u: 1 } }\nd { c { v: 2 } }\nb { c { $d.c* }, $a* }", "b") shouldBe
-      "{\n  c {\n    v: 2\n    u: 1\n  }\n}"
+      "c:\n  v: 2\n  u: 1"
   }
 
   it should "not stand at the root, which every path goes through, nor refer to the block it stands in" in {
@@ -76,29 +76,29 @@ class InjectionTest extends AnyFlatSpec with Matchers {
     val file = java.nio.file.Files.createTempFile("injection", ".psi")
     try {
       java.nio.file.Files.write(file, "$a*\ny: 2".getBytes(java.nio.charset.StandardCharsets.UTF_8))
-      shown("a { x: 1 }\nb { #include(url: \"" + file.toUri.toString + "\") }", "b") shouldBe "{\n  x: 1\n  y: 2\n}"
+      shown("a { x: 1 }\nb { #include(url: \"" + file.toUri.toString + "\") }", "b") shouldBe "x: 1\ny: 2"
     } finally java.nio.file.Files.delete(file)
   }
 
   it should "be looked into by a path, and find nothing when optional and missing" in {
     value(loaded("a { x: 1 }\nb { $a* }\nc: $b.x")("c")) shouldBe "1"
     // a field may refer to another of the same block, the injection merged before either is resolved
-    shown("a { x: 1 }\nm { $a*, y: $m.x }", "m") shouldBe "{\n  x: 1\n  y: 1\n}"
-    shown("b { $?nope*, y: 1 }", "b") shouldBe "{\n  y: 1\n}"
+    shown("a { x: 1 }\nm { $a*, y: $m.x }", "m") shouldBe "x: 1\ny: 1"
+    shown("b { $?nope*, y: 1 }", "b") shouldBe "y: 1"
   }
 
   "An injection among the elements of a sequence" should "put the elements of a sequence there" in {
-    shown("a: [x, y]\nb: [a, $a*, z]", "b") shouldBe "[a, x, y, z]"
-    shown("a: [x, y]\nb: [a, ${a*}, z]", "b") shouldBe "[a, x, y, z]"
-    shown("a: []\nb: [a, $a*, z]", "b") shouldBe "[a, z]"
-    shown("b: [a, $?nope*, ${?nope*}, z]", "b") shouldBe "[a, z]"
+    shown("a: [x, y]\nb: [a, $a*, z]", "b") shouldBe "- a\n- x\n- y\n- z"
+    shown("a: [x, y]\nb: [a, ${a*}, z]", "b") shouldBe "- a\n- x\n- y\n- z"
+    shown("a: []\nb: [a, $a*, z]", "b") shouldBe "- a\n- z"
+    shown("b: [a, $?nope*, ${?nope*}, z]", "b") shouldBe "- a\n- z"
   }
 
   "A substitution among the elements of a sequence with no '*'" should "stand there as one element" in {
-    shown("a: [x, y]\nb: [a, $a, z]", "b") shouldBe "[\n  a\n  [x, y]\n  z\n]"
-    shown("a: x\nb: [a, $a, z]", "b") shouldBe "[a, x, z]"
-    shown("a: @u x\nb: [@t $a]", "b") shouldBe "[@t @u x]"
-    shown("b: [a, $?nope, z]", "b") shouldBe "[a, z]"
+    shown("a: [x, y]\nb: [a, $a, z]", "b") shouldBe "- a\n- - x\n  - y\n- z"
+    shown("a: x\nb: [a, $a, z]", "b") shouldBe "- a\n- x\n- z"
+    shown("a: @u x\nb: [@t $a]", "b") shouldBe "- @t @u x"
+    shown("b: [a, $?nope, z]", "b") shouldBe "- a\n- z"
   }
 
   "An injection among elements that finds no sequence" should "be an error naming what it found" in {
@@ -115,9 +115,9 @@ class InjectionTest extends AnyFlatSpec with Matchers {
     errors(text + "d: $b[5]") shouldBe List(UnresolvedSubstitution(at(4, 4), "b[5]"))
     errors("a: x\nb: [$a*, q]\nd: $b[0]") shouldBe List(InjectionNotSequence(at(2, 5), "a", at(1, 4)))
     // an element refers to one before it in its own sequence
-    shown("a: [x, $a[0]]", "a") shouldBe "[x, x]"
-    shown("a: [[x, y], $a[0]*]", "a") shouldBe "[\n  [x, y]\n  x\n  y\n]"
-    shown("a: [x, $b*, $a[0]]\nb: [y]", "a") shouldBe "[x, y, x]"
+    shown("a: [x, $a[0]]", "a") shouldBe "- x\n- x"
+    shown("a: [[x, y], $a[0]*]", "a") shouldBe "- - x\n  - y\n- x\n- y"
+    shown("a: [x, $b*, $a[0]]\nb: [y]", "a") shouldBe "- x\n- y\n- x"
   }
 
   "An injection" should "take no tags, which would have no node to go to" in {
@@ -178,12 +178,12 @@ class InjectionTest extends AnyFlatSpec with Matchers {
       .fold(e => fail(e.toString), identity)
       .parse("s", "b: [#seq*]")
       .fold(_.errors, root => fail(root.toString)) shouldBe List(DepthExceeded(at(1, 5), 1, fatal = false))
-    shown("b: [a, #seq*, z]") shouldBe "[a, p, @u q, z]"
-    shown("b: [a, #seq()*, z]") shouldBe "[a, p, @u q, z]"
+    shown("b: [a, #seq*, z]") shouldBe "- a\n- p\n- @u q\n- z"
+    shown("b: [a, #seq()*, z]") shouldBe "- a\n- p\n- @u q\n- z"
     // with no `*` what it gives stands as one element, as a field's value
-    shown("b: [a, #seq, z]") shouldBe "[\n  a\n  [p, @u q]\n  z\n]"
-    shown("b: [a, @t #one, z]") shouldBe "[a, @t v, z]"
-    shown("b: #seq") shouldBe "[p, @u q]"
+    shown("b: [a, #seq, z]") shouldBe "- a\n- - p\n  - @u q\n- z"
+    shown("b: [a, @t #one, z]") shouldBe "- a\n- @t v\n- z"
+    shown("b: #seq") shouldBe "- p\n- @u q"
     def errors(text: String): List[PsiError] = by.parse("s", text).fold(_.errors, root => fail(root.toString))
     errors("b: [@t #seq*]") shouldBe List(TaggedInjection(at(1, 8)))
     errors("b: [#one*]") shouldBe List(DirectiveNotSequence(at(1, 5), "one"))
@@ -269,7 +269,8 @@ class InjectionTest extends AnyFlatSpec with Matchers {
 
   "A tree with an injection in a sequence" should "be written back as it is written" in {
     val parsed = Parser.parse(Source("s", "a: [1]\nb: [$a*, @t ${?c}, $?d*]"))
-    Render.document(Merge(::((parsed.value, at(1, 1)), Nil)).value) shouldBe "a: [1]\nb: [${a*}, @t ${?c}, ${?d*}]\n"
+    Render.document(Merge(::((parsed.value, at(1, 1)), Nil)).value) shouldBe
+      "a:\n  - 1\nb:\n  - ${a*}\n  - @t ${?c}\n  - ${?d*}\n"
   }
 
   "Its errors" should "say what is wrong, and what to do" in {

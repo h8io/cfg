@@ -37,7 +37,8 @@ tags: [web, api]
 """)
 ```
 
-What a source loads as is shown here written back as Psi: the same tree, every value a string, every map a block.
+What a source loads as is shown here written back as Psi: the same tree, every value a string, written with
+[indentation](#indentation).
 
 ## Syntax
 
@@ -70,6 +71,45 @@ http { host: 0.0.0.0, port: 8080 }
 pattern: '^\d+$'
 timeout: @duration 5s
 password: null
+""")
+```
+
+### Indentation
+
+A block is written in braces or by indentation, as in Scala 3, and the two mix freely, in one source and in one block.
+
+- `key:` at the end of a line, tags allowed after it, opens a block on the lines indented deeper below: fields make it
+  a map, `- ` elements a sequence, and a value alone is the key's value, as if written after the `:`. With nothing
+  deeper below, it is an error; an empty block is written `{}` or `[]`.
+- An element is `- value` at the start of a line, deeper than its key. A map element has its first field after the
+  `- ` and the rest aligned under it; `- - x` is a sequence in a sequence; a tag goes after the `- `, with the block
+  below it.
+- The lines of a block start at its width, which any deeper indent sets. A deeper line opens nothing by itself — there
+  are no continuation lines — and a line further left closes blocks until it lands on the width of one still open. The
+  top level starts at column 1.
+- Inside `{…}` the first line that starts there sets its width, and a `}` stands in any column. Inside `[…]` and a
+  directive's `(…)` indentation means nothing.
+- A blank line, a comment-only line and a line holding only a doc comment take no part. A tab in indentation is an
+  error.
+
+```scala mdoc:passthrough
+example("""
+server:
+  host: example.com
+  ports:
+    - 80
+    - 443
+  tls { enabled: true, protocols: [TLSv1.3] }
+routes: @ordered
+  - path: /api
+    to: backend
+  - path: /
+    to: static
+greeting:
+  QQQ
+  Hello,
+  world
+  QQQ
 """)
 ```
 
@@ -170,8 +210,8 @@ stands alone among the fields of a block or as an element of a sequence, and now
 - Among fields, the node must be a map, and its fields stand there as if written there: what follows overrides them,
   what comes before is overridden, and blocks merge deep. A substitution with no `*` among fields is an error, having
   no key to stand at.
-- Among elements, the node must be a sequence, and its elements stand there. With no `*` a substitution stands as
-  one element, a sequence nested whole: `[$hosts]`.
+- Among elements, the node must be a sequence, and its elements stand there, after a `- ` as in `[…]`: `- $hosts*`.
+  With no `*` a substitution stands as one element, a sequence nested whole: `[$hosts]`.
 - An injection takes no tags: the fields and elements it puts keep their own.
 - A directive among elements injects what it gives with a `*` too, `#d(…)*`, which must be a sequence; without one
   what it gives stands as one element. Among fields a directive puts the fields of its map with no `*`.
