@@ -464,7 +464,7 @@ private[psi] object Resolve {
     */
   private[psi] def graft(value: Tree.Value, at: SourceLocation, path: Id.Branch, tags: Set[String]): Tree.Value = {
     def moved(value: Tree.Value, id: Id.Branch, tags: Set[String]): Tree.Value = {
-      val location = ReferenceLocation(at, id.path, value.location)
+      val location = ReferenceLocation(at, Message.path(id), value.location)
       value match {
         case scalar: Tree.Scalar => scalar.copy(tags = scalar.tags ++ tags, location = location)
         case node: Tree.Null => node.copy(tags = node.tags ++ tags, location = location)

@@ -975,7 +975,7 @@ not what locations describe. The beginning, the site the reader goes to first, i
 `toString` is cut off at the same length, and written the way a case class writes itself (session
 29): the one a case class generates writes a location shared once for every path to it, 10.6
 million characters for the same 297 bytes. The hash of a location is computed once, for the same
-reason.
+reason, and two locations are compared each pair of the locations under them once (session 30).
 
 **Grafted containers.** With `a: ${server}`, *every* node in the grafted subtree gets a
 `ReferenceLocation` — the reference site of `a`, the path it was taken by (`server.port`), and that
@@ -2357,3 +2357,15 @@ Fixed on a review, the format unchanged, nothing put to the user to decide:
 - **A read whose last wait went past the time fails** (§11): the time was looked at before each
   wait, never after the one that found the end, so a load of 605 ms succeeded under a limit of
   500.
+
+### Session 30 — 2026-11-18
+
+Fixed on a review, the format unchanged, nothing put to the user to decide:
+
+- **Two locations are compared each pair under them once** (§10): the `equals` of a case class
+  compared two built the same way apart once for every path to each pair, so that two loads of
+  `a0: ""`, `a1: "${a0}${a0}"`, … `a100` never finished comparing.
+- **A grafted node writes the path it was taken by with `Message.path`**, as every path from the
+  input is written: `Id.path` recursed as deep as the node, doubling the stack `graft` uses.
+- **A remote jar's copy that cannot be deleted is left behind**: the failure to delete it took
+  the place of the read's outcome, a success or the error that ended it.
