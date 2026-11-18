@@ -867,9 +867,6 @@ from a substitution.
 **Injections** (sessions 25, 26 and 31) put what a node holds where a node would stand: the fields
 of a map among the fields of a block, the elements of a sequence among the elements of a sequence.
 
-**The `*` of session 31 is not implemented yet.** Until it is, an injection is marked by where it
-stands alone, with no `*`, as session 26 had it.
-
 - **A `*` after the path marks an injection**: `$a*` and `${a*}`, `$?a*` and `${?a*}` optional,
   among the fields of a block or as an element of a sequence. Without it a substitution grafts,
   so `[p, $a, z]` holds `a` whole as one element, and among fields, where nothing but a field
@@ -2414,8 +2411,8 @@ Fixed on a review, the format unchanged, nothing put to the user to decide but t
   fields with no `*`, so that `#include(file: …)` is written as it was, the asymmetry told to the
   user and taken. In the indented syntax a block holding a field or an injection is a map, and one
   value alone, a substitution or a directive included, is the key's value: `a:⏎  $b` is `a: $b`.
-  Breaks every injection written since session 26: before 1.0, compatibility is not kept. Not
-  implemented yet.
+  Breaks every injection written since session 26: before 1.0, compatibility is not kept.
+  Implemented with indentation.
 - **A line that starts with `}` may stand in any column** (§4, Indentation), my proposal, agreed:
   the width rule read literally checked it against the blocks it closes; Scala 3 does not.
 - Fixed with it: a code fence in §4, Indentation, ran into the sentence after it.

@@ -81,8 +81,8 @@ untrusted.map(_.parse("input", "#include(file: \"/etc/passwd\")").left.map(_.mes
 ## Directives
 
 A directive is `#name(arguments)`, or `#name` with none, in one of two places: as a value, where it gives a node, or
-among fields, where it gives a map merged into the block it stands in. As an element of a sequence it is an
-injection: a sequence it gives puts its elements there, anything else stands as one element. Arguments are literals — strings, integers,
+among fields, where it gives a map merged into the block it stands in. As an element of a sequence with a `*` after
+it, `#d(…)*`, it is an injection: the sequence it gives puts its elements there. Arguments are literals — strings, integers,
 bare names — positional ones first, then named ones, `name: value`.
 
 A handler declares its parameters and gets the arguments as a map keyed by them, every value a string. It also gets a

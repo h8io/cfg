@@ -60,14 +60,14 @@ private[psi] final class Expand private (
       case sequence: AST.Sequence =>
         val elements = sequence.elements.flatMap { e =>
           val values = e.value match {
-            case AST.DirectiveValue(call, tags) =>
-              run(call, stack, depth + 2).toVector.flatMap(injected(call, tags, _, depth + 1))
+            case AST.DirectiveValue(call, _, true) =>
+              run(call, stack, depth + 2).toVector.flatMap(injected(call, _, depth + 1))
             case other => this.value(other, stack, depth + 1).toVector
           }
           values.map(v => e.copy(value = v))
         }
         Some(sequence.copy(elements = elements))
-      case AST.DirectiveValue(call, tags) => run(call, stack, depth + 1).flatMap(placed(call, tags, _, depth))
+      case AST.DirectiveValue(call, tags, _) => run(call, stack, depth + 1).flatMap(placed(call, tags, _, depth))
       case _ => Some(value)
     }
 
@@ -97,18 +97,17 @@ private[psi] final class Expand private (
       case Fragment.Built(node) => fitting(call)(built(call, node, tags, depth))
     }
 
-  /** A fragment among the elements of a sequence, `depth` levels deep: the elements of a sequence, in its place, or
-    * anything else as one element, as in value position (§9).
+  /** A fragment injected among the elements of a sequence, `depth` levels deep: the elements of a sequence, in its
+    * place; anything else is an error (§9).
     */
-  private def injected(call: AST.Call, tags: Set[String], fragment: Fragment, depth: Int): Vector[AST.Value] =
+  private def injected(call: AST.Call, fragment: Fragment, depth: Int): Vector[AST.Value] =
     fragment match {
-      // the tags have no node to go to
-      case Fragment.Built(_: Node.ISeq[?]) if tags.nonEmpty =>
-        report(TaggedDirectiveInjection(call.location, call.name))
-        Vector.empty
       case Fragment.Built(seq: Node.ISeq[?]) =>
         fitting(call)(seq.iterator.map(built(call, _, Set.empty, depth)).toVector).getOrElse(Vector.empty)
-      case _ => placed(call, tags, fragment, depth).toVector
+      // a source parsed is a map
+      case _ =>
+        report(DirectiveNotSequence(call.location, call.name))
+        Vector.empty
     }
 
   /** Whether a fragment reaching `depth` levels fits under the limit; reported at the call when it does not. */

@@ -31,11 +31,11 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
       case Tree.Null(tags, _) => Tree.Null(tags, nowhere)
       case Tree.Sequence(elements, tags, _) => Tree.Sequence(elements.map(located), tags, nowhere)
       case Tree.Substitution(path, optional, tags, _) => Tree.Substitution(path, optional, tags, nowhere)
-      case Tree.Injection(path, optional, tags, _) => Tree.Injection(path, optional, tags, nowhere)
+      case Tree.Injection(path, optional, _) => Tree.Injection(path, optional, nowhere)
       case Tree.Concatenation(parts, tags, _) =>
         Tree.Concatenation(
           parts.map {
-            case Reference(path, optional, _) => Reference(path, optional, nowhere)
+            case Reference(path, optional, _, injection) => Reference(path, optional, nowhere, injection)
             case text: Text => text
           },
           tags,
@@ -165,18 +165,21 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
         1 ->
           (for {
             n <- Gen.choose(0, 4)
-            es <- Gen.listOfN(n, values(depth - 1))
+            es <- Gen.listOfN(n, elements(depth - 1))
             g <- tagSets
-          } yield Tree.Sequence(es.toVector.map(element), g, nowhere))
+          } yield Tree.Sequence(es.toVector, g, nowhere))
       )
   }
 
-  /** An element of a sequence, where a substitution is an injection. */
-  private def element(value: Tree.Value): Tree.Value =
-    value match {
-      case Tree.Substitution(path, optional, tags, location) => Tree.Injection(path, optional, tags, location)
-      case other => other
-    }
+  /** An element of a sequence: a value, or an injection, which stands only there. */
+  private def elements(depth: Int): Gen[Tree.Value] =
+    Gen.frequency(
+      4 -> values(depth),
+      1 ->
+        (for {
+          p <- path
+          o <- arbitrary[Boolean]
+        } yield Tree.Injection(p, o, nowhere)))
 
   private def maps(depth: Int): Gen[Tree.Map] =
     for {

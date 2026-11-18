@@ -29,7 +29,7 @@ private[psi] object AST {
     */
   final case class DirectiveStatement(call: Call, doc: Option[String]) extends Statement
 
-  /** An injection, `$path` or `${path}` among the fields of a block: the fields of the map at `path`, merged there as
+  /** An injection, `$path*` or `${path*}` among the fields of a block: the fields of the map at `path`, merged there as
     * if written there (§7, §9).
     */
   final case class InjectionStatement(path: Id.Branch, optional: Boolean, location: SourceLocation, doc: Option[String])
@@ -80,11 +80,18 @@ private[psi] object AST {
   /** `[ … ]`. */
   final case class Sequence(elements: Vector[Element], tags: Set[String], location: PsiLocation) extends Value
 
-  /** `\${path}` or `\${?path}` unquoted and alone: the node it refers to, grafted whole as a field's value; as an
-    * element of a sequence, an injection, which puts the elements of a sequence it finds in its place (§9).
+  /** `\${path}` or `\${?path}` unquoted and alone: the node it refers to, grafted whole, as a field's value or as an
+    * element of a sequence (§9).
     */
   final case class Substitution(path: Id.Branch, optional: Boolean, tags: Set[String], location: SourceLocation)
       extends Value
+
+  /** `\${path*}` or `\${?path*}` as an element of a sequence: the elements of the sequence it finds, in its place (§9).
+    * It takes no tags, which would have no node to go to.
+    */
+  final case class Injection(path: Id.Branch, optional: Boolean, location: SourceLocation) extends Value {
+    def tags: Set[String] = Set.empty
+  }
 
   /** A scalar with `\${…}` inside it, or quoted around one alone, such as `"\${a}"`: always a scalar (§9).
     *
@@ -101,8 +108,11 @@ private[psi] object AST {
     def location: PsiLocation = value.location
   }
 
-  /** A directive in value position, which is to produce a node; the tags are added to that node's (§6). */
-  final case class DirectiveValue(call: Call, tags: Set[String]) extends Value {
+  /** A directive in value position, which is to produce a node; the tags are added to that node's (§6). With a `*`
+    * after it, an `injection` among the elements of a sequence, which is to produce a sequence whose elements stand in
+    * its place, and takes no tags (§9).
+    */
+  final case class DirectiveValue(call: Call, tags: Set[String], injection: Boolean = false) extends Value {
     def location: SourceLocation = call.location
   }
 

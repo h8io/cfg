@@ -81,8 +81,8 @@ private[psi] object Render {
           indent(out, level)
           out += ']'
         }
-      case Tree.Substitution(path, optional, _, _) => reference(out, path, optional)
-      case Tree.Injection(path, optional, _, _) => reference(out, path, optional)
+      case Tree.Substitution(path, optional, _, _) => reference(out, path, optional, injection = false)
+      case Tree.Injection(path, optional, _) => reference(out, path, optional, injection = true)
       case Tree.Concatenation(parts, _, _) => quoted(out, parts)
       // the loader's markers run as the tree is resolved, and only a resolved tree is shown
       case marked: Tree.Marked =>
@@ -100,8 +100,8 @@ private[psi] object Render {
   /** A key or a tag, as `Id.path` writes a key. */
   private def name(name: String): String = Id.Key(name, Id.Root).path
 
-  private def reference(out: StringBuilder, path: Id.Branch, optional: Boolean): Unit = {
-    val _ = out ++= (if (optional) "${?" else "${") ++= Message.path(path) += '}'
+  private def reference(out: StringBuilder, path: Id.Branch, optional: Boolean, injection: Boolean): Unit = {
+    val _ = out ++= (if (optional) "${?" else "${") ++= Message.path(path) ++= (if (injection) "*}" else "}")
   }
 
   /** Whether `text` reads back alone, unquoted, as itself: the lexer's own answer, `null` being no string. Half a
@@ -119,7 +119,7 @@ private[psi] object Render {
     out += '"'
     parts.foreach {
       case Text(text) => escape(out, text)
-      case Reference(path, optional, _) => reference(out, path, optional)
+      case Reference(path, optional, _, _) => reference(out, path, optional, injection = false)
     }
     out += '"'
     ()

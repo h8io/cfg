@@ -340,10 +340,16 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
   private def statement(first: Token, doc: Option[String]): AST.Statement =
     first.kind match {
       case Name(name, _) => keys(AST.Key(name, first.location), Nil, doc)
-      case Directive(name) => AST.DirectiveStatement(call(first, name), doc)
-      // among the fields of a block a substitution is an injection (§9)
-      case Scalar(Vector(Reference(path, optional, _)), false, _) =>
+      case Directive(name) =>
+        val (read, star) = call(first, name)
+        // in statement position a call puts the fields of its map with no `*` (§6)
+        star.foreach(star => fail(star, InjectionOutOfPlace(star.location)))
+        AST.DirectiveStatement(read, doc)
+      // among the fields of a block a substitution with a `*` is an injection, and one without has no key (§9)
+      case Scalar(Vector(Reference(path, optional, _, true)), false, _) =>
         AST.InjectionStatement(path, optional, first.location, doc)
+      case Scalar(Vector(Reference(path, optional, _, false)), false, _) =>
+        fail(first, SubstitutionAmongFields(first.location, Message.path(path), optional))
       case Scalar(_, false, _) => fail(first, MisplacedInjection(first.location))
       case Tag(_) => fail(first, TagBeforeKey(first.location))
       case Scalar(parts, _, _) => fail(first, QuotedKey(first.location, written(parts)))
@@ -360,9 +366,10 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
         within(rest.size)(enter(token))
         keys(head, dotted(token) :: rest, doc)
       case Colon =>
-        AST.Field(path, AST.Operator.Merge, within(rest.size)(value(next(ValueMode), Set.empty)), doc)
+        AST.Field(path, AST.Operator.Merge, within(rest.size)(value(next(ValueMode), Set.empty, element = false)), doc)
       case Replace =>
-        AST.Field(path, AST.Operator.Replace, within(rest.size)(value(next(ValueMode), Set.empty)), doc)
+        AST.Field(
+          path, AST.Operator.Replace, within(rest.size)(value(next(ValueMode), Set.empty, element = false)), doc)
       case LeftBrace => AST.Field(path, AST.Operator.Merge, within(rest.size)(block(token, Set.empty)), doc)
       case Tag(_) => fail(token, TagAfterKey(token.location))
       case Newline =>
@@ -390,20 +397,28 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     }
   }
 
-  /** A value from `token`, after the tags already read before it. */
-  @tailrec private def value(token: Token, tags: Set[String]): AST.Value =
+  /** A value from `token`, after the tags already read before it; an `element` of a sequence, where an injection may
+    * stand (§9).
+    */
+  @tailrec private def value(token: Token, tags: Set[String], element: Boolean): AST.Value =
     token.kind match {
-      case Tag(name) => value(next(ValueMode), tags + name)
+      case Tag(name) => value(next(ValueMode), tags + name, element)
       case Scalar(parts, quoted, markers) =>
-        val value = scalar(token, parts, quoted, tags)
+        val value = scalar(token, parts, quoted, tags, element)
         if (markers.isEmpty) value else AST.Marked(value, markers)
       case LeftBrace => block(token, tags)
       case LeftBracket =>
         enter(token)
-        val elements = items(ValueMode, Some(Closing(RightBracket, token.location)), documented = true)(element)
+        val elements = items(ValueMode, Some(Closing(RightBracket, token.location)), documented = true)(sequenceElement)
         ended()
         AST.Sequence(elements, tags, token.location)
-      case Directive(name) => AST.DirectiveValue(call(token, name), tags)
+      case Directive(name) =>
+        call(token, name) match {
+          case (read, None) => AST.DirectiveValue(read, tags)
+          case (_, Some(star)) if !element => fail(star, InjectionOutOfPlace(star.location))
+          case (_, Some(star)) if tags.nonEmpty => fail(star, TaggedInjection(token.location))
+          case (read, Some(_)) => AST.DirectiveValue(read, tags, injection = true)
+        }
       case Name(_, _) => fail(token, BacktickedValue(token.location))
       case Newline =>
         val after = skipNewlines(ValueMode)
@@ -417,14 +432,20 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
       case _ => fail(token, MissingValue(token.location, describe(token.kind)))
     }
 
-  /** A scalar: a substitution when it is one unquoted `${…}` and nothing else, a concatenation when it holds any other,
-    * `null` when it is that word unquoted (§3, §9).
+  /** A scalar: a substitution when it is one unquoted `${…}` and nothing else, an injection when that has a `*` and is
+    * an `element`, a concatenation when it holds any other, `null` when it is that word unquoted (§3, §9).
     */
-  private def scalar(token: Token, parts: Vector[Part], quoted: Boolean, tags: Set[String]): AST.Value = {
+  private def scalar(token: Token, parts: Vector[Part], quoted: Boolean, tags: Set[String], element: Boolean)
+      : AST.Value = {
     unquoted = !quoted
     substituted = parts.exists(_.isInstanceOf[Reference])
     parts match {
-      case Vector(Reference(path, optional, _)) if !quoted => AST.Substitution(path, optional, tags, token.location)
+      case Vector(Reference(path, optional, _, true)) if !quoted && element =>
+        if (tags.nonEmpty) fail(token, TaggedInjection(token.location))
+        AST.Injection(path, optional, token.location)
+      case _ if parts.exists { case Reference(_, _, _, injection) => injection; case _ => false } =>
+        fail(token, InjectionOutOfPlace(token.location))
+      case Vector(Reference(path, optional, _, _)) if !quoted => AST.Substitution(path, optional, tags, token.location)
       case _ if substituted => AST.Concatenation(parts, tags, token.location)
       case _ =>
         val value = text(parts)
@@ -445,15 +466,17 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     substituted = false
   }
 
-  private def element(first: Token, doc: Option[String]): AST.Element = AST.Element(value(first, Set.empty), doc)
+  private def sequenceElement(first: Token, doc: Option[String]): AST.Element =
+    AST.Element(value(first, Set.empty, element = true), doc)
 
   /** A directive from its `#name` token, the last one read: with its arguments when a `(` touches the name, with none
-    * when nothing does — a `(` apart from the name, on its line or a later one, is an error (§6).
+    * when nothing does — a `(` apart from the name, on its line or a later one, is an error (§6). With the `*` that
+    * touches its end, if any, which makes it an injection where one may stand (§9).
     *
-    * A call with any error in it, its name's or its arguments', is read to its end and then left out, its item with it:
-    * a handler must not run on arguments that are not what was meant (§11).
+    * A call with any error in it, its name's or its arguments', is read to its end, its `*` included, and then left
+    * out, its item with it: a handler must not run on arguments that are not what was meant (§11).
     */
-  private def call(directive: Token, name: String): AST.Call = {
+  private def call(directive: Token, name: String): (AST.Call, Option[Token]) = {
     val before = reportedBefore
     val mark = lexer.mark()
     val token = next(KeyMode)
@@ -472,8 +495,21 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
         Vector.empty
     }
     ended()
+    val star = this.star()
     if (lexer.errorCount > before) throw Dropped
-    AST.Call(name, read, directive.location)
+    (AST.Call(name, read, directive.location), star)
+  }
+
+  /** A `*` that touches what was read last, taken; nothing taken when there is none. */
+  private def star(): Option[Token] = {
+    val mark = lexer.mark()
+    val token = lexer.next(ValueMode)
+    token.kind match {
+      case Scalar(Vector(Text("*")), false, _) if !token.spaced => Some(token)
+      case _ =>
+        rewind(mark)
+        None
+    }
   }
 
   /** The arguments after `open`, positional ones first and no name twice (§6). Each one out of place is reported as it
