@@ -186,10 +186,12 @@ loader path.
 ```
 document   = block-body
 block      = "{" block-body "}"
-block-body = { field | directive } 
+block-body = { field | directive | injection }
 field      = key { "." key } ( ( ":" | ":=" ) value | block )
 value      = [ tag ] ( scalar | block | seq | directive | substitution-expr )
-seq        = "[" [ value { sep value } [ sep ] ] "]"
+seq        = "[" [ element { sep element } [ sep ] ] "]"
+element    = value | injection | directive "*"
+injection  = substitution "*"
 sep        = "," | newline
 tag        = "@" name
 directive  = "#" name [ "(" [ arg { sep arg } [ sep ] ] ")" ]
@@ -235,13 +237,18 @@ server:
   Inside a `{…}` the first field that starts a line sets the block's width, and no line of the block
   starts left of it. Inside `[…]` and a directive's `(…)` it means nothing, as in Scala 3's
   parentheses, until a `{` opens a block there. A `}` closes every indented block opened inside its
-  own.
+  own, and a line it starts may stand in any column, as in Scala 3: its indentation is not checked
+  against the widths of the blocks it closes (session 31).
 - **What opens a block:** `key:` or `key :=` at the end of a line, tags allowed after it
   (`routes: @ordered`), followed by a line indented deeper. The block is a map, a sequence or one
-  value, as its first line says: fields, directives and injections make a map (`block-body`, §4),
-  `- ` elements a sequence (below), and anything else is the value of the key, alone in the block,
-  as YAML and Scala 3 both allow — `a:⏎  x`, `a:⏎  """…"""`, `a:⏎  [x, y]`. Mixing fields and
-  `- ` elements in one block is an error, and so is a second value.
+  value. A field or an injection, `$a*` (§9), makes it a map (`block-body`, §4), a directive in it
+  then standing in statement position (§6); `- ` elements make it a sequence (below); and one value
+  alone, a directive or a substitution included, is the value of the key, as YAML and Scala 3 both
+  allow — `a:⏎  x`, `a:⏎  """…"""`, `a:⏎  [x, y]`, `a:⏎  $b`, `a:⏎  #env(name: X)`. A value
+  means on the next line what it means on the line of its `:`, so `a:⏎  $b` is `a: $b`, and
+  `a:⏎  $b*` is `a { $b* }` (session 31). Mixing fields and `- ` elements in one block is an error,
+  and so is a second value, or a value among fields: `$b` there is written `$b*`, the error's hint
+  showing it.
 - **The tags after `key:` are the block's value's**: of the map, of the sequence, as here, or of
   the one value, which may have tags of its own written before it, the two adding up as tags
   written together do (§5): `a: @s⏎  @t x` is `a: @s @t x`.
@@ -251,9 +258,11 @@ server:
     - x
     - y
     - z
-  ``` It merges or replaces as `{…}`
-  after the same `:` or `:=` would (§7). A line indented deeper than the one before it, where nothing
-  opens a block, is an error: Psi has no continuation lines. A bare key alone on a line stays one.
+  ```
+
+  It merges or replaces as `{…}` after the same `:` or `:=` would (§7). A line indented deeper than
+  the one before it, where nothing opens a block, is an error: Psi has no continuation lines. A bare
+  key alone on a line stays one.
 - **Any deeper indent opens a block**, no step fixed per file, as in Scala 3. A line indented less
   must land exactly on the width of a block still open; one that does not is an error, and every
   following line is reported until one lands on such a width again (§11).
@@ -527,7 +536,10 @@ A directive may appear in two positions:
 - **statement position**, inside any block or at the top of a file — it must produce a map, which is
   merged into the enclosing block at the point where it appears, so fields below it override it;
 - **value position**, on the right of `:` or as a sequence element — it produces a single node;
-  as an element, a sequence it gives puts its elements there, an injection (§9).
+  as an element with a `*` after it, `#d(…)*`, a sequence it gives puts its elements there, an
+  injection (§9), and without one what it gives stands as one element (session 31). Anywhere else
+  a `*` after a call is an error: in statement position a directive already puts the fields of the
+  map it gives.
 
 A directive name follows the key rule, as a tag name does (§5): bare if it matches
 `Id.SafeKeyPattern`, in backticks otherwise — ``#`my.directive`(…)``. One rule covers every name
@@ -807,7 +819,7 @@ from a substitution.
 ## 9. Substitutions
 
 - `${path}` in place of a whole value grafts the referenced node, whatever it is — scalar, block or
-  sequence; as an element of a sequence it is an injection (below), a sequence putting its elements.
+  sequence — as an element of a sequence too; with a `*` after its path it is an injection (below).
 - **A path is written as `Id.path` renders one** (§3), right after `${` or `${?` and right up to
   `}`, with no whitespace: keys joined by dots, quoted in backticks when
   not bare, and indices into sequences in brackets — `${x.y[7].z}`, `${a[0][1]}`,
@@ -852,36 +864,43 @@ from a substitution.
 - Cycles are an error naming the path. Self-reference (`a: ${a}" x"` reading the pre-merge value) is
   **not** supported in v1; it is reported as a cycle.
 
-**Injections** (sessions 25 and 26) put what a node holds where a node would stand: the fields of
-a map among the fields of a block, the elements of a sequence among the elements of a sequence.
-An injection is a substitution, `$a` or `${a}`, `$?a` or `${?a}` optional, standing alone among the
-fields of a block or as an element of a sequence; nothing marks it but where it stands (session 26).
-As a field's value a substitution grafts, and in a string or a concatenation it concatenates.
+**Injections** (sessions 25, 26 and 31) put what a node holds where a node would stand: the fields
+of a map among the fields of a block, the elements of a sequence among the elements of a sequence.
 
+**The `*` of session 31 is not implemented yet.** Until it is, an injection is marked by where it
+stands alone, with no `*`, as session 26 had it.
+
+- **A `*` after the path marks an injection**: `$a*` and `${a*}`, `$?a*` and `${?a*}` optional,
+  among the fields of a block or as an element of a sequence. Without it a substitution grafts,
+  so `[p, $a, z]` holds `a` whole as one element, and among fields, where nothing but a field
+  stands, `$a` is an error whose hint shows `$a*`. Anywhere else an injection is an error: as a
+  field's value, in a string, in a concatenation. With no braces the path ends before the `*`, no
+  bare key holding one (§3).
 - **Among the fields of a block, as if the map's fields were written there**: what stands after the
   injection overrides it, what stands before it is overridden, and they merge as `:` merges (§7),
   maps deep and anything else replaced; a `:=` after it replaces. With `a { x: 1, y: 2 }`,
-  `b { $a, x: 3, z: 4 }` is `{ x: 3, y: 2, z: 4 }`. A map over a substitution is the error `:` gives
-  there (§7), the substitution maybe no map. A scalar holding more than the substitution there,
-  `b { $a/x }`, is an error.
+  `b { $a*, x: 3, z: 4 }` is `{ x: 3, y: 2, z: 4 }`. A map over a substitution is the error `:`
+  gives there (§7), the substitution maybe no map. A scalar holding more than the substitution
+  there, `b { $a/x }`, is an error.
 - **What it finds is the map as it ends up**, merged from every source and resolved, as every
   substitution finds; what is merged into the block after it, from a later block or a later
   source, comes after it. Its fields keep where they came from behind the injection (§10), and
-  their own tags; the map's tags are not brought along. It must be a map, an error naming where it
-  is defined otherwise.
-- **Among the elements of a sequence, a sequence it finds puts its elements in its place, and
-  anything else stands there as one element**: with `a: [x, y]`, `[p, $a, z]` is `[p, x, y, z]`,
-  and with `a: x` it is `[p, x, z]`. A sequence written around it nests the sequence whole:
-  `[p, [$a], z]` is `[p, [x, y], z]`. The shape of a sequence thus depends on what its injections
-  find, the cost of the rule, taken knowingly (session 26).
-- **Tags before it go to the one element it puts**, as a graft's do; before one that finds a
-  sequence they have no node to go to, its elements keeping their own, and are an error.
+  their own tags; the map's tags are not brought along.
+- **Among the elements of a sequence, the elements of the sequence it finds in its place**: with
+  `a: [x, y]`, `[p, $a*, z]` is `[p, x, y, z]`, and `[p, $a, z]` is `[p, [x, y], z]`. Whether a
+  substitution nests or puts elements is written, not decided by what it finds.
+- **What it finds must be a map among fields and a sequence among elements**, an error naming
+  where it is defined otherwise. The `*` says what the author meant, so a mismatch is the author's
+  mistake; session 26, with nothing to mark an injection, let anything but a sequence stand as one
+  element.
+- **No tags before it**: they would have no node to go to, the fields and elements keeping their
+  own, so `@t $a*` is an error, where `@t $a` tags the one node it grafts.
 - **An index into a sequence counts the elements its injections put**, and resolves only those
-  before the element it names: in `a: [x, $a[0]]`, `$a[0]` is `x`.
-- **A directive among the elements of a sequence is an injection too** (§6): a sequence it gives
-  puts its elements there, anything else stands there as one element, `[#d(…)]` nests the sequence,
-  and a tag before one that gives a sequence is an error. In statement position a directive puts
-  the fields of a map, as an injection among fields does.
+  before the element it names: in `a: [x, $b*, $a[0]]`, `$a[0]` is `x`, and `$b*` is not resolved
+  to find it.
+- **A directive among the elements of a sequence injects with a `*` too** (§6): `#d(…)*` puts the
+  elements of a sequence it gives, an error otherwise, and `#d(…)` stands as one element. In
+  statement position a directive puts the fields of a map with no `*`, as it always did.
 - An optional injection finding nothing puts nothing, among fields and among elements alike.
 - **Not at the root, nor into the block it stands in**: every path goes through the root, so an
   injection among its fields would refer to the tree it builds, an error of its own; one that refers
@@ -1036,7 +1055,7 @@ mistake is worse than stopping.
   that fails fails its block, and nothing more is merged into it, but what follows it in the block
   still reports its own errors: the injections after it, each on its own, and the fields, merged
   apart from the block and, between two injections, from each other, what an injection would have
-  brought being unknown; `b { $missing, x := $other }` names both. A field that refers into the
+  brought being unknown; `b { $missing*, x := $other }` names both. A field that refers into the
   failed block fails with it, silently. An error found twice is reported once, as in every phase
   (§6): a source included in two blocks resolves twice.
 - **Depth is limited, to 256 unless the loader is built with another**, `withDepthLimit(n)`, `n` at
@@ -1159,8 +1178,8 @@ mistake is worse than stopping.
 1. **Value expressions**, e.g. `${b} + ${c}` for sequence concatenation — the replacement for an
    append operator (§7). Not in v1. Whitespace never joins values (§3), so `${b} + ${c}` is an error
    today and the syntax stays free. **Parked** by the user as hard from every angle — do not reopen
-   it until it is raised again. Injections (§9, sessions 25 and 26) do the jobs that came first:
-   `[$b, $c]` concatenates sequences, and `b { $a, x: 3 }` extends a map.
+   it until it is raised again. Injections (§9, sessions 25, 26 and 31) do the jobs that came
+   first: `[$b*, $c*]` concatenates sequences, and `b { $a*, x: 3 }` extends a map.
 2. ~~**Indentation as an alternative to braces**~~ — settled in session 28 as in Scala 3 (§4,
    Indentation), not implemented yet.
 3. ~~**Multi-line strings**~~ — closed in session 7: reopened by the user and settled point by
@@ -2377,3 +2396,26 @@ Fixed on a review, the format unchanged, nothing put to the user to decide but t
   separators of the system the program runs on; a `resource` keeps `/`, the class path's on every
   system. The user's call, over writing `/` alone into the spec: what separates a path is the
   system's to say, read by `Path` or `URL`, not by the loader.
+
+### Session 31 — 2026-11-18
+
+- **The `*` comes back, marking an injection** (§9, §6, §4), the user's decision. I raised that the
+  rule of the indented syntax, a block's first line saying what it is, read `a:⏎  $b` as
+  `a { $b }` and `password:⏎  #env(name: X)` as a directive in statement position, against the
+  rule of the same section that the next line is only one more place for a value. The name stays
+  "injection", the forms are session 25's, `$a*`, `${a*}`, `$?a*` and `${?a*}`, and the rest are
+  the user's choices of what I put, point by point: the `*` is required among fields too, `$a`
+  alone among them an error, over session 25's `*` optional there; among elements `$a` grafts one
+  element and `$a*` puts a sequence's, so that a sequence's shape no longer depends on what its
+  substitutions find, the cost session 26 took knowingly; `$a*` finding anything but a sequence
+  among elements, or anything but a map among fields, is an error, over session 26's one element,
+  the `*` saying what was meant; no tags before an injection; a directive among elements injects
+  with `#d(…)*` and stands as one element without it, while in statement position it puts a map's
+  fields with no `*`, so that `#include(file: …)` is written as it was, the asymmetry told to the
+  user and taken. In the indented syntax a block holding a field or an injection is a map, and one
+  value alone, a substitution or a directive included, is the key's value: `a:⏎  $b` is `a: $b`.
+  Breaks every injection written since session 26: before 1.0, compatibility is not kept. Not
+  implemented yet.
+- **A line that starts with `}` may stand in any column** (§4, Indentation), my proposal, agreed:
+  the width rule read literally checked it against the blocks it closes; Scala 3 does not.
+- Fixed with it: a code fence in §4, Indentation, ran into the sentence after it.
