@@ -71,6 +71,11 @@ class IncludeTest extends AnyFlatSpec with Matchers {
     value("z") should include("ascii")
     write(dir, "with space/w.psi", "v: spaced")
     value("with space/w.psi") should include("spaced")
+    write(dir, "conf.d/u.psi", "v: dotted")
+    value("conf.d/u") should include("dotted")
+    write(dir, "v.psi", "v: root")
+    value(dir.resolve("v").toString) should include("root")
+    loaded(write(dir, "root.psi", "#include(file: \"/\", optional: true)")).size shouldBe 0
   }
 
   it should "read an absolute path, and resolve a relative one in a text source against the working directory" in {

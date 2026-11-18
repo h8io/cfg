@@ -69,10 +69,15 @@ private[psi] object Include extends Directive {
   private def urls(kind: String, target: String, context: DirectiveContext): Either[IncludeError, List[URL]] =
     try
       kind match {
-        case "file" => Right(extended(target).map(file(_, context.url)))
+        // the last segment of a path as the file system the program runs on reads it
+        case "file" =>
+          Right(extended(target, Option(Paths.get(target).getFileName).exists(_.toString.contains('.')))
+            .map(file(_, context.url)))
         case "resource" =>
           val loader = Option(Thread.currentThread.getContextClassLoader).getOrElse(getClass.getClassLoader)
-          Right(extended(target).flatMap(name => Option(loader.getResource(name))))
+          // a name on the class path separates its segments with `/` on every system
+          Right(extended(target, target.substring(target.lastIndexOf('/') + 1).contains('.'))
+            .flatMap(name => Option(loader.getResource(name))))
         case _ => Right(URI.create(target).toURL :: Nil)
       }
     catch {
@@ -82,8 +87,8 @@ private[psi] object Include extends Directive {
     }
 
   /** A path or a name with no extension, as each of Psi's; one with an extension, as it is. */
-  private def extended(target: String): List[String] =
-    if (target.substring(target.lastIndexOf('/') + 1).contains('.')) target :: Nil
+  private def extended(target: String, extension: Boolean): List[String] =
+    if (extension) target :: Nil
     else List(".Ψ", ".ψ", ".psi").map(target + _)
 
   /** A path: absolute, a file; relative, against the including source's URL, or the working directory with none. */

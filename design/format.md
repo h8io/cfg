@@ -649,9 +649,9 @@ when not given (session 20):
   that URL is — a file, an entry of a jar, a web page — and never against the working directory,
   with one exception: a source given as text has no URL, and a relative path in it resolves against
   the directory the application runs in. A source it includes has a URL, so the paths in that one
-  resolve against it again. An absolute path is a file of the file system. Its segments are
-  separated by `/` on every system, as a URL's are, so that a config reads the same anywhere; Java
-  takes `/` on Windows too (session 30).
+  resolve against it again. An absolute path is a file of the file system. A path is read as the
+  system the program runs on reads one, its last segment included (session 30); resolved against a
+  URL, it is a URL's path, separated by `/`.
 - **`resource`** is a name on the class path, read through the thread's context class loader, or
   the one that loaded Psi when the thread has none.
 - **`url`** is an absolute URL, read as it is written.
@@ -2362,8 +2362,7 @@ Fixed on a review, the format unchanged, nothing put to the user to decide:
 
 ### Session 30 — 2026-11-18
 
-Fixed on a review, the format unchanged; the last item, written into the spec, the user's choice of the two I
-put (the other: take `\` as a separator everywhere, relative paths included):
+Fixed on a review, the format unchanged, nothing put to the user to decide but the last item:
 
 - **Two locations are compared each pair under them once** (§10): the `equals` of a case class
   compared two built the same way apart once for every path to each pair, so that two loads of
@@ -2372,7 +2371,9 @@ put (the other: take `\` as a separator everywhere, relative paths included):
   input is written: `Id.path` recursed as deep as the node, doubling the stack `graft` uses.
 - **A remote jar's copy that cannot be deleted is left behind**: the failure to delete it took
   the place of the read's outcome, a success or the error that ended it.
-- **A `file` separates its segments with `/`** (§6), written down on a review that found the last
-  segment, where an extension is looked for, cut at `/` alone: a relative path resolves against a
-  URL, where `\` is no separator, so a path with `\` was never portable; the spec now says so
-  rather than the loader taking `\` in some places and not in others.
+- **The last segment of a `file`, where an extension is looked for, is the file system's** (§6):
+  it was cut at `/` alone, so that on Windows `C:\conf.d\db` read as having an extension and was not
+  looked for as `.Ψ`, `.ψ` and `.psi`. It is now the file name `Path` gives, which knows the
+  separators of the system the program runs on; a `resource` keeps `/`, the class path's on every
+  system. The user's call, over writing `/` alone into the spec: what separates a path is the
+  system's to say, read by `Path` or `URL`, not by the loader.
