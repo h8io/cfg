@@ -274,7 +274,11 @@ server:
   field's key; the column after `- ` is the element's width.
 
   After `- ` stands any value: a scalar, `[…]`, `{…}`, a substitution, a map written as above, or
-  another element, `- - x` a sequence in a sequence, as in YAML. A tag goes before the value, and a
+  another element, `- - x` a sequence in a sequence, as in YAML. A value means after `- ` what it
+  means as an element of `[…]`: `- $a` grafts one element and `- $a*` puts the elements of a
+  sequence, as `[$a*]` does; an element is a map only when a field follows on the lines aligned
+  under it, or written in braces, `- { $a* }` (session 32). A `-` with nothing after it on its line
+  takes the value in a block below, deeper than the marker, as `- @t` does. A tag goes before the value, and a
   map element has no place for one before its first key: `- @t host: a` is an error, its hint
   showing `- @t { host: a }` or `- @t` with the map in a block below, deeper than the marker.
 
@@ -2416,3 +2420,15 @@ Fixed on a review, the format unchanged, nothing put to the user to decide but t
 - **A line that starts with `}` may stand in any column** (§4, Indentation), my proposal, agreed:
   the width rule read literally checked it against the blocks it closes; Scala 3 does not.
 - Fixed with it: a code fence in §4, Indentation, ran into the sentence after it.
+
+### Session 32 — 2026-11-18
+
+Two gaps of §4, Indentation, found implementing it and settled by the user as I proposed them:
+
+- **`- $a*` puts the elements of a sequence**, as `[$a*]` does: a value means after `- ` what it
+  means as an element, as after `key:` it means what it means on the line of the `:`. Rejected:
+  reading it as a map element `{ $a* }`, as `a:⏎  $b*` is, which would make `- ` the one place a
+  lone injection changes meaning. A map element that starts with an injection has a field after it
+  or braces.
+- **A `-` alone on its line takes its value in a block below**, deeper than the marker, as YAML's
+  does and as `- @t` already did: the same case with no tags, as `key:` with a block below.

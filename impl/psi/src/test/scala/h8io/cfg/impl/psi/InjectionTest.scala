@@ -138,6 +138,10 @@ class InjectionTest extends AnyFlatSpec with Matchers {
   "A substitution alone among the fields of a block, with no '*'" should "be an error that says to add it" in {
     errors("a { x: 1 }\nb { $a }") shouldBe List(SubstitutionAmongFields(at(2, 5), "a", optional = false))
     errors("b { ${?a} }") shouldBe List(SubstitutionAmongFields(at(1, 5), "a", optional = true))
+    SubstitutionAmongFields(at(1, 1), "a", optional = false).message shouldBe
+      "'$" + "{a}' among the fields of a block has no key to stand at"
+    // a quoted one, which is no key, is written back as it was
+    errors("\"$" + "{a*}$" + "{b}\": 1") shouldBe List(QuotedKey(at(1, 1), "$" + "{a*}$" + "{b}"))
   }
 
   "A directive among the elements of a sequence" should "put the elements of a sequence it gives there" in {
@@ -172,7 +176,7 @@ class InjectionTest extends AnyFlatSpec with Matchers {
     }
     Psi.builder.withDirectives(giving("seq", nested)).withDepthLimit(1).build
       .fold(e => fail(e.toString), identity)
-      .parse("s", "b: [#seq]")
+      .parse("s", "b: [#seq*]")
       .fold(_.errors, root => fail(root.toString)) shouldBe List(DepthExceeded(at(1, 5), 1, fatal = false))
     shown("b: [a, #seq*, z]") shouldBe "[a, p, @u q, z]"
     shown("b: [a, #seq()*, z]") shouldBe "[a, p, @u q, z]"
