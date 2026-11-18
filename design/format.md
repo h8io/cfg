@@ -2438,7 +2438,8 @@ Indentation implemented (§4), with the `*` of session 31. Mine, in the code, th
   goes deeper still: `a { b:⏎  c: 1 }` holds `b { c: 1 }`, the `{…}` having no width yet. Below a
   `- ` it goes deeper than the marker.
 - A line holding only a doc comment takes no part in indentation, as a comment does not: the doc
-  comment goes with the item after it, wherever that stands.
+  comment goes with the item after it, wherever that stands. A line that starts with a doc comment
+  and goes on with its item starts where the doc comment does (session 33).
 - Whether a line starts a field is read ahead: keys, then `:` or `:=` with whitespace after it, or
   `{`. `a:⏎  http://host` and `a:⏎  example.com` are values. A value that `Render` writes after a
   `- ` and that would read as a field, `x:` or `x{`, is quoted.
@@ -2451,3 +2452,22 @@ Indentation implemented (§4), with the `*` of session 31. Mine, in the code, th
   counts against the depth limit as a bracket does (§11).
 - `Render` writes indentation, and `toString` of a node other than the root writes a map as its
   fields and a sequence as its elements, at the top level, a block below its tags when it has any.
+
+### Session 33 — 2026-11-18
+
+Fixed on a review of session 32's code, the format unchanged, nothing put to the user to decide:
+
+- **`- #d(…)*` loads**: a call injected after a `- ` was reported as tagged, tags or none.
+- **A line that starts with a doc comment is placed by it** (§4): the item after the comment on its
+  line skipped the check of its column, so `/** d */ b: 2` after an indented block stayed in it, and
+  `   /** d */ b: 2` at the top level was taken.
+- **A line of tags whose value is below counts as a level** (§11): a chain of such lines nested
+  blocks that counted nothing, and 1 500 of them overflowed the stack.
+- **A doc comment before an injection or a call that a block starts with is kept** once the block
+  turns out to be a map, as in braces.
+- One test of whether a field starts, the lexer's, where the parser had a second with other rules:
+  `a: 1 x:y` is a second word of the value, as `x:y` is a value in a block.
+- The hint of an injection out of place shows `${a}*` for a `*` that is text: quoting `$a*`, as it
+  said, kept the `$a` as text too.
+- `Render` writes an element that starts on the line of its `- ` once, where it copied it again at
+  every level, and looks for a field in a scalar only when it holds a `:` or a `{`.

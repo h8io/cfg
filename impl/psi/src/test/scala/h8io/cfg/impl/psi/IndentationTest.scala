@@ -59,6 +59,18 @@ class IndentationTest extends AnyFlatSpec with Matchers {
       List(DirectiveNotMap(at(3, 3), "env"))
   }
 
+  it should "take a line that starts with a doc comment as starting where the comment does" in {
+    shown("a:\n  x: 1\n/** d */ b: 2") shouldBe "a:\n  x: 1\nb: 2\n"
+    errors("   /** d */ b: 2") shouldBe List(UnexpectedIndent(at(1, 4)))
+    errors("a:\n    x: 1\n  /** d */ y: 2") shouldBe List(MisalignedIndent(at(3, 3)))
+  }
+
+  it should "count a line of tags with its value below as a level, so that no chain of them overflows the stack" in {
+    val text = "a: @t\n" + (1 to 2000).map(i => " " * (i + 1) + "@t\n").mkString + " " * 2003 + "x"
+    Psi.parse("s", text).fold(_.errors.map(_.getClass), root => fail(root.toString)) shouldBe
+      List(classOf[DepthExceeded])
+  }
+
   it should "take a doc comment before a field, on a line of its own, wherever it stands" in {
     loaded("/** d */\na:\n      /** e */\n  x: 1\n/** f */\nb: 3").size shouldBe 2
     errors("a:\n  /** e */\n  x") shouldBe List(MisplacedDocComment(at(2, 3)))

@@ -117,7 +117,28 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
       )
   }
 
-  it should "keep a doc comment on the field or element it stands before" in {
+  it should "keep a doc comment before an injection or a call that a block opened by indentation starts with" in {
+    statements("a:\n  /** d */\n  $m*\n  y: 2") shouldBe
+      Vector(
+        field(
+          k("a", 1, 1),
+          Block(
+            Vector(InjectionStatement(Id.Key("m", Id.Root), optional = false, loc(3, 3), Some(" d ")),
+              field(k("y", 4, 3), str("2", 4, 6))),
+            Set.empty,
+            loc(3, 3))
+        ))
+  }
+
+  "An injection among elements" should "take no tags" in {
+    statements("a: [$b*]") match {
+      case Vector(Field(_, _, Sequence(Vector(Element(injection: Injection, None)), _, _), _)) =>
+        injection.tags shouldBe Set.empty
+      case other => fail(other.toString)
+    }
+  }
+
+  "A doc comment" should "keep a doc comment on the field or element it stands before" in {
     statements("/** f */ a: [/** e */ 1]\n/** g */\n\nb { /** h */\n c: 2 }") shouldBe
       Vector(
         Field(
@@ -257,7 +278,9 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     errors("a: `x`") shouldBe List(BacktickedValue(loc(1, 4)))
   }
 
-  "A separator" should "be reported missing between two fields on a line" in {
+  "A separator" should "be reported missing between two fields on a line, a field starting as in a block" in {
+    // with no whitespace after its `:` a word is no field, but a second word of the value
+    errors("a: 1 x:y") shouldBe List(SpaceInValue(loc(1, 6), "x:y"))
     errors("a: 1 b: 2") shouldBe List(MissingSeparator(loc(1, 6), "'b:'"))
     errors("a: 1 b := 2") shouldBe List(MissingSeparator(loc(1, 6), "'b'"))
     errors("a: 1 b.c: 2") shouldBe List(MissingSeparator(loc(1, 6), "'b.c:'"))

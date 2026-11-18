@@ -88,8 +88,8 @@ A block is written in braces or by indentation, as in Scala 3, and the two mix f
   top level starts at column 1.
 - Inside `{…}` the first line that starts there sets its width, and a `}` stands in any column. Inside `[…]` and a
   directive's `(…)` indentation means nothing.
-- A blank line, a comment-only line and a line holding only a doc comment take no part. A tab in indentation is an
-  error.
+- A blank line, a comment-only line and a line holding only a doc comment take no part; a line that starts with a doc
+  comment and goes on with a field starts where the comment does. A tab in indentation is an error.
 
 ```scala mdoc:passthrough
 example("""
