@@ -92,7 +92,7 @@ gives back an error of its own, nothing, or a `Fragment`: a Psi source the conte
 
 This one reads a YAML file with `cfg-yaml`, relative to the source the call stands in:
 
-```scala mdoc:silent
+```scala mdoc:silent:reset-object
 import h8io.cfg.{Id, Node}
 import h8io.cfg.impl.psi.*
 import h8io.cfg.impl.yaml.YAML
@@ -100,8 +100,8 @@ import h8io.cfg.impl.yaml.YAML
 import java.net.URI
 import java.nio.file.Paths
 
-final class YamlUnreadable(file: String, cause: Exception) extends DirectiveError {
-  def message: String = file + " cannot be read as YAML: " + cause.getMessage
+final case class YamlUnreadable(file: String, reason: String) extends DirectiveError {
+  def message: String = file + " cannot be read as YAML: " + reason
 }
 
 object Yaml extends Directive {
@@ -116,7 +116,7 @@ object Yaml extends Directive {
         try {
           val url = context.url.fold(Paths.get(file).toUri)(_.toURI.resolve(new URI(null, null, file, null))).toURL
           Right(Some(Fragment(YAML(url))))
-        } catch { case e: Exception => Left(new YamlUnreadable(file, e)) }
+        } catch { case e: Exception => Left(YamlUnreadable(file, e.toString)) }
       // a required argument is always given, and as a scalar
       case _ => Right(None)
     }
@@ -125,6 +125,10 @@ object Yaml extends Directive {
 
 Nothing a source holds should make a handler throw: what it fails with is reported at the call, its `message` and `hint` under the directive's name, and the call
 gives nothing; loading goes on. A node a fragment brings keeps its own location behind the call's.
+
+An error is compared by value: a source included from two places is parsed twice, its calls with it, and two errors
+equal at one call are reported once. One holding an exception, which equals only itself, would be reported twice, so
+the example keeps the exception's text instead.
 
 ## Markers
 
