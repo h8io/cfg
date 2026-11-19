@@ -6,7 +6,7 @@ import h8io.cfg.{Id, Node}
   * the errors found in making it, reported wherever it is used, so a handler may keep one and give it back again, in
   * the same load or a later one.
   */
-sealed abstract class Fragment
+sealed trait Fragment
 
 object Fragment {
 
