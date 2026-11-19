@@ -579,7 +579,8 @@ final case class ConcatenationTooLong(location: SourceLocation, limit: Int) exte
 }
 
 /** A `:` merge of a map or a substitution, written at `location`, with an earlier value of its key where either is a
-  * whole-value substitution, which may turn out a map or not (`format.md` §7); `:=` replaces instead.
+  * whole-value substitution or a block of injections alone, which may turn out a map or not (`format.md` §7); `:=`
+  * replaces instead, and braces around it, `{ \$a }`, make a map of it.
   *
   * @param earlier
   *   where the earlier value was defined
@@ -587,9 +588,12 @@ final case class ConcatenationTooLong(location: SourceLocation, limit: Int) exte
 final case class MergeWithSubstitution(location: PsiLocation, earlier: PsiLocation) extends PsiError {
   def message: String =
     "':' merges with the value at " + earlier.description +
-      ", and one of them is a substitution, which may not be a map"
+      ", and one of them, a substitution or a block of injections alone, is not known to be a map before " +
+      "substitutions are resolved"
 
-  override def hint: Option[String] = Some("write ':=' to replace the earlier value")
+  override def hint: Option[String] =
+    Some("write ':=' to replace the earlier value, or braces around the substitution or the injections, " +
+      "as in '{ $" + "a }', to make a map of them")
 }
 
 /** `\${path}`, alone or in a concatenation, at `location`, the `\${`, with nothing at `path` in the tree (`format.md`

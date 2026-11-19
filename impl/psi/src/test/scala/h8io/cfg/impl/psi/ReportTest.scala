@@ -5,7 +5,8 @@ import org.scalatest.matchers.should.Matchers
 
 class ReportTest extends AnyFlatSpec with Matchers {
   private def merge(at: String): String =
-    "':' merges with the value at " + at + ", and one of them is a substitution, which may not be a map"
+    "':' merges with the value at " + at + ", and one of them, a substitution or a block of injections alone, is " +
+      "not known to be a map before substitutions are resolved"
 
   "A report" should "count the errors, and list each under its source with its hint" in {
     val errors = Psi.parse("s", "a = 1\nb: foo bar").fold(identity, root => fail(root.toString))
@@ -33,7 +34,8 @@ class ReportTest extends AnyFlatSpec with Matchers {
   }
 
   it should "group by source in the order found, and write a composite location's origin after the message" in {
-    val hint = "hint: write ':=' to replace the earlier value"
+    val hint = "hint: write ':=' to replace the earlier value, or braces around the substitution or the injections, " +
+      "as in '{ $" + "a }', to make a map of them"
     val concatenation = ConcatenationLocation(
       SourceLocation("a", 5, 2),
       ::(ReferenceLocation(SourceLocation("a", 5, 7), "y", SourceLocation("a", 1, 4)), Nil))

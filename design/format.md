@@ -804,8 +804,10 @@ c: 5               // fine: a scalar replaces whatever ${x} turns out to be
 ```
 
 A concatenation such as `"jdbc:${host}"` is always a scalar and never triggers the rule; `${?x}` does,
-since whether it resolves is not known in phase 3 either. The rule applies at every depth of a
-recursive merge, and the error offers `:=` as the fix. Merge errors are reported in the same batch as
+since whether it resolves is not known in phase 3 either, and so does a block of injections alone
+(§9), calls in it included (session 35): what it is depends on what its first item finds or gives.
+The rule applies at every depth of a recursive merge, and the error offers `:=` as the fix, and
+braces, `a { ${x} }` or `a {⏎  #d⏎  #e⏎}`, which make a map of what they hold and merge. Merge errors are reported in the same batch as
 substitution errors (§11); the key is dropped, and nodes depending on it are silenced by the
 root-cause rule.
 
@@ -1286,6 +1288,14 @@ mistake is worse than stopping.
     `[ … ]`, 3 000 keys of a dotted key or 6 700 links of a chain; snakeyaml-engine 3.2 has no
     nesting limit either, unlike SnakeYAML's `nestingDepthLimit`, and overflows somewhere past
     3 000 levels of `[ … ]` and before 1 000 of block mappings.
+
+11. **Merging over a substitution or a block of injections alone** (session 35), deferred rather than
+    an error: a map written over one would be kept and merged once resolution says it is a map, and
+    be the error only when it is not. Raised on the cost of session 35, where
+    `db:⏎  #include(…)⏎  #include(…)` with `db.port: 6432` elsewhere is the error of §7, a common
+    case whose fix, braces, is easy to apply and hard to guess. Doing it for a block of injections
+    alone and not for `a: ${x}` would split one rule in two; doing it for both reopens the user's
+    rule of session 3 (§7). Nothing decided; the error's message and hint name both and the braces.
 
 ## 14. Decision log
 
@@ -2555,3 +2565,8 @@ Fixed on a review of session 32's code, the format unchanged, nothing put to the
   with it, as with a block of substitutions alone (§7), the principle taken over the convenience.
 - **A string is the exception**, the user's decision: a substitution concatenates in a scalar, a
   call does not.
+- **The cost kept, the message made honest** (§7, §13 item 11), the user's choice of the two I put:
+  `db:⏎  #include(…)⏎  #include(…)` no longer merges with `db.port: 6432` written elsewhere. The
+  error named a substitution where there were calls; it now names a substitution or a block of
+  injections alone, and its hint offers braces besides `:=`. Deferring such a merge is §13 item 11.
+  The user wants the documentation to gather such traps later, in a section of their own.
