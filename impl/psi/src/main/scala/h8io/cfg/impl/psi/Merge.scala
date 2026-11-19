@@ -1,17 +1,15 @@
 package h8io.cfg.impl.psi
 
-import scala.collection.mutable
-
 /** Merges the syntax trees of the sources into one tree, in order (`format.md` §7): deep merge, the last one wins.
   *
   * Duplicate keys in a block, dotted keys and the sources passed to the loader are one rule: every field is merged in
   * turn into the map built so far, a block into the map at its key, so a `:=` anywhere, in a later source included,
   * replaces whatever its key held before. `a.b.c: v` is `a { b { c: v } }`, each block standing at its key.
   *
-  * Directives are expanded before merging (§8): one left in a syntax tree is a bug of the loader.
+  * Directives are expanded before merging (§8): one left in a syntax tree is a bug of the loader. Merging finds no
+  * error of its own: where it cannot tell maps from anything else yet, it keeps what it merges for resolution.
   */
 private[psi] final class Merge {
-  private val errors = mutable.ListBuffer.empty[PsiError]
 
   /** The sources in order, each with where its root stands. */
   def sources(documents: ::[(AST.Document, SourceLocation)]): Result[Tree.Map] = {
@@ -20,11 +18,8 @@ private[psi] final class Merge {
       case (root, (document, site)) =>
         block(root.copy(location = Merge.again(site, root.location)), document.statements)
     }
-    Result(root, errors.toList)
+    Result(root, Nil)
   }
-
-  /** The errors found so far. */
-  private[psi] def reported: List[PsiError] = errors.toList
 
   /** Merges the statements of a block into `map`, in order: from an injection on, they are kept as its steps, merged
     * once the injection is resolved (§9).
@@ -49,36 +44,25 @@ private[psi] final class Merge {
 
   private def put(map: Tree.Map, key: String, operator: AST.Operator, value: AST.Value): Tree.Map =
     (operator, map.entries.get(key)) match {
-      case (AST.Operator.Merge, Some(earlier)) =>
-        merged(earlier, value) match {
-          case Some(tree) => map.updated(key, tree)
-          case None => map.failedAt(key)
-        }
+      case (AST.Operator.Merge, Some(earlier)) => map.updated(key, merged(earlier, value))
       case _ => map.updated(key, tree(value))
     }
 
   /** `value` merged with a `:` over `earlier`: maps merge, their tags united, and anything else replaces what was
-    * there, with only its own tags; none when either is a substitution, or a block of injections alone, and the other a
-    * map or either of those.
+    * there, with only its own tags. Where either may turn out a map or not, a substitution or a block of injections
+    * alone, and the other may be a map, both are kept as layers, merged so once resolved (§7).
     */
-  private def merged(earlier: Tree.Value, value: AST.Value): Option[Tree.Value] =
+  private def merged(earlier: Tree.Value, value: AST.Value): Tree.Value =
     (earlier, value) match {
       case (map: Tree.Map, AST.Block(statements, tags, location)) =>
-        Some(block(map.copy(tags = map.tags ++ tags, location = Merge.again(location, map.location)), statements))
-      case (_: Tree.Map | _: Tree.Substitution | _: Tree.Injections, _: AST.Substitution | _: AST.Injections) =>
-        conflict(value.location, earlier)
-      case (_: Tree.Substitution | _: Tree.Injections, block: AST.Block) =>
-        val result = conflict(block.location, earlier)
-        // read on its own, the block has errors of its own to report, independent of the conflict (§11)
-        val _ = tree(block)
-        result
-      case _ => Some(tree(value))
+        block(map.copy(tags = map.tags ++ tags, location = Merge.again(location, map.location)), statements)
+      case (earlier: Tree.Layer, AST.Substitution(path, optional, tags, location)) =>
+        Tree.Layers(earlier, Tree.Substitution(path, optional, tags, location))
+      case (earlier: Tree.Layer, injections: AST.Injections) => Tree.Layers(earlier, this.injections(injections))
+      case (Merge.Unknown(earlier), AST.Block(statements, tags, location)) =>
+        Tree.Layers(earlier, block(Tree.Map.empty(tags, location), statements))
+      case _ => tree(value)
     }
-
-  private def conflict(location: PsiLocation, earlier: Tree.Value): Option[Tree.Value] = {
-    errors += MergeWithSubstitution(location, earlier.location)
-    None
-  }
 
   /** A value with nothing before it to merge with. */
   private def tree(value: AST.Value): Tree.Value =
@@ -88,17 +72,20 @@ private[psi] final class Merge {
       case AST.Block(statements, tags, location) => block(Tree.Map.empty(tags, location), statements)
       case AST.Sequence(elements, tags, location) => sequence(elements, tags, location)
       case AST.Substitution(path, optional, tags, location) => Tree.Substitution(path, optional, tags, location)
-      case AST.Injections(items, tags, location) =>
-        val kept = items.map {
-          case AST.Injected.Calling(call) => unexpanded(call)
-          case gave: AST.Injected.Given => Left(gave)
-          case AST.Injected.Referring(reference) => Right(reference)
-        }
-        Tree.Injections(kept, tags, location)
+      case injections: AST.Injections => this.injections(injections)
       case AST.Concatenation(parts, tags, location) => Tree.Concatenation(parts, tags, location)
       case AST.Marked(value, markers) => Tree.Marked(tree(value), markers)
       case AST.DirectiveValue(call, _) => unexpanded(call)
     }
+
+  private def injections(injections: AST.Injections): Tree.Injections = {
+    val kept = injections.items.map {
+      case AST.Injected.Calling(call) => unexpanded(call)
+      case gave: AST.Injected.Given => Left(gave)
+      case AST.Injected.Referring(reference) => Right(reference)
+    }
+    Tree.Injections(kept, injections.tags, injections.location)
+  }
 
   /** A sequence of `elements`, with nothing before it to merge with. */
   private[psi] def sequence(elements: Vector[AST.Element], tags: Set[String], location: PsiLocation): Tree.Sequence =
@@ -119,6 +106,16 @@ private[psi] final class Merge {
 }
 
 private[psi] object Merge {
+
+  /** A value that may turn out a map or not, known only once resolved. */
+  private object Unknown {
+    def unapply(value: Tree.Value): Option[Tree.Layer] =
+      value match {
+        case _: Tree.Map => None
+        case layer: Tree.Layer => Some(layer)
+        case _ => None
+      }
+  }
 
   /** `steps` with `statement` after them: an injection a step of its own, any other statement among those after the
     * last.

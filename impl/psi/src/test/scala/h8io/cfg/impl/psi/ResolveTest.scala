@@ -130,13 +130,53 @@ class ResolveTest extends AnyFlatSpec with Matchers {
       List(UnresolvedSubstitution(at(1, 4), "x"))
   }
 
-  "A key whose merge failed" should "fail what refers to it, and the maps holding it, silently" in {
+  "A key merged with a substitution" should "report what the substitution does not find, and fail what refers to it" in {
     errors("a {}\na: ${target}\nb: ${a}\nc: ${m.k}\nm { k: ${t}, k {} }\nn: ${m}\nd: ${x}\ntarget: 1",
       Map("a" -> "1", "m.k" -> "1")) shouldBe
-      List(
-        MergeWithSubstitution(at(2, 4), at(1, 3)),
-        MergeWithSubstitution(at(5, 16), at(5, 8)),
-        UnresolvedSubstitution(at(7, 4), "x"))
+      List(UnresolvedSubstitution(at(5, 8), "t"), UnresolvedSubstitution(at(7, 4), "x"))
+  }
+
+  it should "merge a map over what it finds, maps merging and anything else replaced, either way" in {
+    def shown(text: String): String = Psi.parse("s", text).fold(e => fail(e.toString), _("a").toString)
+    shown("a: $b\na.x: 1\nb { y: 2 }") shouldBe "y: 2\nx: 1"
+    // as `:` merges two maps, their tags united
+    shown("b: @t { y: 2 }\na: $b\na.x: 1") shouldBe "@t\n  y: 2\n  x: 1"
+    shown("b: 5\na: $b\na.x: 1") shouldBe "x: 1"
+    shown("a { x: 1 }\na: $b\nb { y: 2 }") shouldBe "x: 1\ny: 2"
+    Psi.parse("s", "a { x: 1 }\na: $b\nb: 5").fold(e => fail(e.toString), _("a")) match {
+      case h8io.cfg.Node.IScalar(_, _, value, _) => value shouldBe "5"
+      case other => fail(other.toString)
+    }
+    shown("a { x: 1 }\na: $b\nb: [5]\na.y: 2") shouldBe "y: 2"
+    // what finds nothing puts nothing
+    shown("a: $?b\na.x: 1") shouldBe "x: 1"
+    Psi.parse("s", "a: $?b\na: $?c\nd: 1").fold(e => fail(e.toString), _("a")) shouldBe
+      h8io.cfg.Node.INone(h8io.cfg.Id.Key("a", h8io.cfg.Id.Root))
+    // a sequence replaces, and a block of injections alone merges as what it turns out
+    shown("a: $s\na: $t\ns: [1]\nt: [2]") shouldBe "- 2"
+    shown("s: [1]\nt: [2]\nm { k: 1 }\na:\n  $s\n  $t\na: $m") shouldBe "k: 1"
+    shown("s: [1]\nt: [2]\nm { k: 1 }\na: $m\na:\n  $s\n  $t") shouldBe "- 1\n- 2"
+    shown("m { k: 1 }\nn { j: 2 }\na: $m\na:\n  $n\n  $n") shouldBe "k: 1\nj: 2"
+    // looked into by a path, and at any depth, layers within layers
+    Psi.parse("s", "a: $b\na.x: 1\nb { y: 2 }\nc: $a.y").fold(e => fail(e.toString), _("c")) match {
+      case h8io.cfg.Node.IScalar(_, _, value, _) => value shouldBe "2"
+      case other => fail(other.toString)
+    }
+    shown("x { s: 1 }\na { k { p: 1 } }\na: $b\nb {}\na { k: $x, k { q: 2 } }") shouldBe
+      "k:\n  p: 1\n  s: 1\n  q: 2"
+  }
+
+  it should "refer to itself only through a cycle" in {
+    errors("a: $a.x\na.x: 1") shouldBe List(SubstitutionCycle(at(1, 4), "a.x"))
+  }
+
+  it should "report what its substitutions do not find, and count what they copy" in {
+    errors("a:\n  $nope\n  $none\na.x: 1") shouldBe
+      List(UnresolvedSubstitution(at(2, 3), "nope"), UnresolvedSubstitution(at(3, 3), "none"))
+    Psi.builder.withSizeLimit(1, PsiLoader.DefaultCharacterLimit).build.fold(e => fail(e.toString), identity)
+      .parse("s", "b { x: 1, y: 2 }\na: $b\na.z: 1").fold(_.errors, root => fail(root.toString)) shouldBe
+      List(ResolutionTooLarge(at(2, 4), "b", 1))
+    Psi.parse("s", "a:\n  $?n\n  $?m\na.x: 1").fold(e => fail(e.toString), _("a").toString) shouldBe "x: 1"
   }
 
   "A cycle" should "be an error at the reference that closes it" in {

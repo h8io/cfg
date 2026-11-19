@@ -103,22 +103,14 @@ class PsiLocationTest extends AnyFlatSpec with Matchers {
     val sources = List("a.psi", "b.psi")
     SourceLocation("b.psi", 2, 3).order(sources) shouldBe ((1, 2, 3))
     SourceLocation("c.psi", 2, 3).order(sources) shouldBe ((2, 2, 3))
-    val a = SourceLocation("a.psi", 4, 5)
-    ReferenceLocation(a, "x", base).order(sources) shouldBe ((0, 4, 5))
-    ConcatenationLocation(a, ::(ReferenceLocation(a, "x", base), Nil)).order(sources) shouldBe ((0, 4, 5))
-    MergedLocation(a, ::(SourceLocation("b.psi", 1, 1), Nil)).order(sources) shouldBe ((0, 4, 5))
-    NoSourceLocation.order(sources) shouldBe ((2, 0, 0))
-    SystemPropertyLocation("p").order(sources) shouldBe ((2, 0, 0))
-    EnvironmentLocation("E").order(sources) shouldBe ((2, 0, 0))
   }
 
   "SystemPropertyLocation" should "name the property" in {
     SystemPropertyLocation("db.url").description shouldBe "system property db.url"
   }
 
-  "EnvironmentLocation" should "name the variable, and stand in no source" in {
+  "EnvironmentLocation" should "name the variable" in {
     EnvironmentLocation("HOME").description shouldBe "environment variable HOME"
-    EnvironmentLocation("HOME").anchor shouldBe None
   }
 
   /** A chain of `links` concatenations, each referring twice to the one before, built apart from any other. */

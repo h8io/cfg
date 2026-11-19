@@ -140,48 +140,40 @@ class MergeTest extends AnyFlatSpec with Matchers {
         "c" -> map(loc(6, 3))())
   }
 
-  it should "not merge with a map or a substitution, the key dropped and `:=` replacing" in {
-    merge("a: ${s}\nb { p: 1 }\nc: ${?s}\nd: 1\na { p: 1 }\nb: ${s}\nc: ${t}\nd := ${s}") shouldBe
-      Result(
-        top("d" -> Substitution(Id.Key("s", Id.Root), optional = false, Set.empty, loc(8, 6)))
-          .copy(failed = Set("a", "b", "c")),
-        List(
-          MergeWithSubstitution(loc(5, 3), loc(1, 4)),
-          MergeWithSubstitution(loc(6, 4), loc(2, 3)),
-          MergeWithSubstitution(loc(7, 4), loc(3, 4)))
+  private def sub(path: String, line: Int, column: Int, optional: Boolean = false): Substitution =
+    Substitution(Id.Key(path, Id.Root), optional, Set.empty, loc(line, column))
+
+  it should "keep a map and a substitution merged either way as layers, for resolution, `:=` replacing" in {
+    root("a: ${s}\nb { p: 1 }\nc: ${?s}\nd: 1\na { p: 1 }\nb: ${s}\nc: ${t}\nd := ${s}") shouldBe
+      top(
+        "a" -> Layers(Vector(sub("s", 1, 4), map(loc(5, 3))("p" -> str("1", 5, 8)))),
+        "b" -> Layers(Vector(map(loc(2, 3))("p" -> str("1", 2, 8)), sub("s", 6, 4))),
+        "c" -> Layers(Vector(sub("s", 3, 4, optional = true), sub("t", 7, 4))),
+        "d" -> sub("s", 8, 6)
       )
     root("a: ${s}\na := { p: 1 }") shouldBe top("a" -> map(loc(2, 6))("p" -> str("1", 2, 11)))
   }
 
-  it should "not merge at any depth, nor with the blocks of a dotted key" in {
-    merge("g { h: ${x}, i: 1 }\ng { h { j: 1 } }\nk: ${x}\nk.l: 1") shouldBe
-      Result(
-        top("g" -> map(loc(2, 3), loc(1, 3))("i" -> str("1", 1, 17)).copy(failed = Set("h"))).copy(failed = Set("k")),
-        List(MergeWithSubstitution(loc(2, 7), loc(1, 8)), MergeWithSubstitution(loc(4, 1), loc(3, 4)))
+  it should "keep them at any depth, with the blocks of a dotted key too" in {
+    root("g { h: ${x}, i: 1 }\ng { h { j: 1 } }\nk: ${x}\nk.l: 1") shouldBe
+      top(
+        "g" -> map(loc(2, 3), loc(1, 3))(
+          "h" -> Layers(Vector(sub("x", 1, 8), map(loc(2, 7))("j" -> str("1", 2, 12)))),
+          "i" -> str("1", 1, 17)),
+        "k" -> Layers(Vector(sub("x", 3, 4), map(loc(4, 1))("l" -> str("1", 4, 6))))
       )
   }
 
-  it should "not hide the conflicts inside a block that conflicts itself" in {
-    merge("a: ${x}\na {\n  b: ${y}\n  b {}\n}\nc: ${x}\nc { d: ${y}, d.e: 1 }") shouldBe
-      Result(
-        top().copy(failed = Set("a", "c")),
-        List(
-          MergeWithSubstitution(loc(2, 3), loc(1, 4)),
-          MergeWithSubstitution(loc(4, 5), loc(3, 6)),
-          MergeWithSubstitution(loc(7, 3), loc(6, 4)),
-          MergeWithSubstitution(loc(7, 14), loc(7, 8))
-        )
-      )
-  }
-
-  it should "forget a failed key once its key is given a value again" in {
-    merge("a: ${s}\na {}\na := 1") shouldBe
-      Result(top("a" -> str("1", 3, 6)), List(MergeWithSubstitution(loc(2, 3), loc(1, 4))))
-  }
-
-  it should "report a merged map where it was defined, every site of it" in {
-    merge("a { x: 1 }\na { y: 2 }\na: ${s}").errors shouldBe
-      List(MergeWithSubstitution(loc(3, 4), MergedLocation(loc(2, 3), ::(loc(1, 3), Nil))))
+  it should "keep layers inside a layer, and add to the layers of a key" in {
+    root("a: ${x}\na {\n  b: ${y}\n  b {}\n}\na: ${z}") shouldBe
+      top(
+        "a" -> Layers(Vector(
+          sub("x", 1, 4),
+          map(loc(2, 3))("b" -> Layers(Vector(sub("y", 3, 6), map(loc(4, 5))()))),
+          sub("z", 6, 4))))
+    root("a { x: 1 }\na { y: 2 }\na: ${s}") shouldBe
+      top(
+        "a" -> Layers(Vector(map(loc(2, 3), loc(1, 3))("x" -> str("1", 1, 8), "y" -> str("2", 2, 8)), sub("s", 3, 4))))
   }
 
   "Sources" should "merge in order as one, a `:=` in a later one replacing what an earlier one held" in {

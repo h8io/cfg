@@ -44,10 +44,17 @@ private[psi] object Render {
 
   /** The fields of `map` at `level`, the first one's indent left out when it goes on the line of a `- `. */
   private def fields(out: StringBuilder, map: Tree.Map, level: Int, onDash: Boolean = false): Unit =
-    map.keys.zipWithIndex.foreach { case (key, i) =>
+    map.keys.flatMap(key => layers(map.entries(key)).map(key -> _)).zipWithIndex.foreach { case ((key, value), i) =>
       if (i > 0 || !onDash) indent(out, level)
       val _ = out ++= name(key) += ':'
-      after(out, map.entries(key), level)
+      after(out, value, level)
+    }
+
+  /** What a field writes once each, a layer at a time: its key written again for each layer merges them back. */
+  private def layers(value: Tree.Value): Vector[Tree.Value] =
+    value match {
+      case Tree.Layers(layers) => layers.flatMap(this.layers)
+      case _ => Vector(value)
     }
 
   /** A value after a `:` or a `- ` that stands at `level`, its tags first, and the line ended. */
@@ -183,6 +190,8 @@ private[psi] object Render {
       case Tree.Injection(path, optional, _, _, _) => reference(out, path, optional)
       case injections: Tree.Injections =>
         throw new IllegalStateException("A block of injections at " + injections.location.description + " on one line")
+      case layers: Tree.Layers =>
+        throw new IllegalStateException("Layers at " + layers.location.description + " with no key to write again")
       case Tree.Concatenation(parts, _, _) => quoted(out, parts)
       // the loader's markers run as the tree is resolved, and only a resolved tree is shown
       case marked: Tree.Marked =>

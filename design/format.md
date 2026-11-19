@@ -541,8 +541,8 @@ before merging and substitution (§8). A value starting with `#` is written in q
 wherever it stands what a substitution standing there does, what the call gives in place of what
 the substitution finds, and the other way round. What sets them apart is when: a call is expanded
 before merging, a substitution resolved after it (§8), and only what follows from that differs —
-a call may stand at the root, where an injection would refer to the tree it builds (§9), and what a
-call gives merges with what is written elsewhere at its key, where a substitution cannot (§7). The
+a call may stand at the root, where an injection would refer to the tree it builds (§9). What is
+merged with either at its key merges once it is known, as `:` merges (§7, session 36). The
 one exception is a string: a substitution concatenates in a scalar, `jdbc:$host/db`, and a call
 does not, `#` inside an unquoted scalar being ordinary.
 
@@ -786,30 +786,30 @@ in practice it matters for maps, and anywhere the author wants the intent to be 
 - With no earlier value `:=` behaves like `:`.
 - `a := ${b}` is always allowed: whatever `${b}` resolves to, nothing before it survives.
 
-**No merging over a substitution in v1.** Merging runs in phase 3 and substitutions resolve in phase 4
-(§8), so when one side of a `:` merge is a whole-value `${…}`, phase 3 cannot know whether it is
-merging two maps or replacing one value with another. Instead of deferring the merge, v1 rejects it:
-a `:` field meeting an earlier value of the same key is an error when one side is a substitution and
-the other is a map or a substitution.
+**A merge with a substitution waits for it** (session 36; sessions 3 to 35 rejected it). Merging runs
+in phase 3 and substitutions resolve in phase 4 (§8), so when one side of a `:` merge is a whole-value
+`${…}`, phase 3 cannot know whether it is merging two maps or replacing one value with another. It
+keeps both as they are, layers at the key, and merges them once resolved, as `:` merges anything:
+maps merge, their tags united, and anything else replaces what was before it. A call merges so
+already, expanded before merging (§6); a substitution now does the same, only later.
 
 ```
 a: ${server}
-a { port: 1 }      // error: cannot merge into a substitution, use := to replace
+a { port: 1 }      // the fields of server, port 1 over its port; port 1 alone when server is no map
 
 b { port: 1 }
-b: ${server}       // error: ${server} may be a map, use := to replace
+b: ${server}       // server's fields over port 1 when it is a map; server alone when it is not
 
 c: ${x}
-c: 5               // fine: a scalar replaces whatever ${x} turns out to be
+c: 5               // 5, whatever ${x} turns out to be, as before
 ```
 
-A concatenation such as `"jdbc:${host}"` is always a scalar and never triggers the rule; `${?x}` does,
-since whether it resolves is not known in phase 3 either, and so does a block of injections alone
-(§9), calls in it included (session 35): what it is depends on what its first item finds or gives.
-The rule applies at every depth of a recursive merge, and the error offers `:=` as the fix, and
-braces, `a { ${x} }` or `a {⏎  #d⏎  #e⏎}`, which make a map of what they hold and merge. Merge errors are reported in the same batch as
-substitution errors (§11); the key is dropped, and nodes depending on it are silenced by the
-root-cause rule.
+The same holds for `${?x}`, which finding nothing puts nothing, so that `a: ${?x}` and `a.port: 1`
+give `a { port: 1 }`, and for a block of injections alone (§9), calls in it included: what it is
+depends on what its first item finds or gives. It holds at every depth of a recursive merge, and
+`a.port: 1` is `a { port: 1 }` (§4). What a value that is no map replaces, layers before it
+included, is not resolved, as what a value written over it is not; a lookup through the key, `${a.port}`,
+merges its layers first. `:=` replaces whatever stood there, as it always did.
 
 There is deliberately no append operator. Appending to a sequence or concatenating values is a job for
 an expression in value position — `a: ${b} + ${c}` — which can be added later (§13); replacement
@@ -912,8 +912,8 @@ it gives it a place for one node, and it grafts; with none, it injects into the 
   neither. A call there decides as a substitution does, by where it stands and not by being
   expanded first (session 35): what it gives waits for the substitutions to be resolved. With none finding anything, the
   block is nothing, and its key or element is left out, as an optional graft's is. A block of one
-  value alone is that value, `a:⏎  $b` a graft (§4). Merging with what is written elsewhere at its
-  key is the error a substitution there gives (§7), the block maybe no map.
+  value alone is that value, `a:⏎  $b` a graft (§4). What is written elsewhere at its key merges
+  with it once it is known, as with a substitution (§7).
 - **What it finds must be a map among fields and a sequence alone on its line among `- `
   elements**, an error naming where it is defined otherwise: the place says what the author meant,
   so a mismatch is the author's mistake.
@@ -1172,8 +1172,8 @@ mistake is worse than stopping.
   written as `Id.path` writes it, bare or in backticks with its escapes.
 - **The report groups errors by source**, in the order above: a line with the source's name, then
   one line per error, `<line>:<column>: <message>`. It opens with a count, `5 errors in 2 sources`.
-  An error at a composite location (§10) is grouped by its `at`, its origin written after the
-  message as `description` writes it.
+  Every error stands at a position in a source (session 36): the one at a composite location (§10),
+  a merge with a substitution, is gone.
 - **No source excerpt in v1**, no line of the source with a caret under the column: the report
   would need the text of every source kept until it is built, and an error that came with a fragment
   from an earlier load has none. Line and column are exact; an excerpt can be added later without
@@ -1289,13 +1289,8 @@ mistake is worse than stopping.
     nesting limit either, unlike SnakeYAML's `nestingDepthLimit`, and overflows somewhere past
     3 000 levels of `[ … ]` and before 1 000 of block mappings.
 
-11. **Merging over a substitution or a block of injections alone** (session 35), deferred rather than
-    an error: a map written over one would be kept and merged once resolution says it is a map, and
-    be the error only when it is not. Raised on the cost of session 35, where
-    `db:⏎  #include(…)⏎  #include(…)` with `db.port: 6432` elsewhere is the error of §7, a common
-    case whose fix, braces, is easy to apply and hard to guess. Doing it for a block of injections
-    alone and not for `a: ${x}` would split one rule in two; doing it for both reopens the user's
-    rule of session 3 (§7). Nothing decided; the error's message and hint name both and the braces.
+11. ~~**Merging over a substitution or a block of injections alone**~~ — settled in session 36: a
+    merge with either waits until it is resolved, and merges as `:` does (§7).
 
 ## 14. Decision log
 
@@ -2570,3 +2565,22 @@ Fixed on a review of session 32's code, the format unchanged, nothing put to the
   error named a substitution where there were calls; it now names a substitution or a block of
   injections alone, and its hint offers braces besides `:=`. Deferring such a merge is §13 item 11.
   The user wants the documentation to gather such traps later, in a section of their own.
+
+### Session 36 — 2026-11-19
+
+- **A merge with a substitution waits for it, and merges as `:` does** (§7, §13 item 11), the
+  user's decision, reversing the rule of session 3, which the user had set: `a: ${x}` with
+  `a.port: 1` elsewhere, an error since then, merges once `${x}` is resolved — its fields and port
+  over them when it is a map, port alone when it is not, replaced. The user's points: `a.port: 1`
+  is `a { port: 1 }`, and a call merges so already, a substitution being a call resolved later
+  (session 35); a call's map is replaced silently by what is written over it, and a substitution's
+  now is too. Settled with the user, as I put them: the map a substitution finds brings its tags,
+  united as `:` unites them, unlike an injection, which brings none; what is no map is replaced
+  silently, a mistake included; `${?x}` finding nothing puts nothing, `a: ${?x}` and `a.port: 1`
+  giving `a { port: 1 }`.
+- Mine, in the code: the merge keeps the values at a key as layers, `Tree.Layers`, read at
+  resolution from the last back to the first that is no map, which stands alone or is replaced by
+  the maps after it, merged in turn; what it replaces is not resolved. `MergeWithSubstitution`,
+  and with it every merge error and the keys a failed merge dropped, is gone. It was the one error
+  at a composite location, so every error now stands at a `SourceLocation`, and the report writes
+  no origin after a message.

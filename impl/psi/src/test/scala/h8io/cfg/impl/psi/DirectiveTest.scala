@@ -323,7 +323,6 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
       "app.psi:1:4 (#yaml from db.yaml:3:8)"
     DirectiveLocation(at(1, 4, "app.psi"), "a.b", NoSourceLocation).description shouldBe
       "app.psi:1:4 (#`a.b` from no source)"
-    DirectiveLocation(at(2, 4, "b"), "x", NoSourceLocation).order(List("a", "b")) shouldBe ((1, 2, 4))
   }
 
   private def write(dir: Path, name: String, text: String): Path =

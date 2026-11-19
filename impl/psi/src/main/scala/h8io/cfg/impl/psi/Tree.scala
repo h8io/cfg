@@ -23,7 +23,7 @@ private[psi] object Tree {
 
   /** `\${path}` or `\${?path}`, alone and unquoted: a graft. */
   final case class Substitution(path: Id.Branch, optional: Boolean, tags: Set[String], location: SourceLocation)
-      extends Value
+      extends Layer
 
   /** `\${path}` or `\${?path}` among the elements of a sequence, an injection: the elements of the sequence it finds,
     * in its place (§9). What a `required` one finds must be a sequence; any other puts anything else as one element,
@@ -48,7 +48,33 @@ private[psi] object Tree {
       items: Vector[Either[AST.Injected.Given, Token.Reference]],
       tags: Set[String],
       location: SourceLocation)
-      extends Value
+      extends Layer
+
+  /** A value `:` merges as a layer (`format.md` §7): a map, or what may turn out a map or not once resolved. */
+  sealed trait Layer extends Value
+
+  /** What `:` merged in turn at one key, where a substitution or a block of injections alone stands among them, so that
+    * whether the merge is of maps is known only once they are resolved (`format.md` §7): maps merge, anything else
+    * replaces what is before it. Each layer is a map, a substitution, a block of injections alone, or layers merged in
+    * their turn into a map.
+    */
+  final case class Layers(layers: Vector[Layer]) extends Layer {
+
+    /** What the layers end up as says its tags. */
+    def tags: Set[String] = Set.empty
+
+    def location: PsiLocation = layers.last.location
+  }
+
+  object Layers {
+
+    /** `value` merged with `:` over `earlier`, both kept for resolution. */
+    def apply(earlier: Layer, value: Layer): Layers =
+      earlier match {
+        case Layers(layers) => Layers(layers :+ value)
+        case _ => Layers(Vector(earlier, value))
+      }
+  }
 
   /** A scalar with `\${…}` inside it. */
   final case class Concatenation(parts: Vector[Token.Part], tags: Set[String], location: SourceLocation) extends Value
@@ -63,8 +89,6 @@ private[psi] object Tree {
     *
     * @param location
     *   where it was defined: one place, or a [[MergedLocation]] of each block merged into it since it was last replaced
-    * @param failed
-    *   the keys left out because their merge failed (`format.md` §7): what refers to one fails silently (§11)
     * @param steps
     *   what was written in the map from its first injection on, to be merged into it in order once each injection is
     *   resolved (§9); the keys and entries are the fields written before it. A map with none is complete.
@@ -74,19 +98,12 @@ private[psi] object Tree {
       entries: immutable.Map[String, Value],
       tags: Set[String],
       location: PsiLocation,
-      failed: Set[String] = Set.empty,
       steps: Vector[Step] = Vector.empty)
-      extends Value {
+      extends Layer {
 
     /** This map with `value` at `key`: in its place when the key is there, last when it is not. */
     def updated(key: String, value: Value): Map =
-      copy(
-        keys = if (entries.contains(key)) keys else keys :+ key,
-        entries = entries.updated(key, value),
-        failed = failed - key)
-
-    /** This map without `key`, its merge having failed. */
-    def failedAt(key: String): Map = removed(key).copy(failed = failed + key)
+      copy(keys = if (entries.contains(key)) keys else keys :+ key, entries = entries.updated(key, value))
 
     /** This map without `key`. */
     def removed(key: String): Map = copy(keys = keys.filter(_ != key), entries = entries - key)
