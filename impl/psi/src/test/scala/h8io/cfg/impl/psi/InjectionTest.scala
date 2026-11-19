@@ -226,15 +226,22 @@ class InjectionTest extends AnyFlatSpec with Matchers {
         def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
           Right(node.fold[Fragment](Fragment.None)(Fragment(_)))
       }
-    val parsing = new Directive {
-      def name: String = "parsed"
-      def parameters: Seq[Parameter] = Nil
-      def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
-        Right(context.parse("p", "x: 1"))
-    }
+    def parsing(called: String, text: String): Directive =
+      new Directive {
+        def name: String = called
+        def parameters: Seq[Parameter] = Nil
+        def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
+          Right(context.parse("p", text))
+      }
     val by = Psi.builder
       .withDirectives(
-        giving("seq", Some(seq)), giving("one", Some(scalar)), giving("map", Some(map)), giving("none", None), parsing)
+        giving("seq", Some(seq)),
+        giving("one", Some(scalar)),
+        giving("map", Some(map)),
+        giving("none", None),
+        parsing("parsed", "x: 1"),
+        parsing("blocks", "c:\n  #map\n  $?nope")
+      )
       .build
       .fold(e => fail(e.toString), identity)
     def loaded(text: String): Node.IMap[Id.Root] = by.parse("s", text).fold(e => fail(e.toString), identity)
@@ -278,6 +285,13 @@ class InjectionTest extends AnyFlatSpec with Matchers {
     errors("b:\n  - p\n  @t #seq") shouldBe List(TaggedInjection(at(3, 3)))
     errors("b:\n  #seq\n  #map") shouldBe List(DirectiveNotSequence(at(3, 3), "map"))
     errors("b:\n  #map\n  #seq") shouldBe List(DirectiveNotMap(at(3, 3), "seq"))
+    // a substitution and a call decide alike, the first as written that finds or gives anything
+    shown("a: [r]\nb:\n  $?nope\n  $a\n  #seq") shouldBe "- r\n- p\n- @u q"
+    errors("a: [r]\nb:\n  $a\n  #map") shouldBe List(DirectiveNotSequence(at(4, 3), "map"))
+    errors("a { y: 2 }\nb:\n  $a\n  #seq") shouldBe List(DirectiveNotMap(at(4, 3), "seq"))
+    errors("a: x\nb:\n  $a\n  #map") shouldBe List(InjectionNotContainer(at(3, 3), "a", at(1, 4)))
+    // what a call gave in a source it parsed waits there too
+    shown("b: #blocks") shouldBe "c:\n  m: 1"
     errors("b:\n  #none\n  #one\n  #seq") shouldBe List(DirectiveNotContainer(at(3, 3), "one"))
     errors("a: [1]\nb:\n  #map\n  $a") shouldBe List(InjectionNotMap(at(4, 3), "a", at(1, 4)))
     // a `*` after a call is a second value

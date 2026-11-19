@@ -640,7 +640,9 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
         val all = values.result()
         val items = all.flatMap { case (value, _, _) => injection(value) }
         all match {
-          case _ +: _ +: _ if items.size == all.size => AST.Injections(items, tags, at)
+          case _ +: _ +: _ if items.size == all.size =>
+            AST.Injections(
+              items.map(_.fold[AST.Injected](AST.Injected.Calling(_), AST.Injected.Referring(_))), tags, at)
           case (value, doc, _) +: rest =>
             doc.foreach { case (_, at) => record(MisplacedDocComment(at)) }
             rest.foreach { case (_, _, at) => record(SecondValue(at.location)) }

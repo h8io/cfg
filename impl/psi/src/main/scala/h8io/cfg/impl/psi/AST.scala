@@ -86,14 +86,31 @@ private[psi] object AST {
   final case class Substitution(path: Id.Branch, optional: Boolean, tags: Set[String], location: SourceLocation)
       extends Value
 
-  /** A block opened by indentation that holds substitutions and calls alone, two or more, none tagged: what they find
-    * or give decides what it is, the fields of maps merged in turn or the elements of sequences (§4, §9).
+  /** A block opened by indentation that holds substitutions and calls alone, two or more, none tagged: what the first
+    * that finds or gives anything finds or gives decides what it is, the fields of maps merged in turn or the elements
+    * of sequences (§4, §9).
     *
     * @param items
-    *   in the order written, a call or a reference
+    *   in the order written
     */
-  final case class Injections(items: Vector[Either[Call, Token.Reference]], tags: Set[String], location: SourceLocation)
-      extends Value
+  final case class Injections(items: Vector[Injected], tags: Set[String], location: SourceLocation) extends Value
+
+  /** What a block of injections alone holds, in the order written (§9). */
+  sealed trait Injected
+
+  object Injected {
+
+    /** A call, not expanded yet. */
+    final case class Calling(call: Call) extends Injected
+
+    /** What a call gave once expanded, as it would stand as a value: kept until substitutions are resolved, so that
+      * what decides the block is the first that finds or gives anything as written, a call or a substitution.
+      */
+    final case class Given(call: Call, value: Value) extends Injected
+
+    /** A substitution. */
+    final case class Referring(reference: Token.Reference) extends Injected
+  }
 
   /** A scalar with `\${…}` inside it, or quoted around one alone, such as `"\${a}"`: always a scalar (§9).
     *

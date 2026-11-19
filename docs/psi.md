@@ -218,9 +218,10 @@ elements. A substitution injects where nothing before it, no key and no `- `, gi
   maps, merged in turn, or the elements of sequences. One alone there is the key's value, the node itself.
 - An injection takes no tags: the fields and elements it puts keep their own. In `[…]` a tag goes to the one element
   a node that is no sequence makes.
-- A directive injects where a substitution does, what it gives in place of the node: among fields, the fields of a
-  map; alone on its line among `- ` elements, the elements of a sequence; in `[…]`, a sequence's elements or anything
-  else as one element.
+- A directive does wherever it stands what a substitution standing there does, what it gives in place of the node:
+  among fields, the fields of a map; alone on its line among `- ` elements, the elements of a sequence; in `[…]`, a
+  sequence's elements or anything else as one element; among injections alone, it decides as the first as written
+  that gives anything. Only inside a string does a substitution go where a directive does not.
 - The node is taken as it ends up, every source merged. An injection at the top of a source is an error, unless the
   source is included in a block.
 

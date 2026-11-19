@@ -537,6 +537,15 @@ before merging and substitution (§8). A value starting with `#` is written in q
 (`color: "#fff"` — unquoted it is a call of an unknown directive `fff`); inside an unquoted scalar
 `#` is ordinary. A pasted YAML or HOCON comment fails loudly: `# text` is a directive with no name.
 
+**A directive and a substitution follow one rule of where they stand** (session 35): a call does
+wherever it stands what a substitution standing there does, what the call gives in place of what
+the substitution finds, and the other way round. What sets them apart is when: a call is expanded
+before merging, a substitution resolved after it (§8), and only what follows from that differs —
+a call may stand at the root, where an injection would refer to the tree it builds (§9), and what a
+call gives merges with what is written elsewhere at its key, where a substitution cannot (§7). The
+one exception is a string: a substitution concatenates in a scalar, `jdbc:$host/db`, and a call
+does not, `#` inside an unquoted scalar being ordinary.
+
 A directive may appear in two positions:
 
 - **statement position**, inside any block or at the top of a file — it must produce a map, which is
@@ -895,9 +904,11 @@ it gives it a place for one node, and it grafts; with none, it injects into the 
   taken knowingly: the shape of a sequence in brackets depends on what its substitutions find, as
   in session 26, where `[$db.host, $cache.host]` would be an error without it.
 - **Two or more alone in a block opened by indentation, none tagged** (session 34): what the first
-  that finds anything finds makes the block a map, the fields of each merged in turn, or a sequence,
-  the elements of each put in turn, the block's tags its own; one finding anything else is an error
-  naming where it is defined, and so is a first that is neither. With none finding anything, the
+  that finds or gives anything, as written, finds or gives makes the block a map, the fields of each
+  merged in turn, or a sequence, the elements of each put in turn, the block's tags its own; one
+  finding or giving anything else is an error naming where it is defined, and so is a first that is
+  neither. A call there decides as a substitution does, by where it stands and not by being
+  expanded first (session 35): what it gives waits for the substitutions to be resolved. With none finding anything, the
   block is nothing, and its key or element is left out, as an optional graft's is. A block of one
   value alone is that value, `a:⏎  $b` a graft (§4). Merging with what is written elsewhere at its
   key is the error a substitution there gives (§7), the block maybe no map.
@@ -2527,3 +2538,20 @@ Fixed on a review of session 32's code, the format unchanged, nothing put to the
   an empty map, which `a: #d` gives as `a: {}`, where nothing leaves `a` out.
 - Breaks every `*` written since session 31, and `[x, $a, z]`, which session 31 made nest a
   sequence whole, puts its elements again: before 1.0, compatibility is not kept.
+
+### Session 35 — 2026-11-19
+
+- **A directive and a substitution follow one rule of where they stand** (§6, §9), the user's
+  principle: a call behaves as a substitution would standing there, and a substitution as a call,
+  resolution aside. I went through the rules with it and put to the user what it leaves: the root,
+  where a call stands and an injection does not, and a merge with what is written elsewhere at a key,
+  which a call's result takes and a substitution's does not — both from when each is done, so within
+  the principle — and two that are not.
+- **In a block of injections alone, the first as written decides, a call or a substitution** (§9),
+  fixing session 34's code, which let a call decide whatever stood before it, being expanded first:
+  `b:⏎  $seq⏎  #map` was a map with the error at `$seq`. What a call gives is now kept in the block
+  until its substitutions are resolved, and the block is then read in order. A block of calls alone
+  is therefore no longer a map before merging: what is written elsewhere at its key does not merge
+  with it, as with a block of substitutions alone (§7), the principle taken over the convenience.
+- **A string is the exception**, the user's decision: a substitution concatenates in a scalar, a
+  call does not.
