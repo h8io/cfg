@@ -31,15 +31,6 @@ class ResolutionMessageTest extends AnyFlatSpec with Matchers {
         Some("concatenate long values fewer times, or build the loader with a higher withSizeLimit")))
   }
 
-  "A merge with a substitution" should "name the earlier value and offer ':='" in {
-    text(MergeWithSubstitution(at(2), at(1))) shouldBe
-      ((
-        "':' merges with the value at s:1:1, and one of them, a substitution or a block of injections alone, is " +
-          "not known to be a map before substitutions are resolved",
-        Some("write ':=' to replace the earlier value, or braces around the substitution or the injections, as in " +
-          "'{ $" + "a }', to make a map of them")))
-  }
-
   "A substitution" should "name its path, and the origin of what it found" in {
     text(UnresolvedSubstitution(at(1), "a.b")) shouldBe
       (("nothing at 'a.b' to substitute", Some("write '$" + "{?a.b}' if it may be missing")))

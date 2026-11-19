@@ -172,15 +172,14 @@ class InjectionTest extends AnyFlatSpec with Matchers {
       List(UnresolvedSubstitution(at(2, 3), "nope"), UnresolvedSubstitution(at(3, 3), "none"))
   }
 
-  it should "be looked into by a path, and merge with nothing written elsewhere, which it may not be a map for" in {
+  it should "be looked into by a path, and merge with what is written elsewhere at its key once resolved" in {
     value(loaded("a { x: 1 }\nc { y: 2 }\nb:\n  $a\n  $c\nd: $b.y")("d")) shouldBe "2"
     value(loaded("a: [x]\nc: [y]\nb:\n  $a\n  $c\nd: $b[1]")("d")) shouldBe "y"
-    errors("a { x: 1 }\nb:\n  $a\n  $a\nb.y: 2") shouldBe List(MergeWithSubstitution(at(5, 1), at(3, 3)))
-    errors("a { x: 1 }\nb { y: 2 }\nb:\n  $a\n  $a") shouldBe List(MergeWithSubstitution(at(4, 3), at(2, 3)))
-    errors("a { x: 1 }\nb: $a\nb:\n  $a\n  $a") shouldBe List(MergeWithSubstitution(at(4, 3), at(2, 4)))
+    shown("a { x: 1 }\nb:\n  $a\n  $a\nb.y: 2", "b") shouldBe "x: 1\ny: 2"
+    shown("a { x: 1 }\nb { y: 2 }\nb:\n  $a\n  $a", "b") shouldBe "y: 2\nx: 1"
+    shown("a { x: 1 }\nb: $a\nb:\n  $a\n  $a", "b") shouldBe "x: 1"
     // an injection brings in a map over one
-    errors("a { c { p: 1 } }\nx { q: 2 }\nb {\n  c:\n    $x\n    $x\n  $a\n}") shouldBe
-      List(MergeWithSubstitution(ReferenceLocation(at(7, 3), "a.c", at(1, 7)), at(5, 5)))
+    shown("a { c { p: 1 } }\nx { q: 2 }\nb {\n  c:\n    $x\n    $x\n  $a\n}", "b") shouldBe "c:\n  q: 2\n  p: 1"
     // nor refer to itself, each reference closing a cycle
     errors("b:\n  $b\n  $b") shouldBe List(SubstitutionCycle(at(2, 3), "b"), SubstitutionCycle(at(3, 3), "b"))
   }
@@ -321,7 +320,7 @@ class InjectionTest extends AnyFlatSpec with Matchers {
       List(UnresolvedSubstitution(at(2, 5), "missing"))
     // what is written after it merges as it is written, its errors included
     errors("b { $missing, x: $a, x { q: 2 } }") shouldBe
-      List(UnresolvedSubstitution(at(1, 5), "missing"), MergeWithSubstitution(at(1, 24), at(1, 18)))
+      List(UnresolvedSubstitution(at(1, 5), "missing"), UnresolvedSubstitution(at(1, 18), "a"))
   }
 
   "A block with an injection of its own, merged with one an injection brings" should "keep where each came from" in {
@@ -351,12 +350,10 @@ class InjectionTest extends AnyFlatSpec with Matchers {
     errors("\"$" + "{a}$" + "{b}\": 1") shouldBe List(QuotedKey(at(1, 1), "$" + "{a}$" + "{b}"))
   }
 
-  "What an injection brings in" should "not merge a map over a substitution, which may be no map" in {
-    errors("a { c { p: 1 } }\nx { q: 2 }\nb { c: $x, $a }") shouldBe
-      List(MergeWithSubstitution(ReferenceLocation(at(3, 12), "a.c", at(1, 7)), at(3, 8)))
-    // what is written after the injection merges as it is written, its errors included
-    errors("a { c { p: 1 } }\nx { q: 2 }\nb { $a, c: $x, c { r: 3 } }") shouldBe
-      List(MergeWithSubstitution(at(3, 12), ReferenceLocation(at(3, 5), "a.c", at(1, 7))))
+  "What an injection brings in" should "merge with a substitution once it is resolved" in {
+    shown("a { c { p: 1 } }\nx { q: 2 }\nb { c: $x, $a }", "b") shouldBe "c:\n  q: 2\n  p: 1"
+    // what is written after the injection merges as it is written
+    shown("a { c { p: 1 } }\nx { q: 2 }\nb { $a, c: $x, c { r: 3 } }", "b") shouldBe "c:\n  p: 1\n  q: 2\n  r: 3"
   }
 
   it should "fit under the depth limit, and count as the nodes it copies" in {

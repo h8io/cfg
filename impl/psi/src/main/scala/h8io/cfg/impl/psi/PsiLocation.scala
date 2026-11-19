@@ -11,18 +11,7 @@ import scala.collection.mutable
   * site as its primary coordinates together with the location of the node it was taken from, so `description` names the
   * line the reader has to go to first and the definition behind it second.
   */
-sealed trait PsiLocation extends Location {
-
-  /** Where an error at this location stands among the errors of a load from `sources`, in order: by source, then by
-    * line and column; a location in no source given, last.
-    */
-  private[psi] def order(sources: Seq[String]): (Int, Int, Int)
-
-  /** The position in a source this location starts with, which an error report groups it under; none for a location in
-    * no source.
-    */
-  private[psi] def anchor: Option[SourceLocation]
-}
+sealed trait PsiLocation extends Location {}
 
 private[psi] object PsiLocation {
 
@@ -161,12 +150,13 @@ private[psi] object PsiLocation {
 final case class SourceLocation(source: String, line: Int, column: Int) extends PsiLocation {
   def description: String = source + ':' + line.toString + ':' + column.toString
 
+  /** Where an error here stands among the errors of a load from `sources`, in order: by source, then by line and
+    * column; a source not given, last.
+    */
   private[psi] def order(sources: Seq[String]): (Int, Int, Int) = {
     val index = sources.indexOf(source)
     (if (index < 0) sources.size else index, line, column)
   }
-
-  private[psi] def anchor: Option[SourceLocation] = Some(this)
 }
 
 /** A node grafted at `at` by `\${path}`.
@@ -184,10 +174,6 @@ final case class ReferenceLocation(at: SourceLocation, path: String, origin: Loc
   def description: String = PsiLocation.describe(this)
 
   override def toString: String = PsiLocation.show(this)
-
-  private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
-
-  private[psi] def anchor: Option[SourceLocation] = Some(at)
 }
 
 /** A scalar built at `at` by concatenation, with one reference per `\${…}` in the order written. */
@@ -201,10 +187,6 @@ final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLo
   def description: String = PsiLocation.describe(this)
 
   override def toString: String = PsiLocation.show(this)
-
-  private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
-
-  private[psi] def anchor: Option[SourceLocation] = Some(at)
 }
 
 /** A map defined in more places than one, merged (`format.md` §7, §10): `at` is where it was defined last, `earlier`
@@ -220,19 +202,11 @@ final case class MergedLocation(at: PsiLocation, earlier: ::[PsiLocation]) exten
   def description: String = PsiLocation.describe(this)
 
   override def toString: String = PsiLocation.show(this)
-
-  private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
-
-  private[psi] def anchor: Option[SourceLocation] = at.anchor
 }
 
 /** The root of a load given no source at all, an empty map that was written nowhere. */
 case object NoSourceLocation extends PsiLocation {
   def description: String = "no source"
-
-  private[psi] def order(sources: Seq[String]): (Int, Int, Int) = (sources.size, 0, 0)
-
-  private[psi] def anchor: Option[SourceLocation] = None
 }
 
 /** A node a directive built from a `Node` of its own and placed at `at`, the call (`format.md` §6, §10).
@@ -252,26 +226,14 @@ final case class DirectiveLocation(at: SourceLocation, directive: String, origin
   def description: String = PsiLocation.describe(this)
 
   override def toString: String = PsiLocation.show(this)
-
-  private[psi] def order(sources: Seq[String]): (Int, Int, Int) = at.order(sources)
-
-  private[psi] def anchor: Option[SourceLocation] = Some(at)
 }
 
 /** A value `#prop` read from the system property `name` (`format.md` §6, §10). */
 final case class SystemPropertyLocation(name: String) extends PsiLocation {
   def description: String = "system property " + name
-
-  private[psi] def order(sources: Seq[String]): (Int, Int, Int) = (sources.size, 0, 0)
-
-  private[psi] def anchor: Option[SourceLocation] = None
 }
 
 /** A value `#env` read from the environment variable `name` (`format.md` §6, §10). */
 final case class EnvironmentLocation(name: String) extends PsiLocation {
   def description: String = "environment variable " + name
-
-  private[psi] def order(sources: Seq[String]): (Int, Int, Int) = (sources.size, 0, 0)
-
-  private[psi] def anchor: Option[SourceLocation] = None
 }

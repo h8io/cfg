@@ -155,15 +155,14 @@ cache := { size: 10 }
 """)
 ```
 
-A [substitution](#substitutions) standing alone as a value is not merged. What it refers to is known only once every
-source is merged, so whether it is a block, which would merge, or anything else, which would be replaced, is not known
-yet: a `:` meeting an earlier value of its key is an error when one side is a whole `${…}` and the other a block or
-another substitution. `:=` replaces instead, and a value that is no block, such as `a: 5`, replaces whatever the
-substitution turns out to be. So a block copied with `${…}` cannot have one of its fields changed:
+A [substitution](#substitutions) standing alone as a value merges too, once it is resolved: what it refers to is known
+only when every source is merged. A block written over it, or under it, merges with it when it turns out a map, its tags
+with the block's, and replaces it, or is replaced by it, when it does not, as `:` does with any value. So a block copied
+with `${…}` can have one of its fields changed:
 
 ```scala mdoc:passthrough
 example("""
-base { port: 1 }
+base { host: localhost, port: 1 }
 a: ${base}
 a { port: 2 }
 """)

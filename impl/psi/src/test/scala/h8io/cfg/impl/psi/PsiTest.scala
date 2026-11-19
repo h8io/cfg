@@ -127,7 +127,7 @@ class PsiTest extends AnyFlatSpec with Matchers {
     errors(Psi(references)) shouldBe List(UnresolvedSubstitution(at(references, 4, 4), "psi-test-e"))
     errors(Psi(conflict)) shouldBe
       List(
-        MergeWithSubstitution(at(conflict, 2, 4), at(conflict, 1, 3)),
+        UnresolvedSubstitution(at(conflict, 2, 4), "s"),
         UnresolvedSubstitution(at(conflict, 3, 5), "psi-test-t"))
   }
 
@@ -137,8 +137,8 @@ class PsiTest extends AnyFlatSpec with Matchers {
     errors(Psi(first, second)) shouldBe
       List(
         UnresolvedSubstitution(at(first, 2, 4), "psi-test-x"),
-        UnresolvedSubstitution(at(second, 1, 4), "psi-test-y"),
-        MergeWithSubstitution(at(second, 2, 3), at(first, 3, 4))
+        UnresolvedSubstitution(at(first, 3, 4), "psi-test-z"),
+        UnresolvedSubstitution(at(second, 1, 4), "psi-test-y")
       )
   }
 

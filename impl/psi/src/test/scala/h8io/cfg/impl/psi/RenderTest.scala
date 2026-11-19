@@ -42,6 +42,7 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
           tags,
           nowhere
         )
+      case Tree.Layers(layers) => Tree.Layers(layers.map(layer => located(layer).asInstanceOf[Tree.Layer]))
       case map: Tree.Map =>
         Tree.Map(map.keys, map.entries.map { case (k, v) => k -> located(v) }, map.tags, nowhere)
       // no loader's marker in these trees
@@ -170,10 +171,6 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
         g <- tagSets
       } yield Tree.Concatenation(p, g, nowhere)
     )
-    val references = for {
-      p <- path
-      o <- arbitrary[Boolean]
-    } yield Reference(p, o, nowhere)
     // a sequence of `- ` elements, an injection alone on its line among them, with one element at least
     val block = for {
       n <- Gen.choose(0, 4)
@@ -201,11 +198,6 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
       )
       g <- tagSets
     } yield Tree.Sequence(es.toVector, g, nowhere)
-    val injections = for {
-      n <- Gen.choose(2, 3)
-      rs <- Gen.listOfN(n, references)
-      g <- tagSets
-    } yield Tree.Injections(rs.toVector.map(Right(_)), g, nowhere)
     // in brackets a substitution is an injection, which stands among elements only
     val held = if (inBrackets) leaves.suchThat(!_.isInstanceOf[Tree.Substitution]) else leaves
     if (depth == 0) held
@@ -213,10 +205,43 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     else Gen.frequency(3 -> leaves, 1 -> maps(depth - 1), 1 -> block, 1 -> bracketed, 1 -> injections)
   }
 
+  private val references: Gen[Reference] =
+    for {
+      p <- path
+      o <- arbitrary[Boolean]
+    } yield Reference(p, o, nowhere)
+
+  private val injections: Gen[Tree.Injections] =
+    for {
+      n <- Gen.choose(2, 3)
+      rs <- Gen.listOfN(n, references)
+      g <- tagSets
+    } yield Tree.Injections(rs.toVector.map(Right(_)), g, nowhere)
+
+  /** What a key written again holds: a map, a substitution or a block of injections alone, no two maps in a row, which
+    * would merge into one.
+    */
+  private def layers(depth: Int): Gen[Tree.Layers] = {
+    val substitutions = for {
+      r <- references
+      g <- tagSets
+    } yield Tree.Substitution(r.path, r.optional, g, nowhere)
+    val layer: Gen[Tree.Layer] = Gen.oneOf(substitutions, injections, maps(depth - 1))
+    for {
+      n <- Gen.choose(2, 3)
+      ls <- Gen.listOfN(n, layer)
+      fill <- substitutions
+    } yield Tree.Layers(ls.foldLeft(Vector.empty[Tree.Layer]) {
+      case (all @ (_ :+ (_: Tree.Map)), _: Tree.Map) => all :+ fill
+      case (all, l) => all :+ l
+    })
+  }
+
   private def maps(depth: Int): Gen[Tree.Map] =
     for {
       n <- Gen.choose(0, 4)
-      entries <- Gen.listOfN(n, Gen.zip(strings, values(depth)))
+      entries <- Gen.listOfN(
+        n, Gen.zip(strings, if (depth == 0) values(0) else Gen.frequency(5 -> values(depth), 1 -> layers(depth))))
       g <- tagSets
     } yield {
       val unique = entries.foldLeft(Vector.empty[(String, Tree.Value)]) { case (all, (k, v)) =>
@@ -257,6 +282,13 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     )
     the[IllegalStateException] thrownBy Render.value(sequence) should have message
       "A block of injections at s:1:1 on one line"
+  }
+
+  it should "not write layers alone, which a key written again for each writes" in {
+    val nowhere = SourceLocation("s", 1, 1)
+    val sub = Tree.Substitution(Id.Key("a", Id.Root), optional = false, Set.empty, nowhere)
+    the[IllegalStateException] thrownBy Render.value(Tree.Layers(sub, sub)) should have message
+      "Layers at s:1:1 with no key to write again"
   }
 
   it should "not write what a call gave in a block of injections, which has no source" in {
