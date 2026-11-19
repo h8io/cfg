@@ -24,10 +24,11 @@ trait Directive {
     * @param arguments
     *   the arguments by parameter, in the order the parameters are declared; every value a scalar string
     * @return
-    *   an error, reported as the directive's failure at the call; nothing, which adds no field in statement position
-    *   and drops the field or element in value position; or a fragment, which must be a map in statement position
+    *   an error, reported as the directive's failure at the call; [[Fragment.None]], nothing, which adds no field in
+    *   statement position and drops the field or element in value position; or a fragment, which must be a map in
+    *   statement position
     */
-  def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Option[Fragment]]
+  def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment]
 }
 
 /** Why a [[Directive]] could not be expanded; a handler's own errors extend it. */

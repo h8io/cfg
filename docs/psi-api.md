@@ -88,8 +88,8 @@ positional ones first, then named ones, `name: value`.
 
 A handler declares its parameters and gets the arguments as a map keyed by them, every value a string. It also gets a
 context: where the call stands, the name and URL of the source holding it, and a way to parse another Psi source. It
-gives back an error of its own, nothing, or a `Fragment`: a Psi source the context parsed, or any `cfg` node,
-`Fragment(node)`.
+gives back an error of its own or a `Fragment`: a Psi source the context parsed, any `cfg` node, `Fragment(node)`, or
+nothing, `Fragment.None`, which adds no field among fields and leaves the field or element out as a value.
 
 This one reads a YAML file with `cfg-yaml`, relative to the source the call stands in:
 
@@ -110,16 +110,16 @@ object Yaml extends Directive {
 
   def parameters: Seq[Parameter] = Seq(Parameter("file", required = true))
 
-  def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Option[Fragment]] =
+  def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
     arguments("file") match {
       case Node.IScalar(_, _, file, _) =>
         // the path is encoded before it is resolved, and one no URL can be made of fails the call too
         try {
           val url = context.url.fold(Paths.get(file).toUri)(_.toURI.resolve(new URI(null, null, file, null))).toURL
-          Right(Some(Fragment(YAML(url))))
+          Right(Fragment(YAML(url)))
         } catch { case e: Exception => Left(YamlUnreadable(file, e.toString)) }
       // a required argument is always given, and as a scalar
-      case _ => Right(None)
+      case _ => Right(Fragment.None)
     }
 }
 ```

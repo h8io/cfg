@@ -93,8 +93,8 @@ class LaunchTest extends AnyFlatSpec with Matchers {
     val handler = new Directive {
       def name: String = "env"
       def parameters: Seq[Parameter] = Nil
-      def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Option[Fragment]] =
-        Right(None)
+      def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
+        Right(Fragment.None)
     }
     Psi.builder.withDirectives(handler).build.left.map(_.errors) shouldBe Left(::(DuplicateDirective("env"), Nil))
     Psi.builder.disableDirective("env").build.fold(e => fail(e.toString), identity).parse("s", "a: #env(HOME)") shouldBe
