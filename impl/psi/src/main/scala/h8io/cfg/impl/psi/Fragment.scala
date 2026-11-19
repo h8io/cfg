@@ -6,7 +6,15 @@ import h8io.cfg.{Id, Node}
   * the errors found in making it, reported wherever it is used, so a handler may keep one and give it back again, in
   * the same load or a later one. [[Fragment.None]] is nothing at all, as `Node.None` is a node that is not there.
   */
-sealed trait Fragment
+sealed trait Fragment {
+
+  /** `some` of this fragment when it holds something, `none` when it is [[Fragment.None]]. */
+  private[psi] def fold[A](none: => A)(some: Fragment.Some => A): A =
+    this match {
+      case fragment: Fragment.Some => some(fragment)
+      case Fragment.None => none
+    }
+}
 
 object Fragment {
 
