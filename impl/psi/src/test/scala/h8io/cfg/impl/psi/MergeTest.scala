@@ -204,5 +204,6 @@ class MergeTest extends AnyFlatSpec with Matchers {
   "A directive" should "be a bug of the loader when it reaches merging unexpanded" in {
     the[IllegalStateException] thrownBy merge("#x(1)") should have message "#x at s0:1:1 was never expanded"
     the[IllegalStateException] thrownBy merge("a: [#y]") should have message "#y at s0:1:5 was never expanded"
+    the[IllegalStateException] thrownBy merge("a:\n  #z\n  $b") should have message "#z at s0:2:3 was never expanded"
   }
 }

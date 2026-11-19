@@ -31,11 +31,12 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
       case Tree.Null(tags, _) => Tree.Null(tags, nowhere)
       case Tree.Sequence(elements, tags, _) => Tree.Sequence(elements.map(located), tags, nowhere)
       case Tree.Substitution(path, optional, tags, _) => Tree.Substitution(path, optional, tags, nowhere)
-      case Tree.Injection(path, optional, _) => Tree.Injection(path, optional, nowhere)
+      case Tree.Injection(path, optional, tags, _, required) => Tree.Injection(path, optional, tags, nowhere, required)
+      case Tree.Injections(references, tags, _) => Tree.Injections(references.map(reference), tags, nowhere)
       case Tree.Concatenation(parts, tags, _) =>
         Tree.Concatenation(
           parts.map {
-            case Reference(path, optional, _, injection) => Reference(path, optional, nowhere, injection)
+            case r: Reference => reference(r)
             case text: Text => text
           },
           tags,
@@ -46,6 +47,8 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
       // no loader's marker in these trees
       case marked: Tree.Marked => fail(marked.toString)
     }
+
+  private def reference(reference: Reference): Reference = reference.copy(location = nowhere)
 
   private def roundTrip(text: String): Unit = {
     val read = tree(text)
@@ -64,8 +67,8 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
 
   it should "write a sequence as `- ` elements, the first line of a map or sequence on the line of its `- `" in {
     Render.document(
-      tree("a: [1, x, null, ${b}, ${c*}]\nc: [1, [2, 3], {d: 3, e: 4}, {}, [], @t {e: 4}, @u [5]]")) shouldBe
-      "a:\n  - 1\n  - x\n  - null\n  - ${b}\n  - ${c*}\nc:\n  - 1\n  - - 2\n    - 3\n  - d: 3\n    e: 4\n  - {}\n" +
+      tree("a:\n  - 1\n  - x\n  - null\n  - ${b}\n  ${c}\nc: [1, [2, 3], {d: 3, e: 4}, {}, [], @t {e: 4}, @u [5]]")) shouldBe
+      "a:\n  - 1\n  - x\n  - null\n  - ${b}\n  ${c}\nc:\n  - 1\n  - - 2\n    - 3\n  - d: 3\n    e: 4\n  - {}\n" +
       "  - []\n  - @t\n    e: 4\n  - @u\n    - 5\n"
     Render.document(tree("a: [[[{b: 1, c: 2}]]]")) shouldBe "a:\n  - - - b: 1\n        c: 2\n"
   }
@@ -107,7 +110,7 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
 
   it should "read back every example as the tree it was written from" in {
     roundTrip("a: 1\nb { c: x, d { } }\ne: null\nm: @z @a { k: @t v }\nc: [1, [2], {d: 3}, {}, @t {e: 4}]")
-    roundTrip("a: [\"x:\", @t \"z:\", \"-\", [[{b: 1, c: [@t {d: 2}]}]], @u [], $x*]")
+    roundTrip("a: [\"x:\", @t \"z:\", \"-\", [[{b: 1, c: [@t {d: 2}]}]], @u [], $x]")
     roundTrip("`a b`: @`t:x` \"q\\\"b\\\\d$x\\${y}\"\nf: x${g}y\nh: \"${i}\"\ns: \"\"")
   }
 
@@ -149,7 +152,8 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
       })
       .suchThat(_.exists(_.isInstanceOf[Reference]))
 
-  private def values(depth: Int): Gen[Tree.Value] = {
+  /** A value, `inBrackets` one that brackets can hold: no block of injections, and sequences that brackets write. */
+  private def values(depth: Int, inBrackets: Boolean = false): Gen[Tree.Value] = {
     val leaves = Gen.oneOf(
       for {
         t <- strings
@@ -166,29 +170,48 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
         g <- tagSets
       } yield Tree.Concatenation(p, g, nowhere)
     )
-    if (depth == 0) leaves
-    else
-      Gen.frequency(
-        3 -> leaves,
-        1 -> maps(depth - 1),
-        1 ->
-          (for {
-            n <- Gen.choose(0, 4)
-            es <- Gen.listOfN(n, elements(depth - 1))
-            g <- tagSets
-          } yield Tree.Sequence(es.toVector, g, nowhere))
+    val references = for {
+      p <- path
+      o <- arbitrary[Boolean]
+    } yield Reference(p, o, nowhere)
+    // a sequence of `- ` elements, an injection alone on its line among them, with one element at least
+    val block = for {
+      n <- Gen.choose(0, 4)
+      es <- Gen.listOfN(n,
+        Gen.frequency(4 -> values(depth - 1, inBrackets = false),
+          1 -> references.map(r =>
+            Tree.Injection(r.path, r.optional, Set.empty, nowhere, required = true))))
+      g <- tagSets
+    } yield {
+      val elements = if (es.nonEmpty && es.forall(_.isInstanceOf[Tree.Injection])) Tree.Null(Set.empty, nowhere) +: es
+      else es
+      Tree.Sequence(elements.toVector, g, nowhere)
+    }
+    // a sequence in brackets, an injection among its elements with its tags
+    val bracketed = for {
+      n <- Gen.choose(0, 4)
+      es <- Gen.listOfN(
+        n,
+        Gen.frequency(4 -> values(depth - 1, inBrackets = true),
+          1 ->
+            (for {
+              r <- references
+              g <- tagSets
+            } yield Tree.Injection(r.path, r.optional, g, nowhere, required = false)))
       )
+      g <- tagSets
+    } yield Tree.Sequence(es.toVector, g, nowhere)
+    val injections = for {
+      n <- Gen.choose(2, 3)
+      rs <- Gen.listOfN(n, references)
+      g <- tagSets
+    } yield Tree.Injections(rs.toVector, g, nowhere)
+    // in brackets a substitution is an injection, which stands among elements only
+    val held = if (inBrackets) leaves.suchThat(!_.isInstanceOf[Tree.Substitution]) else leaves
+    if (depth == 0) held
+    else if (inBrackets) Gen.frequency(3 -> held, 1 -> maps(depth - 1), 1 -> bracketed)
+    else Gen.frequency(3 -> leaves, 1 -> maps(depth - 1), 1 -> block, 1 -> bracketed, 1 -> injections)
   }
-
-  /** An element of a sequence: a value, or an injection, which stands only there. */
-  private def elements(depth: Int): Gen[Tree.Value] =
-    Gen.frequency(
-      4 -> values(depth),
-      1 ->
-        (for {
-          p <- path
-          o <- arbitrary[Boolean]
-        } yield Tree.Injection(p, o, nowhere)))
 
   private def maps(depth: Int): Gen[Tree.Map] =
     for {
@@ -220,6 +243,20 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
         located(merged.value) shouldBe located(root)
       }
     }
+
+  it should "not write a block of injections in brackets, where none stands" in {
+    val nowhere = SourceLocation("s", 1, 1)
+    val reference = Reference(Id.Key("a", Id.Root), optional = false, nowhere)
+    val sequence = Tree.Sequence(
+      Vector(
+        Tree.Injection(reference.path, optional = false, Set.empty, nowhere, required = false),
+        Tree.Injections(Vector(reference, reference), Set.empty, nowhere)),
+      Set.empty,
+      nowhere
+    )
+    the[IllegalStateException] thrownBy Render.value(sequence) should have message
+      "A block of injections at s:1:1 on one line"
+  }
 
   "toString" should "write the root as a document and any other node alone, a block below its tags" in {
     val root = Psi.parse("s", "a { b: [1, {c: 2}] }\nd: @t {}\ne: @u { f: 3 }\ng: @v [4]")

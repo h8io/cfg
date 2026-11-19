@@ -11,7 +11,7 @@ package object psi {
       case Tree.Null(tags, location) => Node.INull(id, tags, location)
       case map: Tree.Map => MapImpl(id, map)
       case sequence: Tree.Sequence => SeqImpl(id, sequence)
-      case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Marked | _: Tree.Injection =>
+      case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Marked | _: Tree.Injection | _: Tree.Injections =>
         throw new IllegalStateException("An unresolved substitution at " + value.location.description)
     }
 }

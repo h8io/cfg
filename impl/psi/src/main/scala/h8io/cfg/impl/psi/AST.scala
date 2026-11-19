@@ -29,8 +29,8 @@ private[psi] object AST {
     */
   final case class DirectiveStatement(call: Call, doc: Option[String]) extends Statement
 
-  /** An injection, `$path*` or `${path*}` among the fields of a block: the fields of the map at `path`, merged there as
-    * if written there (§7, §9).
+  /** An injection, `$path` or `${path}` alone among the fields of a block: the fields of the map at `path`, merged
+    * there as if written there (§7, §9).
     */
   final case class InjectionStatement(path: Id.Branch, optional: Boolean, location: SourceLocation, doc: Option[String])
       extends Statement
@@ -86,12 +86,14 @@ private[psi] object AST {
   final case class Substitution(path: Id.Branch, optional: Boolean, tags: Set[String], location: SourceLocation)
       extends Value
 
-  /** `\${path*}` or `\${?path*}` as an element of a sequence: the elements of the sequence it finds, in its place (§9).
-    * It takes no tags, which would have no node to go to.
+  /** A block opened by indentation that holds substitutions and calls alone, two or more, none tagged: what they find
+    * or give decides what it is, the fields of maps merged in turn or the elements of sequences (§4, §9).
+    *
+    * @param items
+    *   in the order written, a call or a reference
     */
-  final case class Injection(path: Id.Branch, optional: Boolean, location: SourceLocation) extends Value {
-    def tags: Set[String] = Set.empty
-  }
+  final case class Injections(items: Vector[Either[Call, Token.Reference]], tags: Set[String], location: SourceLocation)
+      extends Value
 
   /** A scalar with `\${…}` inside it, or quoted around one alone, such as `"\${a}"`: always a scalar (§9).
     *
@@ -108,14 +110,28 @@ private[psi] object AST {
     def location: PsiLocation = value.location
   }
 
-  /** A directive in value position, which is to produce a node; the tags are added to that node's (§6). With a `*`
-    * after it, an `injection` among the elements of a sequence, which is to produce a sequence whose elements stand in
-    * its place, and takes no tags (§9).
-    */
-  final case class DirectiveValue(call: Call, tags: Set[String], injection: Boolean = false) extends Value {
+  /** A directive in value position, which is to produce a node; the tags are added to that node's (§6). */
+  final case class DirectiveValue(call: Call, tags: Set[String]) extends Value {
     def location: SourceLocation = call.location
   }
 
-  /** An element of a sequence, with the doc comment before it. */
-  final case class Element(value: Value, doc: Option[String])
+  /** How an element that is a substitution or a call stands among the elements of a sequence (§6, §9). */
+  sealed trait Put
+
+  object Put {
+
+    /** As one element: after a `- `. */
+    case object Whole extends Put
+
+    /** In `[…]`, an injection: the elements of a sequence found or given, anything else as one element. */
+    case object Found extends Put
+
+    /** Alone on its line in a block of `- ` elements, an injection: the elements of a sequence, which it must be. */
+    case object Elements extends Put
+  }
+
+  /** An element of a sequence, with the doc comment before it; `put` says how it stands there when it is a substitution
+    * or a call, and means nothing for any other value.
+    */
+  final case class Element(value: Value, doc: Option[String], put: Put = Put.Whole)
 }

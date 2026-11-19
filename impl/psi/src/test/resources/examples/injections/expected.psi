@@ -16,6 +16,15 @@ replica:
   pool:
     size: 20
     timeout: 30
+monitoring:
+  interval: 10s
+audited:
+  host: localhost
+  port: 6432
+  pool:
+    size: 20
+    timeout: 30
+  interval: 10s
 hosts:
   - a
   - b
@@ -28,3 +37,9 @@ groups:
   - - a
     - b
   - - backup
+flat:
+  - a
+  - b
+  - localhost
+  - - a
+    - b

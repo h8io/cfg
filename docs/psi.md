@@ -78,8 +78,9 @@ password: null
 A block is written in braces or by indentation, as in Scala 3, and the two mix freely, in one source and in one block.
 
 - `key:` at the end of a line, tags allowed after it, opens a block on the lines indented deeper below: fields make it
-  a map, `- ` elements a sequence, and a value alone is the key's value, as if written after the `:`. With nothing
-  deeper below, it is an error; an empty block is written `{}` or `[]`.
+  a map, `- ` elements a sequence, and a value alone is the key's value, as if written after the `:`. A substitution
+  or a directive alone on its line among fields or elements is an [injection](#injections), and so are two or more
+  alone. With nothing deeper below, it is an error; an empty block is written `{}` or `[]`.
 - An element is `- value` at the start of a line, deeper than its key. A map element has its first field after the
   `- ` and the rest aligned under it; `- - x` is a sequence in a sequence; a tag goes after the `- `, with the block
   below it.
@@ -174,8 +175,9 @@ a { port: 2 }
 indexes in brackets: `${servers[0].host}`. Substitutions are resolved once every source is merged, so a value refers
 to its final state, whichever source set it.
 
-- `${path}` alone, unquoted, puts the node there whatever it is: a block, a sequence, a value, as an element of a
-  sequence too. With a `*` after the path, `${path*}` or `$path*`, it is an [injection](#injections).
+- `${path}` alone, unquoted, after a key or a `- ` puts the node there whatever it is: a block, a sequence, a value.
+  Where nothing gives it a place of its own, among fields, on a line of its own among `- ` elements, or in `[…]`, it
+  is an [injection](#injections).
 - Inside a value, `jdbc:${host}/db` or `"jdbc:${host}/db"`, it builds a string, and the node has to be a value.
 - `${?path}` is optional: with nothing at `path`, the field is left out, an element of a sequence is dropped, and a
   part of a string is empty.
@@ -203,17 +205,22 @@ raw: '${not.a.path}'
 
 ### Injections
 
-An injection, `$path*` or `${path*}`, `$?path*` or `${?path*}` optional, puts what the node holds in its place. It
-stands alone among the fields of a block or as an element of a sequence, and nowhere else.
+An injection puts what a node holds in its place: the fields of a map among fields, the elements of a sequence among
+elements. A substitution injects where nothing before it, no key and no `- `, gives it a place for one node:
 
-- Among fields, the node must be a map, and its fields stand there as if written there: what follows overrides them,
-  what comes before is overridden, and blocks merge deep. A substitution with no `*` among fields is an error, having
-  no key to stand at.
-- Among elements, the node must be a sequence, and its elements stand there, after a `- ` as in `[…]`: `- $hosts*`.
-  With no `*` a substitution stands as one element, a sequence nested whole: `[$hosts]`.
-- An injection takes no tags: the fields and elements it puts keep their own.
-- A directive among elements injects what it gives with a `*` too, `#d(…)*`, which must be a sequence; without one
-  what it gives stands as one element. Among fields a directive puts the fields of its map with no `*`.
+- Alone among the fields of a block, the node must be a map, and its fields stand there as if written there: what
+  follows overrides them, what comes before is overridden, and blocks merge deep.
+- Alone on its line among `- ` elements, the node must be a sequence, and its elements stand there. After a `- ` it is
+  one element, a sequence nested whole.
+- In `[…]`, a sequence puts its elements there, and anything else stands as one element: `[$hosts, $db.host]` holds
+  the hosts and then the host. Brackets around it nest a sequence whole: `[[$hosts]]`.
+- Two or more alone in a block below a key, none tagged, take what the first that finds anything finds: the fields of
+  maps, merged in turn, or the elements of sequences. One alone there is the key's value, the node itself.
+- An injection takes no tags: the fields and elements it puts keep their own. In `[…]` a tag goes to the one element
+  a node that is no sequence makes.
+- A directive injects where a substitution does, what it gives in place of the node: among fields, the fields of a
+  map; alone on its line among `- ` elements, the elements of a sequence; in `[…]`, a sequence's elements or anything
+  else as one element.
 - The node is taken as it ends up, every source merged. An injection at the top of a source is an error, unless the
   source is included in a block.
 
@@ -221,13 +228,21 @@ stands alone among the fields of a block or as an element of a sequence, and now
 example("""
 defaults { host: localhost, port: 5432, pool { size: 10, timeout: 30 } }
 db {
-  $defaults*
+  $defaults
   port: 6432
   pool { size: 20 }
 }
+monitoring { interval: 10s }
+audited:
+  $db
+  $monitoring
 hosts: [a, b]
-all: [primary, $hosts*, backup]
-groups: [$hosts, [backup]]
+all:
+  - primary
+  $hosts
+  - backup
+flat: [$hosts, $db.host]
+groups: [[$hosts], [backup]]
 """)
 ```
 

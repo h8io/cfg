@@ -626,36 +626,37 @@ final case class MisplacedInjection(location: SourceLocation) extends PsiError {
   override def hint: Option[String] = Some("write a key and ':' before a value")
 }
 
-/** A substitution standing alone among the fields of a block, `\$path` with no `*`: a graft with no key to stand at
-  * (`format.md` §9).
-  */
-final case class SubstitutionAmongFields(location: SourceLocation, path: String, optional: Boolean) extends PsiError {
-  private def written(star: String): String = "'${" + (if (optional) "?" else "") + Message.cut(path) + star + "}'"
-
-  def message: String = written("") + " among the fields of a block has no key to stand at"
-
-  override def hint: Option[String] =
-    Some("write " + written("*") + " to inject the fields of the map there, or a key and ':' before it")
-}
-
-/** An injection, a substitution or a call with a `*` after it, anywhere but alone among the fields of a block or the
-  * elements of a sequence: as a field's value, in a string or a concatenation, or a call among fields (`format.md` §6,
-  * §9).
-  */
-final case class InjectionOutOfPlace(location: SourceLocation) extends PsiError {
-  def message: String = "an injection stands alone among the fields of a block or the elements of a sequence"
-
-  override def hint: Option[String] =
-    Some("remove the '*' to put the node itself here; a '*' that is text goes after braces, as in '${a}*'")
-}
-
-/** A tag before an injection among the elements of a sequence, whose elements keep their own tags, so that the tag has
-  * no node to go to (`format.md` §9).
+/** A tag before a substitution or a call alone on its line among the fields or the `- ` elements of a block, an
+  * injection, whose fields or elements keep their own tags, so that the tag has no node to go to (`format.md` §9).
   */
 final case class TaggedInjection(location: SourceLocation) extends PsiError {
-  def message: String = "a tag before an injection, whose elements keep their own tags"
+  def message: String = "a tag before an injection, whose fields or elements keep their own tags"
 
-  override def hint: Option[String] = Some("remove the tag, or the '*' to put the node itself as one element")
+  override def hint: Option[String] =
+    Some("remove the tag, or write '- ' before it to put the node itself as one element")
+}
+
+/** A tag in `[…]` before a substitution, at `location`, of `\${path}`, which is a sequence: its elements stand there
+  * with tags of their own, and the tag has no node to go to; `found` is where the sequence is defined (`format.md` §9).
+  */
+final case class TaggedSequence(location: SourceLocation, path: String, found: PsiLocation) extends PsiError {
+  def message: String =
+    "a tag before '${" + Message.cut(path) + "}', a sequence whose elements stand in its place, keeping their own " +
+      "tags; it is defined at " + found.description
+
+  override def hint: Option[String] =
+    Some("remove the tag, or nest the sequence whole: [${" + Message.cut(path) + "}]")
+}
+
+/** A tag in `[…]` before a call that gave a sequence: its elements stand there with tags of their own, and the tag has
+  * no node to go to (`format.md` §6, §9).
+  */
+final case class TaggedDirectiveSequence(location: SourceLocation, name: String) extends PsiError {
+  def message: String =
+    "a tag before " + Message.directive(name) + ", which gave a sequence whose elements stand in its place, keeping " +
+      "their own tags"
+
+  override def hint: Option[String] = Some("remove the tag, or nest the sequence whole: [#…]")
 }
 
 /** An injection among the elements of a sequence, at `location`, of `\${path}`, which is not a sequence; `found` is
@@ -665,16 +666,40 @@ final case class InjectionNotSequence(location: SourceLocation, path: String, fo
   def message: String =
     "'${" + Message.cut(path) + "}' injected among elements is not a sequence; it is defined at " + found.description
 
-  override def hint: Option[String] = Some("remove the '*' to put it as one element")
+  override def hint: Option[String] = Some("write '- ' before it to put it as one element")
 }
 
-/** A call injected among the elements of a sequence, `#name(…)*`, whose handler gave something other than a sequence
-  * (`format.md` §6, §9).
+/** A call alone on its line among the `- ` elements of a block, an injection, whose handler gave something other than a
+  * sequence (`format.md` §6, §9).
   */
 final case class DirectiveNotSequence(location: SourceLocation, name: String) extends PsiError {
   def message: String = Message.directive(name) + " injected among elements gave something other than a sequence"
 
-  override def hint: Option[String] = Some("remove the '*' to put what it gives as one element")
+  override def hint: Option[String] = Some("write '- ' before it to put what it gives as one element")
+}
+
+/** In a block of injections alone, the first substitution, at `location`, that finds anything: `\${path}`, which is
+  * neither a map nor a sequence, so that the block is neither; `found` is where its node is defined (`format.md` §4,
+  * §9).
+  */
+final case class InjectionNotContainer(location: SourceLocation, path: String, found: PsiLocation) extends PsiError {
+  def message: String =
+    "'${" + Message.cut(path) + "}' injected in a block of injections alone is neither a map nor a sequence; it is " +
+      "defined at " + found.description
+
+  override def hint: Option[String] =
+    Some("give the block one value alone to take it whole, or write the values as elements with '- '")
+}
+
+/** In a block of injections alone, the first call that gives anything, which gave neither a map nor a sequence, so that
+  * the block is neither (`format.md` §4, §6).
+  */
+final case class DirectiveNotContainer(location: SourceLocation, name: String) extends PsiError {
+  def message: String =
+    Message.directive(name) + " in a block of injections alone gave neither a map nor a sequence"
+
+  override def hint: Option[String] =
+    Some("give the block one value alone to take it whole, or write the values as elements with '- '")
 }
 
 /** An injection among the fields of the root, which every path goes through, so that it would refer to the tree it
