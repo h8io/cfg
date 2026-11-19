@@ -15,8 +15,8 @@ object Fragment {
     */
   case object None extends Fragment
 
-  /** A fragment that holds something. */
-  private[psi] sealed trait Content extends Fragment
+  /** A fragment that holds something, as `Node.Some` is a node that is there. */
+  private[psi] sealed trait Some extends Fragment
 
   /** A fragment of `node`, which holds no substitution; its ids are dropped, and its locations are kept as origins
     * behind the call (§10).
@@ -31,7 +31,7 @@ object Fragment {
       root: SourceLocation,
       errors: List[PsiError],
       sources: List[String])
-      extends Content
+      extends Some
 
-  private[psi] final case class Built(node: Node.ISome[Id]) extends Content
+  private[psi] final case class Built(node: Node.ISome[Id]) extends Some
 }
