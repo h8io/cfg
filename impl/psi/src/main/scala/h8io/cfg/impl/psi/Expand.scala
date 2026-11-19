@@ -61,15 +61,16 @@ private[psi] final class Expand private (
         val elements = sequence.elements.flatMap { e =>
           val values = (e.value, e.put) match {
             case (AST.DirectiveValue(call, _), AST.Put.Elements) =>
-              run(call, stack, depth + 2).toVector.flatMap(injected(call, _, depth + 1))
+              run(call, stack, depth + 2).fold(Vector.empty[AST.Value])(injected(call, _, depth + 1))
             case (AST.DirectiveValue(call, tags), AST.Put.Found) =>
-              run(call, stack, depth + 2).toVector.flatMap(spread(call, tags, _, depth + 1))
+              run(call, stack, depth + 2).fold(Vector.empty[AST.Value])(spread(call, tags, _, depth + 1))
             case (other, _) => this.value(other, stack, depth + 1).toVector
           }
           values.map(v => e.copy(value = v))
         }
         Some(sequence.copy(elements = elements))
-      case AST.DirectiveValue(call, tags) => run(call, stack, depth + 1).flatMap(placed(call, tags, _, depth))
+      case AST.DirectiveValue(call, tags) =>
+        run(call, stack, depth + 1).fold(Option.empty[AST.Value])(placed(call, tags, _, depth))
       case injections: AST.Injections => gathered(injections, stack, depth)
       case _ => Some(value)
     }
@@ -82,7 +83,7 @@ private[psi] final class Expand private (
   private def gathered(injections: AST.Injections, stack: List[Source], depth: Int): Option[AST.Value] = {
     val AST.Injections(items, tags, location) = injections
     val expanded = items.map(_.left.map(call => call -> run(call, stack, depth + 1)))
-    expanded.collectFirst { case Left((call, Some(fragment))) => call -> fragment } match {
+    expanded.collectFirst { case Left((call, fragment: Fragment.Some)) => call -> fragment } match {
       case None =>
         val references = expanded.collect { case Right(reference) => Right(reference) }
         if (references.isEmpty) None else Some(AST.Injections(references, tags, location))
@@ -91,13 +92,13 @@ private[psi] final class Expand private (
           case Right(Token.Reference(path, optional, at)) =>
             Vector(AST.Element(AST.Substitution(path, optional, Set.empty, at), None, AST.Put.Elements))
           case Left((call, fragment)) =>
-            fragment.toVector.flatMap(injected(call, _, depth + 1)).map(AST.Element(_, None))
+            fragment.fold(Vector.empty[AST.Value])(injected(call, _, depth + 1)).map(AST.Element(_, None))
         }
         Some(AST.Sequence(elements, tags, location))
       case Some((_, Fragment.Built(_: Node.IMap[?]) | _: Fragment.Parsed)) =>
         val statements = expanded.flatMap {
           case Right(Token.Reference(path, optional, at)) => Vector(AST.InjectionStatement(path, optional, at, None))
-          case Left((call, fragment)) => fragment.toVector.flatMap(fields(call, _, depth + 1))
+          case Left((call, fragment)) => fragment.fold(Vector.empty[AST.Statement])(fields(call, _, depth + 1))
         }
         Some(AST.Block(statements, tags, location))
       case Some((call, _)) =>
@@ -198,26 +199,27 @@ private[psi] final class Expand private (
     }
   }
 
-  /** The fragment a call gives, none when it gives nothing or fails; a source it parses stands `base` levels deep. */
-  private def run(call: AST.Call, stack: List[Source], base: Int): Option[Fragment.Some] =
+  /** The fragment a call gives, [[Fragment.None]] when it gives nothing or fails; a source it parses stands `base`
+    * levels deep.
+    */
+  private def run(call: AST.Call, stack: List[Source], base: Int): Fragment =
     if (disabled(call.name)) {
       report(DisabledDirective(call.location, call.name))
-      None
+      Fragment.None
     } else
       directives.get(call.name) match {
         case Some(directive) =>
-          arguments(call, directive.parameters).flatMap { arguments =>
+          arguments(call, directive.parameters).fold[Fragment](Fragment.None) { arguments =>
             directive(arguments, new Context(call, stack, base)) match {
               case Left(error) =>
                 report(DirectiveFailed(call.location, call.name, error))
-                None
-              case Right(fragment: Fragment.Some) => Some(fragment)
-              case Right(Fragment.None) => None
+                Fragment.None
+              case Right(fragment) => fragment
             }
           }
         case None =>
           report(UnknownDirective(call.location, call.name))
-          None
+          Fragment.None
       }
 
   /** The arguments of `call` by parameter — positional ones in order, then named ones — or none when one goes to no

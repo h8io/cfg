@@ -267,6 +267,9 @@ class InjectionTest extends AnyFlatSpec with Matchers {
     shown("a: [r]\nb:\n  #seq\n  $a") shouldBe "- p\n- @u q\n- r"
     shown("a { y: 2 }\nb:\n  #parsed\n  $a\n  #map") shouldBe "x: 1\ny: 2\nm: 1"
     shown("a { y: 2 }\nb:\n  #none\n  $a\n  $a") shouldBe "y: 2"
+    // a call that gives nothing puts nothing, alone on its line among `- ` elements or among injections alone
+    shown("b:\n  - p\n  #none") shouldBe "- p"
+    shown("b:\n  #parsed\n  #none") shouldBe "x: 1"
     loaded("b:\n  #none\n  #none\nc: 1")("b") shouldBe Node.INone(Id.Key("b", Id.Root))
     def errors(text: String): List[PsiError] = by.parse("s", text).fold(_.errors, root => fail(root.toString))
     errors("b: [@t #seq]") shouldBe List(TaggedDirectiveSequence(at(1, 8), "seq"))
