@@ -86,14 +86,23 @@ private[psi] final class Merge {
       case AST.Scalar(text, tags, location) => Tree.Scalar(text, tags, location)
       case AST.Null(tags, location) => Tree.Null(tags, location)
       case AST.Block(statements, tags, location) => block(Tree.Map.empty(tags, location), statements)
-      case AST.Sequence(elements, tags, location) => Tree.Sequence(elements.map(element), tags, location)
+      case AST.Sequence(elements, tags, location) => sequence(elements, tags, location)
       case AST.Substitution(path, optional, tags, location) => Tree.Substitution(path, optional, tags, location)
       case AST.Injections(items, tags, location) =>
-        Tree.Injections(items.map(_.fold(unexpanded, identity)), tags, location)
+        val kept = items.map {
+          case AST.Injected.Calling(call) => unexpanded(call)
+          case gave: AST.Injected.Given => Left(gave)
+          case AST.Injected.Referring(reference) => Right(reference)
+        }
+        Tree.Injections(kept, tags, location)
       case AST.Concatenation(parts, tags, location) => Tree.Concatenation(parts, tags, location)
       case AST.Marked(value, markers) => Tree.Marked(tree(value), markers)
       case AST.DirectiveValue(call, _) => unexpanded(call)
     }
+
+  /** A sequence of `elements`, with nothing before it to merge with. */
+  private[psi] def sequence(elements: Vector[AST.Element], tags: Set[String], location: PsiLocation): Tree.Sequence =
+    Tree.Sequence(elements.map(element), tags, location)
 
   /** An element of a sequence, where a substitution may be an injection (§9). */
   private def element(element: AST.Element): Tree.Value =

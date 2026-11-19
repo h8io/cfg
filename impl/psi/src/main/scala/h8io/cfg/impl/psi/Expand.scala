@@ -71,41 +71,18 @@ private[psi] final class Expand private (
         Some(sequence.copy(elements = elements))
       case AST.DirectiveValue(call, tags) =>
         run(call, stack, depth + 1).fold(Option.empty[AST.Value])(placed(call, tags, _, depth))
-      case injections: AST.Injections => gathered(injections, stack, depth)
+      // what a call gives is kept, to be put once substitutions are resolved (§9)
+      case AST.Injections(items, tags, location) =>
+        val expanded = items.flatMap {
+          case AST.Injected.Calling(call) =>
+            run(call, stack, depth + 1)
+              .fold(Option.empty[AST.Value])(placed(call, Set.empty, _, depth))
+              .map(AST.Injected.Given(call, _))
+          case other => Some(other)
+        }
+        if (expanded.isEmpty) None else Some(AST.Injections(expanded, tags, location))
       case _ => Some(value)
     }
-
-  /** A block of injections alone, `depth` levels deep, its calls expanded (§4, §9): a map when the first that gives
-    * anything gives a map, its substitutions injections among fields, a sequence when it gives a sequence, its
-    * substitutions injections among elements; with no call giving anything, still a block of injections, or nothing
-    * when there is no substitution in it either.
-    */
-  private def gathered(injections: AST.Injections, stack: List[Source], depth: Int): Option[AST.Value] = {
-    val AST.Injections(items, tags, location) = injections
-    val expanded = items.map(_.left.map(call => call -> run(call, stack, depth + 1)))
-    expanded.collectFirst { case Left((call, fragment: Fragment.Some)) => call -> fragment } match {
-      case None =>
-        val references = expanded.collect { case Right(reference) => Right(reference) }
-        if (references.isEmpty) None else Some(AST.Injections(references, tags, location))
-      case Some((_, Fragment.Built(_: Node.ISeq[?]))) =>
-        val elements = expanded.flatMap {
-          case Right(Token.Reference(path, optional, at)) =>
-            Vector(AST.Element(AST.Substitution(path, optional, Set.empty, at), None, AST.Put.Elements))
-          case Left((call, fragment)) =>
-            fragment.fold(Vector.empty[AST.Value])(injected(call, _, depth + 1)).map(AST.Element(_, None))
-        }
-        Some(AST.Sequence(elements, tags, location))
-      case Some((_, Fragment.Built(_: Node.IMap[?]) | _: Fragment.Parsed)) =>
-        val statements = expanded.flatMap {
-          case Right(Token.Reference(path, optional, at)) => Vector(AST.InjectionStatement(path, optional, at, None))
-          case Left((call, fragment)) => fragment.fold(Vector.empty[AST.Statement])(fields(call, _, depth + 1))
-        }
-        Some(AST.Block(statements, tags, location))
-      case Some((call, _)) =>
-        report(DirectiveNotContainer(call.location, call.name))
-        None
-    }
-  }
 
   /** The fields of a fragment in statement position `depth` levels deep, which must be a map and fit there. */
   private def fields(call: AST.Call, fragment: Fragment.Some, depth: Int): Vector[AST.Statement] =
@@ -315,6 +292,9 @@ private[psi] object Expand {
     value match {
       case AST.Block(statements, _, _) => 1 + levels(statements)
       case AST.Sequence(elements, _, _) => 1 + elements.iterator.map(e => height(e.value)).foldLeft(0)(math.max)
+      // what a call gave, a map or a sequence, stands where the block does
+      case AST.Injections(items, _, _) =>
+        items.iterator.collect { case AST.Injected.Given(_, value) => height(value) }.foldLeft(1)(math.max)
       case _ => 0
     }
 

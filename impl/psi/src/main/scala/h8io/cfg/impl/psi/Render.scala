@@ -16,7 +16,8 @@ import h8io.cfg.impl.psi.Token.{KeyMode, Reference, Text, ValueMode}
   * A merged tree holds what is still unresolved, which only a test or a debugger shows. An injection among `- `
   * elements and a block of injections alone are written on lines of their own; a sequence holding an injection that
   * came from `[…]` is written in brackets, an element a line, a map in it in braces. A sequence of nothing but
-  * injections among `- ` elements, which only a call can give, has no source that reads back as it.
+  * injections among `- ` elements, which only a call can give, has no source that reads back as it, and neither has
+  * what a call gave in a block of injections alone.
   */
 private[psi] object Render {
 
@@ -95,10 +96,16 @@ private[psi] object Render {
               dashed(out, element, level)
           }
         }
-      case Tree.Injections(references, _, _) =>
-        references.zipWithIndex.foreach { case (r, i) =>
+      case Tree.Injections(items, _, _) =>
+        items.zipWithIndex.foreach { case (item, i) =>
           if (i > 0 || !onDash) indent(out, level)
-          reference(out, r.path, r.optional)
+          item.fold(
+            gave =>
+              throw new IllegalStateException(
+                "What " + Message.directive(gave.call.name) + " at " + gave.call.location.description +
+                  " gave in a block of injections has no source"),
+            r => reference(out, r.path, r.optional)
+          )
           val _ = out += '\n'
         }
       // only a value alone without tags, as `value` writes one

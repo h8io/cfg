@@ -32,7 +32,7 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
       case Tree.Sequence(elements, tags, _) => Tree.Sequence(elements.map(located), tags, nowhere)
       case Tree.Substitution(path, optional, tags, _) => Tree.Substitution(path, optional, tags, nowhere)
       case Tree.Injection(path, optional, tags, _, required) => Tree.Injection(path, optional, tags, nowhere, required)
-      case Tree.Injections(references, tags, _) => Tree.Injections(references.map(reference), tags, nowhere)
+      case Tree.Injections(items, tags, _) => Tree.Injections(items.map(_.map(reference)), tags, nowhere)
       case Tree.Concatenation(parts, tags, _) =>
         Tree.Concatenation(
           parts.map {
@@ -205,7 +205,7 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
       n <- Gen.choose(2, 3)
       rs <- Gen.listOfN(n, references)
       g <- tagSets
-    } yield Tree.Injections(rs.toVector, g, nowhere)
+    } yield Tree.Injections(rs.toVector.map(Right(_)), g, nowhere)
     // in brackets a substitution is an injection, which stands among elements only
     val held = if (inBrackets) leaves.suchThat(!_.isInstanceOf[Tree.Substitution]) else leaves
     if (depth == 0) held
@@ -250,12 +250,20 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     val sequence = Tree.Sequence(
       Vector(
         Tree.Injection(reference.path, optional = false, Set.empty, nowhere, required = false),
-        Tree.Injections(Vector(reference, reference), Set.empty, nowhere)),
+        Tree.Injections(Vector(Right(reference), Right(reference)), Set.empty, nowhere)
+      ),
       Set.empty,
       nowhere
     )
     the[IllegalStateException] thrownBy Render.value(sequence) should have message
       "A block of injections at s:1:1 on one line"
+  }
+
+  it should "not write what a call gave in a block of injections, which has no source" in {
+    val nowhere = SourceLocation("s", 1, 1)
+    val gave = AST.Injected.Given(AST.Call("d", Vector.empty, nowhere), AST.Null(Set.empty, nowhere))
+    the[IllegalStateException] thrownBy Render.value(Tree.Injections(Vector(Left(gave)), Set.empty, nowhere)) should
+      have message "What '#d' at s:1:1 gave in a block of injections has no source"
   }
 
   "toString" should "write the root as a document and any other node alone, a block below its tags" in {

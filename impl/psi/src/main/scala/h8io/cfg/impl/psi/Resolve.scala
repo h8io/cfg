@@ -72,19 +72,14 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
   private def resolve(id: Id, value: Tree.Value): Resolution =
     value match {
       case _: Tree.Scalar | _: Tree.Null => Right(Some(value))
-      case map: Tree.Map if map.steps.nonEmpty =>
-        step(completed(id, map) match {
-          case Right(done) => this.map(id, done).map(Some(_))
-          case Left(failure) =>
-            abandoned.remove(id).foreach(_.foreach(fields => this.map(id, fields)))
-            Left(failure)
-        })
+      case map: Tree.Map if map.steps.nonEmpty => step(finished(id, completed(id, map)))
       case map: Tree.Map => step(this.map(id, map).map(Some(_)))
       case sequence: Tree.Sequence => step(this.sequence(id, sequence).map(Some(_)))
       case injection: Tree.Injection =>
         once(id, Some(new Following(injection.location, injection.path)))(injected(id, injection))
       case injections: Tree.Injections =>
-        once(id, injections.references.headOption.map(r => new Following(r.location, r.path)))(gathered(id, injections))
+        once(id, injections.items.collectFirst { case Right(r) => new Following(r.location, r.path) })(
+          gathered(id, injections))
       case Tree.Substitution(path, optional, tags, at) =>
         once(id, Some(new Following(at, path)))(
           reference(path, optional, at).flatMap(_.fold[Resolution](Right(None))(grafted(id, _, at, path, tags))))
@@ -144,37 +139,53 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     * its children would be: what an injection between them would have brought is no more known.
     */
   private def completed(id: Id, map: Tree.Map): Either[Failure, Tree.Map] =
-    once(id, map.steps.collectFirst { case Tree.Step.Injection(path, _, at) => new Following(at, path) }) {
-      val failures = mutable.ListBuffer.empty[Either[Failure, Unit]]
-      val nothing = Tree.Map.empty(Set.empty, map.location)
-      var rest = List.empty[Tree.Map]
-      val done = map.steps.foldLeft(map.copy(steps = Vector.empty)) { (current, step) =>
-        step match {
-          case Tree.Step.Injection(path, optional, at) =>
-            // after a failure, into nothing, for its own errors alone
-            val into = if (failures.isEmpty) current else Tree.Map.empty(Set.empty, at)
-            val next = fields(id, into, path, optional, at) match {
-              case Right(merged) if failures.isEmpty => merged
-              case Right(_) => current
-              case Left(failure) =>
-                failures += Left(failure)
-                current
-            }
-            // the fields after it, once one has failed, apart from those before it
-            if (failures.nonEmpty) rest = nothing :: rest
-            next
-          case Tree.Step.Statements(statements) if failures.nonEmpty =>
-            rest = merging.block(rest.head, statements) :: rest.tail
-            current
-          case _ if failures.nonEmpty => current
-          case Tree.Step.Statements(statements) => merging.block(current, statements)
-          case Tree.Step.Graft(content) => over(current, content)
-        }
-      }
-      if (failures.nonEmpty) abandoned(id) = rest
-      failure(failures.toList).toLeft(Some(done))
+    once(id, map.steps.collectFirst { case Tree.Step.Injection(path, _, at) => new Following(at, path) })(
+      complete(id, map).map(Some(_))
       // a completion always gives a map
-    }.map(_.get.asInstanceOf[Tree.Map])
+    ).map(_.get.asInstanceOf[Tree.Map])
+
+  /** `map` at `id` completed, as [[completed]] does, not marked as being resolved: its caller marks it. */
+  private def complete(id: Id, map: Tree.Map): Either[Failure, Tree.Map] = {
+    val failures = mutable.ListBuffer.empty[Either[Failure, Unit]]
+    val nothing = Tree.Map.empty(Set.empty, map.location)
+    var rest = List.empty[Tree.Map]
+    val done = map.steps.foldLeft(map.copy(steps = Vector.empty)) { (current, step) =>
+      step match {
+        case Tree.Step.Injection(path, optional, at) =>
+          // after a failure, into nothing, for its own errors alone
+          val into = if (failures.isEmpty) current else Tree.Map.empty(Set.empty, at)
+          val next = fields(id, into, path, optional, at) match {
+            case Right(merged) if failures.isEmpty => merged
+            case Right(_) => current
+            case Left(failure) =>
+              failures += Left(failure)
+              current
+          }
+          // the fields after it, once one has failed, apart from those before it
+          if (failures.nonEmpty) rest = nothing :: rest
+          next
+        case Tree.Step.Statements(statements) if failures.nonEmpty =>
+          rest = merging.block(rest.head, statements) :: rest.tail
+          current
+        case _ if failures.nonEmpty => current
+        case Tree.Step.Statements(statements) => merging.block(current, statements)
+        case Tree.Step.Graft(content) => over(current, content)
+      }
+    }
+    if (failures.nonEmpty) abandoned(id) = rest
+    failure(failures.toList).toLeft(done)
+  }
+
+  /** The map at `id` once `completion` has completed it, its children resolved; failed, with the fields kept apart in
+    * `abandoned` resolved for their own errors.
+    */
+  private def finished(id: Id, completion: Either[Failure, Tree.Map]): Resolution =
+    completion match {
+      case Right(done) => this.map(id, done).map(Some(_))
+      case Left(failure) =>
+        abandoned.remove(id).foreach(_.foreach(fields => this.map(id, fields)))
+        Left(failure)
+    }
 
   /** The map `current` with the fields of the map at `path` merged into it; unchanged when an optional injection finds
     * nothing.
@@ -211,33 +222,54 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
         // a sequence grafted is a sequence
         .map(_ => graft(found, at, path, Set.empty).asInstanceOf[Tree.Sequence].elements)
 
-  /** What a block of injections alone at `id` gives (§4, §9): the fields of the maps its substitutions find merged in
-    * turn, or the elements of the sequences, as the first that finds anything says, with the block's tags; none when
-    * none finds anything.
+  /** What a block of injections alone at `id` gives (§4, §9): what the first that finds or gives anything finds or
+    * gives, as written, decides, and the block is then read as written with a map's fields or a sequence's elements:
+    * its substitutions injections among fields or among `- ` elements, and what its calls gave put there, each of which
+    * must be the same. The block's tags are its own; none when nothing finds or gives anything. Every substitution is
+    * resolved first, for its own errors.
     */
   private def gathered(id: Id, injections: Tree.Injections): Resolution = {
-    val Tree.Injections(references, tags, location) = injections
-    val found = references.map(r => reference(r.path, r.optional, r.location))
-    failure(found).toLeft(references.zip(found).collect { case (r, Right(Some(value))) => r -> value }).flatMap {
-      present =>
-        present.headOption.fold[Resolution](Right(None)) {
-          case (_, _: Tree.Map) =>
-            val merged = present.foldLeft[Either[Failure, Tree.Map]](Right(Tree.Map.empty(tags, location))) {
-              case (Right(current), (r, found: Tree.Map)) => into(id, current, found, r.location, r.path)
-              case (Right(_), (r, other)) => failed(InjectionNotMap(r.location, Message.path(r.path), other.location))
-              case (failure, _) => failure
-            }
-            merged.map(Some(_))
-          case (_, _: Tree.Sequence) =>
-            val put = present.map {
-              case (r, found: Tree.Sequence) => elements(segments(id).size, found, r.location, r.path)
-              case (r, other) => failed(InjectionNotSequence(r.location, Message.path(r.path), other.location))
-            }
-            failure(put).toLeft(Some(Tree.Sequence(put.collect { case Right(e) => e }.flatten, tags, location)))
-          case (r, other) => failed(InjectionNotContainer(r.location, Message.path(r.path), other.location))
+    val Tree.Injections(items, tags, location) = injections
+    val found = items.map(_.map(r => r -> reference(r.path, r.optional, r.location)))
+    val first = found.collectFirst {
+      case Left(AST.Injected.Given(call, value)) => Left(call -> value)
+      case Right((r, Right(Some(value)))) => Right(r -> value)
+    }
+    failure(found.collect { case Right((_, resolution)) => resolution }).toLeft(first).flatMap {
+      case None => Right(None)
+      case Some(Left((_, _: AST.Block)) | Right((_, _: Tree.Map))) =>
+        val statements = items.flatMap {
+          case Right(r) => Vector(AST.InjectionStatement(r.path, r.optional, r.location, None))
+          case Left(AST.Injected.Given(_, AST.Block(statements, _, _))) => statements
+          case Left(_) => Vector.empty
         }
+        mismatched(items)(_.isInstanceOf[AST.Block], DirectiveNotMap.apply)
+          .toLeft(merging.block(Tree.Map.empty(tags, location), statements))
+          .fold(Left(_), map => step(finished(id, complete(id, map))))
+      case Some(Left((_, _: AST.Sequence)) | Right((_, _: Tree.Sequence))) =>
+        val elements = items.flatMap {
+          case Right(r) =>
+            Vector(AST.Element(AST.Substitution(r.path, r.optional, Set.empty, r.location), None, AST.Put.Elements))
+          case Left(AST.Injected.Given(_, AST.Sequence(elements, _, _))) => elements
+          case Left(_) => Vector.empty
+        }
+        mismatched(items)(_.isInstanceOf[AST.Sequence], DirectiveNotSequence.apply)
+          .toLeft(merging.sequence(elements, tags, location))
+          .fold(Left(_), sequence => step(this.sequence(id, sequence).map(Some(_))))
+      case Some(Left((call, _))) => failed(DirectiveNotContainer(call.location, call.name))
+      case Some(Right((r, other))) => failed(InjectionNotContainer(r.location, Message.path(r.path), other.location))
     }
   }
+
+  /** The failure of a block of injections alone whose calls gave what `fits` does not take, each reported as `error` at
+    * its call; none when every one fits.
+    */
+  private def mismatched(items: Vector[Either[AST.Injected.Given, Token.Reference]])(
+      fits: AST.Value => Boolean,
+      error: (SourceLocation, String) => PsiError): Option[Failure] =
+    failure(items.collect {
+      case Left(AST.Injected.Given(call, value)) if !fits(value) => failed(error(call.location, call.name))
+    })
 
   /** `value`, found by `\${path}` at `at`, grafted at `id` with the tags written before it added to its own. */
   private def grafted(id: Id, value: Tree.Value, at: SourceLocation, path: Id.Branch, tags: Set[String]): Resolution =

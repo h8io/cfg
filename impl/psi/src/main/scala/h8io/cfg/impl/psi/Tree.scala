@@ -37,10 +37,17 @@ private[psi] object Tree {
       required: Boolean)
       extends Value
 
-  /** A block of substitutions alone, two or more (§4, §9): the fields of the maps they find merged in turn, or the
-    * elements of the sequences, as the first one that finds anything says; nothing when none does.
+  /** A block of substitutions and what calls gave alone, two or more (§4, §9): the fields of the maps they find or give
+    * merged in turn, or the elements of the sequences, as the first that finds or gives anything says; nothing when
+    * none does.
+    *
+    * @param items
+    *   in the order written, what a call gave or a reference
     */
-  final case class Injections(references: Vector[Token.Reference], tags: Set[String], location: SourceLocation)
+  final case class Injections(
+      items: Vector[Either[AST.Injected.Given, Token.Reference]],
+      tags: Set[String],
+      location: SourceLocation)
       extends Value
 
   /** A scalar with `\${…}` inside it. */
