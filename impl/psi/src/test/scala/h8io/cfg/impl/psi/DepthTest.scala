@@ -10,11 +10,11 @@ class DepthTest extends AnyFlatSpec with Matchers {
   private def beyond(line: Int, column: Int, source: String = "s"): DepthExceeded =
     DepthExceeded(at(line, column, source), 3, fatal = true)
 
-  private def directive(directiveName: String)(body: DirectiveContext => Option[Fragment]): Directive =
+  private def directive(directiveName: String)(body: DirectiveContext => Fragment): Directive =
     new Directive {
       def name: String = directiveName
       def parameters: Seq[Parameter] = Nil
-      def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Option[Fragment]] =
+      def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
         Right(body(context))
     }
 
@@ -68,7 +68,7 @@ class DepthTest extends AnyFlatSpec with Matchers {
   }
 
   "A source a directive parses" should "be read from the depth of the call" in {
-    val text = directive("t")(context => Some(context.parse("t", "c { d { } }")))
+    val text = directive("t")(context => context.parse("t", "c { d { } }"))
     errors("a { b { #t } }", text) shouldBe List(beyond(1, 7, "t"))
     errors("a { b: #t }", text) shouldBe List(beyond(1, 7, "t"))
     loads("a: #t", text) shouldBe true
@@ -78,7 +78,7 @@ class DepthTest extends AnyFlatSpec with Matchers {
     var cached = Option.empty[Fragment]
     val cache = directive("cache") { context =>
       if (cached.isEmpty) cached = Some(context.parse("t", "c { }"))
-      cached
+      cached.getOrElse(Fragment.None)
     }
     errors("x: #cache\na { b { y: #cache } }", cache) shouldBe
       List(DepthExceeded(at(2, 12), 3, fatal = false))
@@ -87,7 +87,7 @@ class DepthTest extends AnyFlatSpec with Matchers {
 
   it should "fail its call when built from a node too deep for where it lands" in {
     val node = Psi.parse("n", "p { q { r { } } }").fold(e => fail(e.toString), identity)
-    val built = directive("built")(_ => Some(Fragment(node)))
+    val built = directive("built")(_ => Fragment(node))
     loads("#built", built) shouldBe true
     errors("a { b { #built } }", built) shouldBe List(DepthExceeded(at(1, 9), 3, fatal = false))
     errors("v: #built", built) shouldBe List(DepthExceeded(at(1, 4), 3, fatal = false))
@@ -95,7 +95,7 @@ class DepthTest extends AnyFlatSpec with Matchers {
       case seq: Node.ISeq[?] => seq
       case other => fail(other.toString)
     }
-    val listed = directive("listed")(_ => Some(Fragment(list)))
+    val listed = directive("listed")(_ => Fragment(list))
     loads("v: #listed", listed) shouldBe true
     errors("a { v: #listed }", listed) shouldBe List(DepthExceeded(at(1, 8), 3, fatal = false))
   }

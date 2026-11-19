@@ -48,7 +48,7 @@ private[psi] abstract class Launch(val name: String) extends Directive {
   def parameters: Seq[Parameter] =
     Seq(Parameter("name", required = true), Parameter("optional", required = false), Parameter("default", false))
 
-  def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Option[Fragment]] = {
+  def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] = {
     def argument(name: String): Option[Node.IScalar[?]] =
       arguments(name) match {
         case scalar: Node.IScalar[?] => Some(scalar)
@@ -66,8 +66,8 @@ private[psi] abstract class Launch(val name: String) extends Directive {
       _ <- if (optional && default.nonEmpty) Left(OptionalWithDefault) else Right(())
       found <- value(key)
       node <- found.orElse(default.map(d => Node.Scalar(Id.Root, Set.empty, d.value, d.location))) match {
-        case Some(node) => Right(Some(Fragment(node)))
-        case None => if (optional) Right(None) else Left(notSet(key))
+        case Some(node) => Right(Fragment(node))
+        case None => if (optional) Right(Fragment.None) else Left(notSet(key))
       }
     } yield node
   }

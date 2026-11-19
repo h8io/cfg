@@ -43,7 +43,7 @@ private[psi] object Include extends Directive {
   def parameters: Seq[Parameter] =
     Seq("file", "resource", "url", "optional").map(Parameter(_, required = false))
 
-  def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Option[Fragment]] = {
+  def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] = {
     def argument(name: String): Option[String] =
       arguments(name) match {
         case Node.IScalar(_, _, value, _) => Some(value)
@@ -116,20 +116,20 @@ private[psi] object Include extends Directive {
       target: String,
       candidates: List[URL],
       optional: Boolean,
-      context: DirectiveContext): Either[IncludeError, Option[Fragment]] =
+      context: DirectiveContext): Either[IncludeError, Fragment] =
     candidates match {
       case url :: rest =>
         present(target, url).flatMap { there =>
           if (there.contains(false)) read(target, rest, optional, context)
           else
             context.parse(url) match {
-              case Right(fragment) => Right(Some(fragment))
+              case Right(fragment) => Right(fragment)
               // a target known to be there only once read is not there when reading it finds nothing: a page not found
               case Left(_: FileNotFoundException) if there.isEmpty => read(target, rest, optional, context)
               case Left(cause) => Left(IncludeUnreadable(target, cause))
             }
         }
-      case Nil => if (optional) Right(None) else Left(IncludeNotFound(target))
+      case Nil => if (optional) Right(Fragment.None) else Left(IncludeNotFound(target))
     }
 
   /** Whether `url` is there, as the file system says for a file and for an entry of a jar that is a file; none for any

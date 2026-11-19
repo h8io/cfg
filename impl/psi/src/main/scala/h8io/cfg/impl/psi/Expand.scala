@@ -107,7 +107,7 @@ private[psi] final class Expand private (
   }
 
   /** The fields of a fragment in statement position `depth` levels deep, which must be a map and fit there. */
-  private def fields(call: AST.Call, fragment: Fragment, depth: Int): Vector[AST.Statement] =
+  private def fields(call: AST.Call, fragment: Fragment.Content, depth: Int): Vector[AST.Statement] =
     fragment match {
       case Fragment.Parsed(document, _, errors, sources) =>
         this.errors ++= errors
@@ -122,7 +122,7 @@ private[psi] final class Expand private (
   /** A fragment in value position with `depth` levels around it, with the tags written before the call added to its
     * own; none when it does not fit there.
     */
-  private def placed(call: AST.Call, tags: Set[String], fragment: Fragment, depth: Int): Option[AST.Value] =
+  private def placed(call: AST.Call, tags: Set[String], fragment: Fragment.Content, depth: Int): Option[AST.Value] =
     fragment match {
       case Fragment.Parsed(document, root, errors, sources) =>
         this.errors ++= errors
@@ -135,7 +135,7 @@ private[psi] final class Expand private (
   /** A fragment injected among the elements of a sequence, `depth` levels deep: the elements of a sequence, in its
     * place; anything else is an error (§9).
     */
-  private def injected(call: AST.Call, fragment: Fragment, depth: Int): Vector[AST.Value] =
+  private def injected(call: AST.Call, fragment: Fragment.Content, depth: Int): Vector[AST.Value] =
     fragment match {
       case Fragment.Built(seq: Node.ISeq[?]) =>
         fitting(call)(seq.iterator.map(built(call, _, Set.empty, depth)).toVector).getOrElse(Vector.empty)
@@ -148,7 +148,7 @@ private[psi] final class Expand private (
   /** A fragment in `[…]`, `depth` levels deep: the elements of a sequence, in its place, or anything else as one
     * element, with the tags written before the call, which a sequence's elements have no place for (§9).
     */
-  private def spread(call: AST.Call, tags: Set[String], fragment: Fragment, depth: Int): Vector[AST.Value] =
+  private def spread(call: AST.Call, tags: Set[String], fragment: Fragment.Content, depth: Int): Vector[AST.Value] =
     fragment match {
       case Fragment.Built(_: Node.ISeq[?]) if tags.nonEmpty =>
         report(TaggedDirectiveSequence(call.location, call.name))
@@ -199,7 +199,7 @@ private[psi] final class Expand private (
   }
 
   /** The fragment a call gives, none when it gives nothing or fails; a source it parses stands `base` levels deep. */
-  private def run(call: AST.Call, stack: List[Source], base: Int): Option[Fragment] =
+  private def run(call: AST.Call, stack: List[Source], base: Int): Option[Fragment.Content] =
     if (disabled(call.name)) {
       report(DisabledDirective(call.location, call.name))
       None
@@ -211,7 +211,8 @@ private[psi] final class Expand private (
               case Left(error) =>
                 report(DirectiveFailed(call.location, call.name, error))
                 None
-              case Right(fragment) => fragment
+              case Right(content: Fragment.Content) => Some(content)
+              case Right(Fragment.None) => None
             }
           }
         case None =>

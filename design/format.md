@@ -616,7 +616,7 @@ the name and URL of the source the call stands in (a source given as text has no
 parse another source.
 
 What a handler gives back is an error of its own, reported as the directive's failure at the call, or
-*nothing*, or a *fragment*: Psi's own unexpanded tree, opaque to the handler, which it gets in one of
+*nothing*, `Fragment.None` (session 34), or a *fragment*: Psi's own unexpanded tree, opaque to the handler, which it gets in one of
 two ways:
 
 - from its context, by parsing another source — what `#include` does. A `${…}` in that source stays
@@ -2521,5 +2521,9 @@ Fixed on a review of session 32's code, the format unchanged, nothing put to the
   `SubstitutionAmongFields` and `InjectionOutOfPlace` are gone. `Render` writes a merged tree's
   injections as they are written: alone on their lines, and a sequence holding one from `[…]` in
   brackets.
+- **A handler gives back `Either[DirectiveError, Fragment]`**, nothing being `Fragment.None` (§6), the
+  user's proposal, over `Option[Fragment]`: nothing is a value of the type, as `Node.None` is a node
+  that is not there. Named `None` over `Empty`, the user's choice of the two I put: `Empty` reads as
+  an empty map, which `a: #d` gives as `a: {}`, where nothing leaves `a` out.
 - Breaks every `*` written since session 31, and `[x, $a, z]`, which session 31 made nest a
   sequence whole, puts its elements again: before 1.0, compatibility is not kept.

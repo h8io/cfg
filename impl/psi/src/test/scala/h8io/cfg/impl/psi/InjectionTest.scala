@@ -223,14 +223,14 @@ class InjectionTest extends AnyFlatSpec with Matchers {
       new Directive {
         def name: String = called
         def parameters: Seq[Parameter] = Nil
-        def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Option[Fragment]] =
-          Right(node.map(Fragment(_)))
+        def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
+          Right(node.fold[Fragment](Fragment.None)(Fragment(_)))
       }
     val parsing = new Directive {
       def name: String = "parsed"
       def parameters: Seq[Parameter] = Nil
-      def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Option[Fragment]] =
-        Right(Some(context.parse("p", "x: 1")))
+      def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
+        Right(context.parse("p", "x: 1"))
     }
     val by = Psi.builder
       .withDirectives(

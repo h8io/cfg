@@ -17,11 +17,11 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
   private def directive(
       directiveName: String,
       params: Parameter*)(
-      body: (Node.IMap[Id.Root], DirectiveContext) => Either[DirectiveError, Option[Fragment]]): Directive =
+      body: (Node.IMap[Id.Root], DirectiveContext) => Either[DirectiveError, Fragment]): Directive =
     new Directive {
       def name: String = directiveName
       def parameters: Seq[Parameter] = params
-      def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Option[Fragment]] =
+      def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
         body(arguments, context)
     }
 
@@ -41,15 +41,16 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     Psi.parse("y", text).fold(errors => fail(errors.toString), identity)
 
   private def constant(name: String, fragment: => Fragment): Directive =
-    directive(name)((_, _) => Right(Some(fragment)))
+    directive(name)((_, _) => Right(fragment))
 
-  private def nothing: Directive = directive("none")((_, _) => Right(None))
+  private def nothing: Directive = directive("none")((_, _) => Right(Fragment.None))
 
   "A builder" should "report every error of its configuration at once" in {
-    val x = directive("x", Parameter("p", required = true), Parameter("p", required = false))((_, _) => Right(None))
+    val x =
+      directive("x", Parameter("p", required = true), Parameter("p", required = false))((_, _) => Right(Fragment.None))
     Psi.builder
-      .withDirectives(directive("include")((_, _) => Right(None)), x)
-      .withDirectives(x, directive("y")((_, _) => Right(None)))
+      .withDirectives(directive("include")((_, _) => Right(Fragment.None)), x)
+      .withDirectives(x, directive("y")((_, _) => Right(Fragment.None)))
       .disableDirective("y")
       .build shouldBe
       Left(
@@ -91,7 +92,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     val d = directive("d", Parameter("a", required = true), Parameter("b", required = false), Parameter("c", false)) {
       (arguments, _) =>
         received = Some(arguments)
-        Right(None)
+        Right(Fragment.None)
     }
     loaded(loader(d), "#d(c: 3, a: 1)").isEmpty shouldBe true
     received.map(_.toList) shouldBe
@@ -108,7 +109,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     var runs = 0
     val d = directive("d", Parameter("a", required = true), Parameter("b", required = false)) { (_, _) =>
       runs += 1
-      Right(None)
+      Right(Fragment.None)
     }
     errors(loader(d), "#d(1, 2, 3)\n#d(1, x: 2)\n#d(1, a: 2)\n#d(b: 1)") shouldBe
       List(
@@ -122,7 +123,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
   it should "report each required argument missing, their names told apart only past what a message quotes" in {
     val (primary, secondary) = ("connection_configuration_primary", "connection_configuration_secondary")
     val d = directive("d", Parameter(primary, required = true), Parameter(secondary, required = true))((_, _) =>
-      Right(None))
+      Right(Fragment.None))
     errors(loader(d), "#d") shouldBe List(MissingArgument(at(1, 1), primary), MissingArgument(at(1, 1), secondary))
   }
 
@@ -186,7 +187,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
   "A fragment parsed" should "expand its own directives and merge as written in statement position" in {
     val parsing = directive("p", Parameter("text", required = true)) { (arguments, context) =>
       arguments("text") match {
-        case Node.IScalar(_, _, text, _) => Right(Some(context.parse("t", text)))
+        case Node.IScalar(_, _, text, _) => Right(context.parse("t", text))
         case other => Left(Problem(other.toString))
       }
     }
@@ -204,30 +205,30 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
   }
 
   it should "report the errors in it with every source's" in {
-    val bad = directive("bad")((_, context) => Right(Some(context.parse("t", "a b"))))
+    val bad = directive("bad")((_, context) => Right(context.parse("t", "a b")))
     errors(loader(bad), "#bad\nc: ${d}") shouldBe List(ExpectedColon(at(1, 3, "t"), "'b'"))
   }
 
   it should "carry its errors, reported wherever it is used, once per load, and not where it is not" in {
     var kept: Option[Fragment] = None
     val cache = directive("cache") { (_, context) =>
-      Right(Some(kept.getOrElse {
+      Right(kept.getOrElse {
         val fragment = context.parse("child", "good: 1\nbroken value")
         kept = Some(fragment)
         fragment
-      }))
+      })
     }
     errors(loader(cache), "#cache") shouldBe List(ExpectedColon(at(2, 8, "child"), "'value'"))
     errors(loader(cache), "#cache\na: #cache") shouldBe List(ExpectedColon(at(2, 8, "child"), "'value'"))
     val dropped = directive("dropped") { (_, context) =>
       val _ = context.parse("child", "broken value")
-      Right(None)
+      Right(Fragment.None)
     }
     loaded(loader(dropped), "#dropped").isEmpty shouldBe true
   }
 
   it should "be a cycle when its source is being expanded, named by the chain" in {
-    val self = directive("self")((_, context) => Right(Some(context.parse("again", "#self"))))
+    val self = directive("self")((_, context) => Right(context.parse("again", "#self")))
     errors(loader(self), "#self") shouldBe List(DirectiveCycle(at(1, 1, "again"), ::("s", List("again", "again"))))
   }
 
@@ -235,7 +236,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     var n = 0
     val deeper = directive("deeper") { (_, context) =>
       n += 1
-      Right(Some(context.parse("n" + n.toString, "#deeper")))
+      Right(context.parse("n" + n.toString, "#deeper"))
     }
     errors(loader(deeper), "#deeper") match {
       case List(DirectiveTooDeep(location, limit)) =>
@@ -249,7 +250,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     var seen: Option[(SourceLocation, String, Option[URL])] = None
     val d = directive("d") { (_, context) =>
       seen = Some((context.location, context.source, context.url))
-      Right(None)
+      Right(Fragment.None)
     }
     loaded(loader(d), "a: 1\nb: #d").size shouldBe 1
     seen shouldBe Some((at(2, 4), "s", None))
@@ -268,9 +269,9 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
       arguments("file") match {
         case Node.IScalar(_, _, file, _) =>
           context.parse(context.url.getOrElse(dir.toUri.toURL).toURI.resolve(file).toURL) match {
-            case Right(fragment) => Right(Some(fragment))
+            case Right(fragment) => Right(fragment)
             case Left(e: IOException) =>
-              if (file.startsWith("optional")) Right(None) else Left(Problem(e.getClass.getSimpleName))
+              if (file.startsWith("optional")) Right(Fragment.None) else Left(Problem(e.getClass.getSimpleName))
           }
         case other => Left(Problem(other.toString))
       }
@@ -296,7 +297,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
       arguments("file") match {
         case Node.IScalar(_, _, file, _) =>
           context.parse(context.url.getOrElse(fail("no URL")).toURI.resolve(file).toURL).left.map(e =>
-            Problem(e.toString)).map(Some(_))
+            Problem(e.toString))
         case other => Left(Problem(other.toString))
       }
     }
