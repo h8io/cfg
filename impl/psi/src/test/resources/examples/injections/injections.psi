@@ -3,21 +3,29 @@ defaults:
   port: 5432
   pool { size: 10, timeout: 30 }
 
-// the fields of `defaults` stand here as if written here, those below override them
+// a substitution alone among fields puts the fields of the map there, as if written there; those below override them
 primary:
-  $defaults*
+  $defaults
   port: 6432
   pool.size: 20
 
-// a graft copies the node whole
+// alone after a key it is the key's value: a graft, which copies the node whole
 replica: $primary
 
+// two or more alone in a block: the fields of the maps they find, merged in turn
+monitoring { interval: 10s }
+audited:
+  $primary
+  $monitoring
+
 hosts: [a, b]
-// `$hosts*` puts the elements of `hosts`, `$hosts` the sequence as one element
+// alone on its line among `- ` elements it puts the elements of a sequence there; after a `- ` it is one element
 all:
   - first
-  - $hosts*
+  $hosts
   - last
 groups:
   - $hosts
   - [backup]
+// in brackets it puts the elements of a sequence it finds, and anything else as one element
+flat: [$hosts, $defaults.host, [$hosts]]

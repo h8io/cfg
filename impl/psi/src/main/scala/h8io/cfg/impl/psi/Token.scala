@@ -63,11 +63,8 @@ private[psi] object Token {
 
   final case class Text(value: String) extends Part
 
-  /** `${path}` or `$path`, `${?path}` or `$?path` when `optional`, found at `location`; with a `*` after the path,
-    * `${path*}` or `$path*`, an `injection` (`format.md` §9), which only the parser tells in place or not.
-    */
-  final case class Reference(path: Id.Branch, optional: Boolean, location: SourceLocation, injection: Boolean = false)
-      extends Part
+  /** `${path}` or `$path`, `${?path}` or `$?path` when `optional`, found at `location`. */
+  final case class Reference(path: Id.Branch, optional: Boolean, location: SourceLocation) extends Part
 
   /** What the parser asks the lexer for: the same characters mean different things on either side of `:`, and in a
     * directive's arguments.
@@ -112,7 +109,6 @@ private[psi] object Token {
   def written(parts: Vector[Part]): String =
     parts.iterator.map {
       case Text(value) => value
-      case Reference(path, optional, _, injection) =>
-        "${" + (if (optional) "?" else "") + Message.path(path) + (if (injection) "*" else "") + "}"
+      case Reference(path, optional, _) => "${" + (if (optional) "?" else "") + Message.path(path) + "}"
     }.mkString
 }

@@ -59,17 +59,52 @@ private[psi] final class Expand private (
       case block: AST.Block => Some(block.copy(statements = statements(block.statements, stack, depth + 1)))
       case sequence: AST.Sequence =>
         val elements = sequence.elements.flatMap { e =>
-          val values = e.value match {
-            case AST.DirectiveValue(call, _, true) =>
+          val values = (e.value, e.put) match {
+            case (AST.DirectiveValue(call, _), AST.Put.Elements) =>
               run(call, stack, depth + 2).toVector.flatMap(injected(call, _, depth + 1))
-            case other => this.value(other, stack, depth + 1).toVector
+            case (AST.DirectiveValue(call, tags), AST.Put.Found) =>
+              run(call, stack, depth + 2).toVector.flatMap(spread(call, tags, _, depth + 1))
+            case (other, _) => this.value(other, stack, depth + 1).toVector
           }
           values.map(v => e.copy(value = v))
         }
         Some(sequence.copy(elements = elements))
-      case AST.DirectiveValue(call, tags, _) => run(call, stack, depth + 1).flatMap(placed(call, tags, _, depth))
+      case AST.DirectiveValue(call, tags) => run(call, stack, depth + 1).flatMap(placed(call, tags, _, depth))
+      case injections: AST.Injections => gathered(injections, stack, depth)
       case _ => Some(value)
     }
+
+  /** A block of injections alone, `depth` levels deep, its calls expanded (§4, §9): a map when the first that gives
+    * anything gives a map, its substitutions injections among fields, a sequence when it gives a sequence, its
+    * substitutions injections among elements; with no call giving anything, still a block of injections, or nothing
+    * when there is no substitution in it either.
+    */
+  private def gathered(injections: AST.Injections, stack: List[Source], depth: Int): Option[AST.Value] = {
+    val AST.Injections(items, tags, location) = injections
+    val expanded = items.map(_.left.map(call => call -> run(call, stack, depth + 1)))
+    expanded.collectFirst { case Left((call, Some(fragment))) => call -> fragment } match {
+      case None =>
+        val references = expanded.collect { case Right(reference) => Right(reference) }
+        if (references.isEmpty) None else Some(AST.Injections(references, tags, location))
+      case Some((_, Fragment.Built(_: Node.ISeq[?]))) =>
+        val elements = expanded.flatMap {
+          case Right(Token.Reference(path, optional, at)) =>
+            Vector(AST.Element(AST.Substitution(path, optional, Set.empty, at), None, AST.Put.Elements))
+          case Left((call, fragment)) =>
+            fragment.toVector.flatMap(injected(call, _, depth + 1)).map(AST.Element(_, None))
+        }
+        Some(AST.Sequence(elements, tags, location))
+      case Some((_, Fragment.Built(_: Node.IMap[?]) | _: Fragment.Parsed)) =>
+        val statements = expanded.flatMap {
+          case Right(Token.Reference(path, optional, at)) => Vector(AST.InjectionStatement(path, optional, at, None))
+          case Left((call, fragment)) => fragment.toVector.flatMap(fields(call, _, depth + 1))
+        }
+        Some(AST.Block(statements, tags, location))
+      case Some((call, _)) =>
+        report(DirectiveNotContainer(call.location, call.name))
+        None
+    }
+  }
 
   /** The fields of a fragment in statement position `depth` levels deep, which must be a map and fit there. */
   private def fields(call: AST.Call, fragment: Fragment, depth: Int): Vector[AST.Statement] =
@@ -108,6 +143,18 @@ private[psi] final class Expand private (
       case _ =>
         report(DirectiveNotSequence(call.location, call.name))
         Vector.empty
+    }
+
+  /** A fragment in `[…]`, `depth` levels deep: the elements of a sequence, in its place, or anything else as one
+    * element, with the tags written before the call, which a sequence's elements have no place for (§9).
+    */
+  private def spread(call: AST.Call, tags: Set[String], fragment: Fragment, depth: Int): Vector[AST.Value] =
+    fragment match {
+      case Fragment.Built(_: Node.ISeq[?]) if tags.nonEmpty =>
+        report(TaggedDirectiveSequence(call.location, call.name))
+        Vector.empty
+      case Fragment.Built(_: Node.ISeq[?]) => injected(call, fragment, depth)
+      case _ => placed(call, tags, fragment, depth).toVector
     }
 
   /** Whether a fragment reaching `depth` levels fits under the limit; reported at the call when it does not. */

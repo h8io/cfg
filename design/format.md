@@ -190,8 +190,8 @@ block-body = { field | directive | injection }
 field      = key { "." key } ( ( ":" | ":=" ) value | block )
 value      = [ tag ] ( scalar | block | seq | directive | substitution-expr )
 seq        = "[" [ element { sep element } [ sep ] ] "]"
-element    = value | injection | directive "*"
-injection  = substitution "*"
+element    = value
+injection  = substitution
 sep        = "," | newline
 tag        = "@" name
 directive  = "#" name [ "(" [ arg { sep arg } [ sep ] ] ")" ]
@@ -239,15 +239,17 @@ server:
   own, and a line it starts may stand in any column, as in Scala 3: its indentation is not checked
   against the widths of the blocks it closes (session 31).
 - **What opens a block:** `key:` or `key :=` at the end of a line, tags allowed after it
-  (`routes: @ordered`), followed by a line indented deeper. The block is a map, a sequence or one
-  value. A field or an injection, `$a*` (§9), makes it a map (`block-body`, §4), a directive in it
-  then standing in statement position (§6); `- ` elements make it a sequence (below); and one value
-  alone, a directive or a substitution included, is the value of the key, as YAML and Scala 3 both
-  allow — `a:⏎  x`, `a:⏎  """…"""`, `a:⏎  [x, y]`, `a:⏎  $b`, `a:⏎  #env(name: X)`. A value
-  means on the next line what it means on the line of its `:`, so `a:⏎  $b` is `a: $b`, and
-  `a:⏎  $b*` is `a { $b* }` (session 31). Mixing fields and `- ` elements in one block is an error,
-  and so is a second value, or a value among fields: `$b` there is written `$b*`, the error's hint
-  showing it.
+  (`routes: @ordered`), followed by a line indented deeper. The block is a map, a sequence, one
+  value, or injections alone. A field makes it a map (`block-body`, §4), a substitution alone on its
+  line in it then an injection of a map's fields (§9) and a directive one in statement position (§6);
+  `- ` elements make it a sequence (below), a substitution or a directive alone on its line among
+  them an injection of a sequence's elements (§9); and one value alone, a directive or a substitution
+  included, is the value of the key, as YAML and Scala 3 both allow — `a:⏎  x`, `a:⏎  """…"""`,
+  `a:⏎  [x, y]`, `a:⏎  $b`, `a:⏎  #env(name: X)`. A value means on the next line what it means on
+  the line of its `:`, so `a:⏎  $b` is `a: $b`, a graft. Two or more substitutions or directives
+  alone, none tagged, are injections, and what the first that finds or gives anything finds or gives
+  makes the block a map or a sequence (§9, session 34). Mixing fields and `- ` elements in one block
+  is an error, and so is a second value, or a value among fields or elements.
 - **The tags after `key:` are the block's value's**: of the map, of the sequence, as here, or of
   the one value, which may have tags of its own written before it, the two adding up as tags
   written together do (§5): `a: @s⏎  @t x` is `a: @s @t x`.
@@ -274,9 +276,10 @@ server:
 
   After `- ` stands any value: a scalar, `[…]`, `{…}`, a substitution, a map written as above, or
   another element, `- - x` a sequence in a sequence, as in YAML. A value means after `- ` what it
-  means as an element of `[…]`: `- $a` grafts one element and `- $a*` puts the elements of a
-  sequence, as `[$a*]` does; an element is a map only when a field follows on the lines aligned
-  under it, or written in braces, `- { $a* }` (session 32). A `-` with nothing after it on its line
+  means after a key, one node: `- $a` grafts one element, and `$a` alone on its line among the
+  elements, with no marker, puts the elements of a sequence (session 34); an element is a map only
+  when a field follows on the lines aligned under it, or written in braces, `- { $a }`. A `-` with
+  nothing after it on its line
   takes the value in a block below, deeper than the marker, as `- @t` does. A tag goes before the value, and a
   map element has no place for one before its first key: `- @t host: a` is an error, its hint
   showing `- @t { host: a }` or `- @t` with the map in a block below, deeper than the marker.
@@ -538,11 +541,10 @@ A directive may appear in two positions:
 
 - **statement position**, inside any block or at the top of a file — it must produce a map, which is
   merged into the enclosing block at the point where it appears, so fields below it override it;
-- **value position**, on the right of `:` or as a sequence element — it produces a single node;
-  as an element with a `*` after it, `#d(…)*`, a sequence it gives puts its elements there, an
-  injection (§9), and without one what it gives stands as one element (session 31). Anywhere else
-  a `*` after a call is an error: in statement position a directive already puts the fields of the
-  map it gives.
+- **value position**, on the right of `:` or as a sequence element — it produces a single node,
+  after a key or a `- `. As an element of `[…]` a sequence it gives puts its elements there and
+  anything else stands as one element; alone on its line among `- ` elements it is an injection, a
+  sequence it gives putting its elements there and anything else an error (§9, session 34).
 
 A directive name follows the key rule, as a tag name does (§5): bare if it matches
 `Id.SafeKeyPattern`, in backticks otherwise — ``#`my.directive`(…)``. One rule covers every name
@@ -644,9 +646,9 @@ an error, as a backstop for a key that changes on every step (`?n=1`, `?n=2`, �
 source parsed twice not through itself, a diamond, is no cycle: it is parsed again each time.
 
 **Tags before a directive in value position** are added to the tags of the node it produces, as
-tags before a whole-value `${…}` are added to the grafted node's (§9): `a: @t #include(…)`. Among
-the elements of a sequence, a tag before a call that gives a sequence is an error, its elements
-keeping their own tags (§9).
+tags before a whole-value `${…}` are added to the grafted node's (§9): `a: @t #include(…)`. In
+`[…]`, a tag before a call that gives a sequence is an error, its elements keeping their own tags,
+and alone on its line among fields or `- ` elements a call takes no tag (§9).
 
 `#include` is the only built-in, reserved and possibly disabled (above):
 
@@ -822,7 +824,8 @@ from a substitution.
 ## 9. Substitutions
 
 - `${path}` in place of a whole value grafts the referenced node, whatever it is — scalar, block or
-  sequence — as an element of a sequence too; with a `*` after its path it is an injection (below).
+  sequence — after a key or a `- `; alone among fields, alone on its line among `- ` elements, or in
+  `[…]`, it is an injection (below).
 - **A path is written as `Id.path` renders one** (§3), right after `${` or `${?` and right up to
   `}`, with no whitespace: keys joined by dots, quoted in backticks when
   not bare, and indices into sequences in brackets — `${x.y[7].z}`, `${a[0][1]}`,
@@ -867,41 +870,55 @@ from a substitution.
 - Cycles are an error naming the path. Self-reference (`a: ${a}" x"` reading the pre-merge value) is
   **not** supported in v1; it is reported as a cycle.
 
-**Injections** (sessions 25, 26 and 31) put what a node holds where a node would stand: the fields
-of a map among the fields of a block, the elements of a sequence among the elements of a sequence.
+**Injections** (sessions 25, 26, 31 and 34) put what a node holds where a node would stand: the
+fields of a map among the fields of a block, the elements of a sequence among the elements of a
+sequence. Where a substitution stands says whether it injects (session 34): a key or a `- ` before
+it gives it a place for one node, and it grafts; with none, it injects into the block around it.
 
-- **A `*` after the path marks an injection**: `$a*` and `${a*}`, `$?a*` and `${?a*}` optional,
-  among the fields of a block or as an element of a sequence. Without it a substitution grafts,
-  so `[p, $a, z]` holds `a` whole as one element, and among fields, where nothing but a field
-  stands, `$a` is an error whose hint shows `$a*`. Anywhere else an injection is an error: as a
-  field's value, in a string, in a concatenation. With no braces the path ends before the `*`, no
-  bare key holding one (§3).
-- **Among the fields of a block, as if the map's fields were written there**: what stands after the
-  injection overrides it, what stands before it is overridden, and they merge as `:` merges (§7),
-  maps deep and anything else replaced; a `:=` after it replaces. With `a { x: 1, y: 2 }`,
-  `b { $a*, x: 3, z: 4 }` is `{ x: 3, y: 2, z: 4 }`. A map over a substitution is the error `:`
-  gives there (§7), the substitution maybe no map. A scalar holding more than the substitution
-  there, `b { $a/x }`, is an error.
+- **Among the fields of a block, as if the map's fields were written there**: `$a` and `${a}`,
+  `$?a` and `${?a}` optional, alone among the fields, in braces or on a line of a block opened by
+  indentation. What stands after the injection overrides it, what stands before it is overridden,
+  and they merge as `:` merges (§7), maps deep and anything else replaced; a `:=` after it replaces.
+  With `a { x: 1, y: 2 }`, `b { $a, x: 3, z: 4 }` is `{ x: 3, y: 2, z: 4 }`. A map over a
+  substitution is the error `:` gives there (§7), the substitution maybe no map. A scalar holding
+  more than the substitution there, `b { $a/x }`, is an error.
 - **What it finds is the map as it ends up**, merged from every source and resolved, as every
   substitution finds; what is merged into the block after it, from a later block or a later
   source, comes after it. Its fields keep where they came from behind the injection (§10), and
   their own tags; the map's tags are not brought along.
-- **Among the elements of a sequence, the elements of the sequence it finds in its place**: with
-  `a: [x, y]`, `[p, $a*, z]` is `[p, x, y, z]`, and `[p, $a, z]` is `[p, [x, y], z]`. Whether a
-  substitution nests or puts elements is written, not decided by what it finds.
-- **What it finds must be a map among fields and a sequence among elements**, an error naming
-  where it is defined otherwise. The `*` says what the author meant, so a mismatch is the author's
-  mistake; session 26, with nothing to mark an injection, let anything but a sequence stand as one
-  element.
+- **Alone on its line among `- ` elements, the elements of the sequence it finds in its place**:
+  with `a: [x, y]`, `b:⏎  - p⏎  $a⏎  - z` is `[p, x, y, z]`, and `- $a` there `[p, [x, y], z]`.
+  Whether it nests or puts elements is written, not decided by what it finds.
+- **In `[…]`, by what it finds** (session 34): a sequence puts its elements there, and anything else
+  stands as one element, as after a `- `. With `a: [x, y]` and `h: x`, `[p, $a, $h]` is
+  `[p, x, y, x]`; brackets around it nest a sequence whole, `[p, [$a]]` is `[p, [x, y]]`. The cost,
+  taken knowingly: the shape of a sequence in brackets depends on what its substitutions find, as
+  in session 26, where `[$db.host, $cache.host]` would be an error without it.
+- **Two or more alone in a block opened by indentation, none tagged** (session 34): what the first
+  that finds anything finds makes the block a map, the fields of each merged in turn, or a sequence,
+  the elements of each put in turn, the block's tags its own; one finding anything else is an error
+  naming where it is defined, and so is a first that is neither. With none finding anything, the
+  block is nothing, and its key or element is left out, as an optional graft's is. A block of one
+  value alone is that value, `a:⏎  $b` a graft (§4). Merging with what is written elsewhere at its
+  key is the error a substitution there gives (§7), the block maybe no map.
+- **What it finds must be a map among fields and a sequence alone on its line among `- `
+  elements**, an error naming where it is defined otherwise: the place says what the author meant,
+  so a mismatch is the author's mistake.
 - **No tags before it**: they would have no node to go to, the fields and elements keeping their
-  own, so `@t $a*` is an error, where `@t $a` tags the one node it grafts.
+  own, so `@t $a` alone among fields or on its line among `- ` elements is an error, where `@t $a`
+  after a key or a `- ` tags the one node it grafts. In `[…]` a tag goes to the one element when
+  what it finds is no sequence, and is an error before a sequence.
 - **An index into a sequence counts the elements its injections put**, and resolves only those
-  before the element it names: in `a: [x, $b*, $a[0]]`, `$a[0]` is `x`, and `$b*` is not resolved
+  before the element it names: in `a: [x, $b, $a[0]]`, `$a[0]` is `x`, and `$b` is not resolved
   to find it.
-- **A directive among the elements of a sequence injects with a `*` too** (§6): `#d(…)*` puts the
-  elements of a sequence it gives, an error otherwise, and `#d(…)` stands as one element. In
-  statement position a directive puts the fields of a map with no `*`, as it always did.
+- **A directive injects where a substitution does** (§6), what it gives in place of what is found:
+  among fields in statement position, a map's fields; alone on its line among `- ` elements, a
+  sequence's elements, an error otherwise; in `[…]`, a sequence's elements or anything else as one
+  element; alone in a block with other injections, as a substitution there.
 - An optional injection finding nothing puts nothing, among fields and among elements alike.
+- **A `*` after a substitution is text**, as after anything else: `$a*` is `a` and `*`
+  concatenated, and among fields, where a scalar holding more than the substitution is an error,
+  `{ $a* }` is that error. Sessions 25 and 31 marked an injection with it; session 34 dropped it.
 - **Not at the root, nor into the block it stands in**: every path goes through the root, so an
   injection among its fields would refer to the tree it builds, an error of its own; one that refers
   to the block it stands in, or one around it, is a cycle. A source included in a block puts its
@@ -1178,8 +1195,8 @@ mistake is worse than stopping.
 1. **Value expressions**, e.g. `${b} + ${c}` for sequence concatenation — the replacement for an
    append operator (§7). Not in v1. Whitespace never joins values (§3), so `${b} + ${c}` is an error
    today and the syntax stays free. **Parked** by the user as hard from every angle — do not reopen
-   it until it is raised again. Injections (§9, sessions 25, 26 and 31) do the jobs that came
-   first: `[$b*, $c*]` concatenates sequences, and `b { $a*, x: 3 }` extends a map.
+   it until it is raised again. Injections (§9, sessions 25, 26, 31 and 34) do the jobs that came
+   first: `[$b, $c]` concatenates sequences, and `b { $a, x: 3 }` extends a map.
 2. ~~**Indentation as an alternative to braces**~~ — settled in session 28 as in Scala 3 (§4,
    Indentation), implemented in session 32.
 3. ~~**Multi-line strings**~~ — closed in session 7: reopened by the user and settled point by
@@ -2471,3 +2488,38 @@ Fixed on a review of session 32's code, the format unchanged, nothing put to the
   said, kept the `$a` as text too.
 - `Render` writes an element that starts on the line of its `- ` once, where it copied it again at
   every level, and looks for a field in a scalar only when it holds a `:` or a `{`.
+
+### Session 34 — 2026-11-19
+
+- **The `*` is gone again: where a substitution stands says whether it injects** (§4, §6, §9), the
+  user's decision, on the user's point that injections follow the logic of directives, which inject
+  in statement position and give one node in value position with no `*`. A key or a `- ` before a
+  substitution or a call gives it a place for one node; with none, alone among fields or alone on
+  its line among `- ` elements, it injects into the block around it. Session 31's case for the `*`,
+  `a:⏎  $b` read two ways, is settled as `#include` already was: one value alone after a key is its
+  value, `a:⏎  $b` a graft, and `a:⏎  $b⏎  x: 1` injects. The difference, told to the user before
+  deciding and taken: a key that `a:⏎  $b` grafts at cannot take a map merged into it from elsewhere
+  (§7), where `a { $b }` can; and the graft brings the map's tags along and takes what is no map.
+- **Alone on its line among `- ` elements a substitution puts the elements of a sequence**, the
+  user's proposal: `- $b` is one element, `$b` with no marker the elements of `b`, an error when `b`
+  is no sequence. It undoes session 32's `- $a*`.
+- **In `[…]`, by what it finds**, the user's choice of the two I put (session 26's rule): a sequence
+  puts its elements, anything else stands as one element. Taken over brackets always injecting,
+  which would make `[$db.host, $cache.host]` an error and leave no way to put a scalar or `null` in
+  brackets but a concatenation; and over brackets never injecting, which leaves brackets no way to
+  concatenate. Brackets around it nest a sequence whole, `[[$a]]`.
+- **Two or more substitutions or calls alone in a block opened by indentation, none tagged, are
+  decided by what they find**, the user's choice of the two I put, over an error: the first that
+  finds or gives anything makes the block a map or a sequence, and the rest must agree. Mine, in the
+  code: a call there runs when the source is expanded, so one that gives a map or a sequence decides
+  before any substitution is resolved; a block where none finds anything is nothing, as an optional
+  graft that finds nothing is.
+- Mine, in the code: a tag before an injection alone on its line is `TaggedInjection`, a call's
+  included, where among fields it was `ValueAmongFields`; in brackets, before a sequence found or
+  given, `TaggedSequence` or `TaggedDirectiveSequence`; a block of injections alone whose first
+  finds or gives neither a map nor a sequence, `InjectionNotContainer` or `DirectiveNotContainer`.
+  `SubstitutionAmongFields` and `InjectionOutOfPlace` are gone. `Render` writes a merged tree's
+  injections as they are written: alone on their lines, and a sequence holding one from `[…]` in
+  brackets.
+- Breaks every `*` written since session 31, and `[x, $a, z]`, which session 31 made nest a
+  sequence whole, puts its elements again: before 1.0, compatibility is not kept.

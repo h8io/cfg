@@ -58,15 +58,16 @@ private[psi] final class Merge {
     }
 
   /** `value` merged with a `:` over `earlier`: maps merge, their tags united, and anything else replaces what was
-    * there, with only its own tags; none when either is a substitution and the other a map or a substitution.
+    * there, with only its own tags; none when either is a substitution, or a block of injections alone, and the other a
+    * map or either of those.
     */
   private def merged(earlier: Tree.Value, value: AST.Value): Option[Tree.Value] =
     (earlier, value) match {
       case (map: Tree.Map, AST.Block(statements, tags, location)) =>
         Some(block(map.copy(tags = map.tags ++ tags, location = Merge.again(location, map.location)), statements))
-      case (_: Tree.Map | _: Tree.Substitution, substitution: AST.Substitution) =>
-        conflict(substitution.location, earlier)
-      case (_: Tree.Substitution, block: AST.Block) =>
+      case (_: Tree.Map | _: Tree.Substitution | _: Tree.Injections, _: AST.Substitution | _: AST.Injections) =>
+        conflict(value.location, earlier)
+      case (_: Tree.Substitution | _: Tree.Injections, block: AST.Block) =>
         val result = conflict(block.location, earlier)
         // read on its own, the block has errors of its own to report, independent of the conflict (§11)
         val _ = tree(block)
@@ -85,13 +86,23 @@ private[psi] final class Merge {
       case AST.Scalar(text, tags, location) => Tree.Scalar(text, tags, location)
       case AST.Null(tags, location) => Tree.Null(tags, location)
       case AST.Block(statements, tags, location) => block(Tree.Map.empty(tags, location), statements)
-      case AST.Sequence(elements, tags, location) => Tree.Sequence(elements.map(e => tree(e.value)), tags, location)
+      case AST.Sequence(elements, tags, location) => Tree.Sequence(elements.map(element), tags, location)
       case AST.Substitution(path, optional, tags, location) => Tree.Substitution(path, optional, tags, location)
-      // the parser takes one as an element of a sequence alone
-      case AST.Injection(path, optional, location) => Tree.Injection(path, optional, location)
+      case AST.Injections(items, tags, location) =>
+        Tree.Injections(items.map(_.fold(unexpanded, identity)), tags, location)
       case AST.Concatenation(parts, tags, location) => Tree.Concatenation(parts, tags, location)
       case AST.Marked(value, markers) => Tree.Marked(tree(value), markers)
-      case AST.DirectiveValue(call, _, _) => unexpanded(call)
+      case AST.DirectiveValue(call, _) => unexpanded(call)
+    }
+
+  /** An element of a sequence, where a substitution may be an injection (§9). */
+  private def element(element: AST.Element): Tree.Value =
+    (element.value, element.put) match {
+      case (AST.Substitution(path, optional, tags, location), AST.Put.Found) =>
+        Tree.Injection(path, optional, tags, location, required = false)
+      case (AST.Substitution(path, optional, tags, location), AST.Put.Elements) =>
+        Tree.Injection(path, optional, tags, location, required = true)
+      case (value, _) => tree(value)
     }
 
   private def unexpanded(call: AST.Call): Nothing =

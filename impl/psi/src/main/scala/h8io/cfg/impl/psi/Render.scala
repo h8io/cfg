@@ -12,6 +12,11 @@ import h8io.cfg.impl.psi.Token.{KeyMode, Reference, Text, ValueMode}
   * sequence its first element, `- - x`. Keys and tags are written as `Id.path` writes keys, bare when they can be and
   * in backticks otherwise (`format.md` §3); tags in alphabetical order. A scalar is written bare when the lexer reads
   * it back as the same scalar, in double quotes otherwise; a concatenation always in double quotes.
+  *
+  * A merged tree holds what is still unresolved, which only a test or a debugger shows. An injection among `- `
+  * elements and a block of injections alone are written on lines of their own; a sequence holding an injection that
+  * came from `[…]` is written in brackets, an element a line, a map in it in braces. A sequence of nothing but
+  * injections among `- ` elements, which only a call can give, has no source that reads back as it.
   */
 private[psi] object Render {
 
@@ -57,11 +62,13 @@ private[psi] object Render {
     }
   }
 
-  /** A map or a sequence with something in it, which stands in a block below its key. */
+  /** A map or a sequence with something in it, or a block of injections alone, which stands in a block below its key.
+    */
   private def block(value: Tree.Value): Boolean =
     value match {
       case map: Tree.Map => map.keys.nonEmpty
       case sequence: Tree.Sequence => sequence.elements.nonEmpty
+      case _: Tree.Injections => true
       case _ => false
     }
 
@@ -71,17 +78,65 @@ private[psi] object Render {
   private def contents(out: StringBuilder, value: Tree.Value, level: Int, onDash: Boolean = false): Unit =
     value match {
       case map: Tree.Map if map.keys.nonEmpty => fields(out, map, level, onDash)
+      case sequence: Tree.Sequence if sequence.elements.exists(spread) =>
+        if (!onDash) indent(out, level)
+        bracketed(out, sequence, level)
+        val _ = out += '\n'
       case sequence: Tree.Sequence if sequence.elements.nonEmpty =>
         sequence.elements.zipWithIndex.foreach { case (element, i) =>
           if (i > 0 || !onDash) indent(out, level)
-          val _ = out += '-'
-          dashed(out, element, level)
+          element match {
+            // alone on its line, it puts the elements of a sequence
+            case _: Tree.Injection =>
+              oneLine(out, element)
+              val _ = out += '\n'
+            case _ =>
+              val _ = out += '-'
+              dashed(out, element, level)
+          }
+        }
+      case Tree.Injections(references, _, _) =>
+        references.zipWithIndex.foreach { case (r, i) =>
+          if (i > 0 || !onDash) indent(out, level)
+          reference(out, r.path, r.optional)
+          val _ = out += '\n'
         }
       // only a value alone without tags, as `value` writes one
       case _ =>
         oneLine(out, value)
         val _ = out += '\n'
     }
+
+  /** Whether `element` is an injection from `[…]`, which only brackets write. */
+  private def spread(element: Tree.Value): Boolean =
+    element match {
+      case injection: Tree.Injection => !injection.required
+      case _ => false
+    }
+
+  /** A sequence in brackets that stands at `level`: `[`, an element a line below it, one level deeper, a map in braces
+    * and a sequence in brackets, and `]` on a line of its own.
+    */
+  private def bracketed(out: StringBuilder, sequence: Tree.Sequence, level: Int): Unit = {
+    out ++= "[\n"
+    sequence.elements.foreach { element =>
+      indent(out, level + 1)
+      element.tags.toVector.sorted.foreach(tag => out ++= "@" ++= name(tag) += ' ')
+      element match {
+        case map: Tree.Map if map.keys.nonEmpty =>
+          out ++= "{\n"
+          fields(out, map, level + 2)
+          indent(out, level + 1)
+          out += '}'
+        case sequence: Tree.Sequence if sequence.elements.nonEmpty => bracketed(out, sequence, level + 1)
+        case _ => oneLine(out, element)
+      }
+      out += '\n'
+    }
+    indent(out, level)
+    out += ']'
+    ()
+  }
 
   /** An element after its `- `, which stands at `level`: an untagged map or sequence starts on the line of the `- `,
     * the rest of it aligned under that start; anything else as after a `:`.
@@ -117,8 +172,10 @@ private[psi] object Render {
       case Tree.Null(_, _) => out ++= "null"
       case _: Tree.Map => out ++= "{}"
       case _: Tree.Sequence => out ++= "[]"
-      case Tree.Substitution(path, optional, _, _) => reference(out, path, optional, injection = false)
-      case Tree.Injection(path, optional, _) => reference(out, path, optional, injection = true)
+      case Tree.Substitution(path, optional, _, _) => reference(out, path, optional)
+      case Tree.Injection(path, optional, _, _, _) => reference(out, path, optional)
+      case injections: Tree.Injections =>
+        throw new IllegalStateException("A block of injections at " + injections.location.description + " on one line")
       case Tree.Concatenation(parts, _, _) => quoted(out, parts)
       // the loader's markers run as the tree is resolved, and only a resolved tree is shown
       case marked: Tree.Marked =>
@@ -130,8 +187,8 @@ private[psi] object Render {
   /** A key or a tag, as `Id.path` writes a key. */
   private def name(name: String): String = Id.Key(name, Id.Root).path
 
-  private def reference(out: StringBuilder, path: Id.Branch, optional: Boolean, injection: Boolean): Unit = {
-    val _ = out ++= (if (optional) "${?" else "${") ++= Message.path(path) ++= (if (injection) "*}" else "}")
+  private def reference(out: StringBuilder, path: Id.Branch, optional: Boolean): Unit = {
+    val _ = out ++= (if (optional) "${?" else "${") ++= Message.path(path) += '}'
   }
 
   /** Whether `text` reads back alone, unquoted, as itself: the lexer's own answer, `null` being no string. Half a
@@ -149,7 +206,7 @@ private[psi] object Render {
     out += '"'
     parts.foreach {
       case Text(text) => escape(out, text)
-      case Reference(path, optional, _, _) => reference(out, path, optional, injection = false)
+      case Reference(path, optional, _) => reference(out, path, optional)
     }
     out += '"'
     ()

@@ -83,6 +83,8 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       case sequence: Tree.Sequence => step(this.sequence(id, sequence).map(Some(_)))
       case injection: Tree.Injection =>
         once(id, Some(new Following(injection.location, injection.path)))(injected(id, injection))
+      case injections: Tree.Injections =>
+        once(id, injections.references.headOption.map(r => new Following(r.location, r.path)))(gathered(id, injections))
       case Tree.Substitution(path, optional, tags, at) =>
         once(id, Some(new Following(at, path)))(
           reference(path, optional, at).flatMap(_.fold[Resolution](Right(None))(grafted(id, _, at, path, tags))))
@@ -184,15 +186,58 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       optional: Boolean,
       at: SourceLocation): Either[Failure, Tree.Map] =
     reference(path, optional, at).flatMap(_.fold[Either[Failure, Tree.Map]](Right(current)) {
-      case found: Tree.Map =>
-        // its fields stand where the map's do
-        if (segments(id).size - 1 + height(found) > limit) failed(DepthExceeded(at, limit, fatal = false))
-        else
-          grow(size(found) - 1, 0, ResolutionTooLarge(at, Message.path(path), nodeLimit))
-            // a map grafted is a map
-            .map(_ => over(current, graft(found, at, path, Set.empty).asInstanceOf[Tree.Map]))
+      case found: Tree.Map => into(id, current, found, at, path)
       case other => failed(InjectionNotMap(at, Message.path(path), other.location))
     })
+
+  /** The map `current` at `id` with the fields of `found`, the map at `path`, merged into it, as an injection at `at`
+    * merges them.
+    */
+  private def into(id: Id, current: Tree.Map, found: Tree.Map, at: SourceLocation, path: Id.Branch)
+      : Either[Failure, Tree.Map] =
+    // its fields stand where the map's do
+    if (segments(id).size - 1 + height(found) > limit) failed(DepthExceeded(at, limit, fatal = false))
+    else
+      grow(size(found) - 1, 0, ResolutionTooLarge(at, Message.path(path), nodeLimit))
+        // a map grafted is a map
+        .map(_ => over(current, graft(found, at, path, Set.empty).asInstanceOf[Tree.Map]))
+
+  /** The elements of `found`, the sequence at `path`, injected at `at` where `around` levels stand around them. */
+  private def elements(around: Int, found: Tree.Sequence, at: SourceLocation, path: Id.Branch)
+      : Either[Failure, Vector[Tree.Value]] =
+    if (around - 1 + height(found) > limit) failed(DepthExceeded(at, limit, fatal = false))
+    else
+      grow(size(found) - 1, 0, ResolutionTooLarge(at, Message.path(path), nodeLimit))
+        // a sequence grafted is a sequence
+        .map(_ => graft(found, at, path, Set.empty).asInstanceOf[Tree.Sequence].elements)
+
+  /** What a block of injections alone at `id` gives (§4, §9): the fields of the maps its substitutions find merged in
+    * turn, or the elements of the sequences, as the first that finds anything says, with the block's tags; none when
+    * none finds anything.
+    */
+  private def gathered(id: Id, injections: Tree.Injections): Resolution = {
+    val Tree.Injections(references, tags, location) = injections
+    val found = references.map(r => reference(r.path, r.optional, r.location))
+    failure(found).toLeft(references.zip(found).collect { case (r, Right(Some(value))) => r -> value }).flatMap {
+      present =>
+        present.headOption.fold[Resolution](Right(None)) {
+          case (_, _: Tree.Map) =>
+            val merged = present.foldLeft[Either[Failure, Tree.Map]](Right(Tree.Map.empty(tags, location))) {
+              case (Right(current), (r, found: Tree.Map)) => into(id, current, found, r.location, r.path)
+              case (Right(_), (r, other)) => failed(InjectionNotMap(r.location, Message.path(r.path), other.location))
+              case (failure, _) => failure
+            }
+            merged.map(Some(_))
+          case (_, _: Tree.Sequence) =>
+            val put = present.map {
+              case (r, found: Tree.Sequence) => elements(segments(id).size, found, r.location, r.path)
+              case (r, other) => failed(InjectionNotSequence(r.location, Message.path(r.path), other.location))
+            }
+            failure(put).toLeft(Some(Tree.Sequence(put.collect { case Right(e) => e }.flatten, tags, location)))
+          case (r, other) => failed(InjectionNotContainer(r.location, Message.path(r.path), other.location))
+        }
+    }
+  }
 
   /** `value`, found by `\${path}` at `at`, grafted at `id` with the tags written before it added to its own. */
   private def grafted(id: Id, value: Tree.Value, at: SourceLocation, path: Id.Branch, tags: Set[String]): Resolution =
@@ -203,18 +248,18 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
         .map(_ => Some(graft(value, at, path, tags)))
 
   /** What an injection among elements finds: a sequence, whose elements are to stand in its place; none when an
-    * optional one finds nothing, and anything else is an error.
+    * optional one finds nothing. Anything else is an error for a `required` one, and stands there as one element
+    * otherwise, with the tags written before it, which a sequence's elements have no place for.
     */
   private def injected(id: Id, injection: Tree.Injection): Resolution = {
-    val Tree.Injection(path, optional, at) = injection
+    val Tree.Injection(path, optional, tags, at, required) = injection
     reference(path, optional, at).flatMap(_.fold[Resolution](Right(None)) {
+      case found: Tree.Sequence if tags.nonEmpty => failed(TaggedSequence(at, Message.path(path), found.location))
       case found: Tree.Sequence =>
-        // its elements stand where the injection does
-        if (segments(id).size - 2 + height(found) > limit) failed(DepthExceeded(at, limit, fatal = false))
-        else
-          grow(size(found) - 1, 0, ResolutionTooLarge(at, Message.path(path), nodeLimit))
-            .map(_ => Some(graft(found, at, path, Set.empty)))
-      case found => failed(InjectionNotSequence(at, Message.path(path), found.location))
+        // its elements stand where the injection does, below the sequence it stands in
+        elements(segments(id).size - 1, found, at, path).map(e => Some(found.copy(elements = e)))
+      case found if required => failed(InjectionNotSequence(at, Message.path(path), found.location))
+      case found => grafted(id, found, at, path, tags)
     })
   }
 
@@ -240,8 +285,8 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
           tags = map.tags ++ content.tags,
           location = Merge.again(content.location, map.location),
           steps = map.steps :+ Tree.Step.Graft(content)))
-      case (substitution: Tree.Substitution, content: Tree.Map) =>
-        errors += MergeWithSubstitution(content.location, substitution.location)
+      case (_: Tree.Substitution | _: Tree.Injections, content: Tree.Map) =>
+        errors += MergeWithSubstitution(content.location, earlier.location)
         None
       case _ => Some(value)
     }
@@ -313,7 +358,7 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       case Nil => resolve(id, value)
       case next :: rest =>
         val here = value match {
-          case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Marked => resolve(id, value)
+          case _: Tree.Substitution | _: Tree.Injections | _: Tree.Concatenation | _: Tree.Marked => resolve(id, value)
           // what an injection brings in among fields is known only once it is resolved
           case map: Tree.Map if map.steps.nonEmpty => completed(id, map).map(Some(_))
           case _ => Right(Some(value))
@@ -344,15 +389,18 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
               case injection: Tree.Injection =>
                 resolve(Id.Index(i, id), injection) match {
                   case Right(found) =>
-                    // a sequence, or nothing for an optional one
-                    val elements = found.collect { case put: Tree.Sequence => put.elements }.getOrElse(Vector.empty)
+                    // a sequence, anything else as one element, or nothing for an optional one
+                    val elements = found.fold(Vector.empty[Tree.Value]) {
+                      case put: Tree.Sequence => put.elements
+                      case one => Vector(one)
+                    }
                     if (left < elements.size) Right(Some(Id.Index(i, id) -> elements(left)))
                     else element(i + 1, left - elements.size)
                   case Left(failure) => Left(failure)
                 }
-              // an optional one that finds nothing puts no element
-              case substitution: Tree.Substitution if substitution.optional =>
-                resolve(Id.Index(i, id), substitution) match {
+              // one that finds nothing puts no element
+              case value @ (Tree.Substitution(_, true, _, _) | _: Tree.Injections) =>
+                resolve(Id.Index(i, id), value) match {
                   case Right(None) => element(i + 1, left)
                   case Right(Some(_)) if left > 0 => element(i + 1, left - 1)
                   case Right(Some(value)) => Right(Some(Id.Index(i, id) -> value))
@@ -424,7 +472,7 @@ private[psi] object Resolve {
   /** The first reference of `concatenation`, where it is reported going past the limit with no substitution followed.
     */
   private def first(concatenation: Tree.Concatenation): Option[Following] =
-    concatenation.parts.collectFirst { case Token.Reference(path, _, at, _) => new Following(at, path) }
+    concatenation.parts.collectFirst { case Token.Reference(path, _, at) => new Following(at, path) }
 
   def apply(
       root: Tree.Map,
@@ -481,7 +529,7 @@ private[psi] object Resolve {
           val entries = map.entries.map { case (key, child) => key -> moved(child, Id.Key(key, id), Set.empty) }
           map.copy(entries = entries, tags = map.tags ++ tags, location = location)
         // a node is resolved whole before it is grafted
-        case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Marked | _: Tree.Injection =>
+        case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Marked | _: Tree.Injection | _: Tree.Injections =>
           throw new IllegalStateException("An unresolved substitution at " + value.location.description + " grafted")
       }
     }

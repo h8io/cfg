@@ -46,10 +46,10 @@ class IndentationTest extends AnyFlatSpec with Matchers {
       ConcatenationLocation(at(3, 3), ::(ReferenceLocation(at(3, 4), "x", at(1, 4)), Nil)))
   }
 
-  it should "inject a map's fields with a `*`, alone or among fields, and graft a node without one" in {
-    shown("m { x: 1 }\na:\n  $m*\nb:\n  $m*\n  y: 2\nc:\n  y: 2\n  ${m*}") shouldBe
+  it should "inject a map's fields among fields, and take a substitution alone as its value" in {
+    shown("m { x: 1 }\na:\n  $m\nb:\n  $m\n  y: 2\nc:\n  y: 2\n  ${m}") shouldBe
       "m:\n  x: 1\na:\n  x: 1\nb:\n  x: 1\n  y: 2\nc:\n  y: 2\n  x: 1\n"
-    shown("m { x: 1 }\na: @t\n  $m*") shouldBe "m:\n  x: 1\na: @t\n  x: 1\n"
+    shown("m: @u { x: 1 }\na: @t\n  $m") shouldBe "m: @u\n  x: 1\na: @t @u\n  x: 1\n"
   }
 
   it should "take a directive alone as its value, and among fields as a statement" in {
@@ -91,10 +91,9 @@ class IndentationTest extends AnyFlatSpec with Matchers {
     errors("a:\n  x\n  y") shouldBe List(SecondValue(at(3, 3)))
     errors("a:\n  x, y") shouldBe List(SecondValue(at(2, 6)))
     errors("a:\n  x\n  y: 1\n  z") shouldBe List(ValueAmongFields(at(2, 3)), ValueAmongFields(at(4, 3)))
-    errors("m { x: 1 }\na:\n  $m\n  y: 1") shouldBe List(SubstitutionAmongFields(at(3, 3), "m", optional = false))
-    errors("a:\n  y: 1\n  #d(x)*") shouldBe List(InjectionOutOfPlace(at(3, 3)))
-    errors("a:\n  y: 1\n  @t #d(x)") shouldBe List(ValueAmongFields(at(3, 3)))
-    errors("a:\n  #d(x)*") shouldBe List(InjectionOutOfPlace(at(2, 3)), UnknownDirective(at(2, 3), "d"))
+    errors("m { x: 1 }\na:\n  @t $m\n  y: 1") shouldBe List(TaggedInjection(at(3, 3)))
+    errors("a:\n  y: 1\n  @t #d(x)") shouldBe List(TaggedInjection(at(3, 3)))
+    errors("a:\n  y: 1\n  #d(x)*") shouldBe List(MissingSeparator(at(3, 8), "'*'"), UnknownDirective(at(3, 3), "d"))
     errors("a:\n  x y") shouldBe List(SpaceInValue(at(2, 5), "y"))
   }
 
@@ -164,17 +163,17 @@ class IndentationTest extends AnyFlatSpec with Matchers {
   }
 
   it should
-    "graft with `$a` and inject with `$a*`, as in `[…]`, a map element starting with one having a field after it" in {
-      shown("s: [1, 2]\nm { x: 1 }\na:\n  - $s\n  - $s*\n  - $m*\n    y: 2\n  - { $m* }") shouldBe
-        "s:\n  - 1\n  - 2\nm:\n  x: 1\na:\n  - - 1\n    - 2\n  - 1\n  - 2\n  - x: 1\n    y: 2\n  - x: 1\n"
-      errors("s: [1]\na:\n  - @t\n    $s*") shouldBe List(TaggedInjection(at(4, 5)))
-      errors("a:\n  - @t\n    #d(x)*") shouldBe List(TaggedInjection(at(3, 5)), UnknownDirective(at(3, 5), "d"))
+    "graft with `- $a`, inject with `$a` alone on its line, a map element starting with one having a field after it" in {
+      shown("s: [1, 2]\nm { x: 1 }\na:\n  - $s\n  $s\n  - $m\n    y: 2\n  - { $m }\n  - [$s]") shouldBe
+        "s:\n  - 1\n  - 2\nm:\n  x: 1\na:\n  - - 1\n    - 2\n  - 1\n  - 2\n  - x: 1\n    y: 2\n  - x: 1\n  - - 1\n    - 2\n"
+      shown("s: [1]\na:\n  - @t\n    $s") shouldBe "s:\n  - 1\na:\n  - @t\n    - 1\n"
     }
 
   it should "not stand among fields, nor fields among elements" in {
     errors("a:\n  - x\n  y: 1") shouldBe List(MixedBlock(at(3, 3)))
     errors("a:\n  y: 1\n  - x") shouldBe List(MixedBlock(at(3, 3)))
-    errors("a:\n  x\n  - y") shouldBe List(MixedBlock(at(3, 3)))
+    // a value before the first `- ` is no element either
+    errors("a:\n  x\n  - y") shouldBe List(MixedBlock(at(2, 3)))
   }
 
   "Indentation" should "count against the depth limit" in {

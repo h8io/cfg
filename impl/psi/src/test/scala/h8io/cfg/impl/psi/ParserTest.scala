@@ -118,7 +118,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   }
 
   it should "keep a doc comment before an injection or a call that a block opened by indentation starts with" in {
-    statements("a:\n  /** d */\n  $m*\n  y: 2") shouldBe
+    statements("a:\n  /** d */\n  $m\n  y: 2") shouldBe
       Vector(
         field(
           k("a", 1, 1),
@@ -130,10 +130,10 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
         ))
   }
 
-  "An injection among elements" should "take no tags" in {
-    statements("a: [$b*]") match {
-      case Vector(Field(_, _, Sequence(Vector(Element(injection: Injection, None)), _, _), _)) =>
-        injection.tags shouldBe Set.empty
+  "A substitution in brackets" should "be an injection of what it finds, with the tags written before it" in {
+    statements("a: [@t $b]") match {
+      case Vector(Field(_, _, Sequence(Vector(Element(substitution: Substitution, None, Put.Found)), _, _), _)) =>
+        substitution.tags shouldBe Set("t")
       case other => fail(other.toString)
     }
   }
@@ -382,7 +382,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
           k("d", 6, 1),
           Sequence(
             Vector(
-              Element(Substitution(at("e"), optional = false, Set.empty, loc(6, 5)), None),
+              Element(Substitution(at("e"), optional = false, Set.empty, loc(6, 5)), None, Put.Found),
               Element(Concatenation(Vector(Text("x"), ref(at("e"), 6, 12)), Set.empty, loc(6, 11)), None)
             ),
             Set.empty,
@@ -440,8 +440,8 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
           k("b", 2, 1),
           Sequence(
             Vector(
-              Element(DirectiveValue(Call("y", Vector.empty, loc(2, 5)), Set.empty), None),
-              Element(DirectiveValue(Call("z", Vector(arg("2", 2, 12)), loc(2, 9)), Set.empty), None)
+              Element(DirectiveValue(Call("y", Vector.empty, loc(2, 5)), Set.empty), None, Put.Found),
+              Element(DirectiveValue(Call("z", Vector(arg("2", 2, 12)), loc(2, 9)), Set.empty), None, Put.Found)
             ),
             Set.empty,
             loc(2, 4)

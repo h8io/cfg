@@ -650,11 +650,10 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
     offset += 2
     val optional = at(offset, '?')
     if (optional) offset += 1
-    path(Id.Root).filter(_ => at(offset, '}') || at(offset, '*') && at(offset + 1, '}')) match {
+    path(Id.Root).filter(_ => at(offset, '}')) match {
       case Some(path) =>
-        val injection = at(offset, '*')
-        offset += (if (injection) 2 else 1)
-        Some(Reference(path, optional, source.location(start), injection))
+        offset += 1
+        Some(Reference(path, optional, source.location(start)))
       case None if !ended =>
         if (has(offset) && isSpace(text.charAt(offset)))
           report(WhitespaceInSubstitution.apply, offset)
@@ -683,13 +682,7 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
     offset += 1
     val optional = at(offset, '?')
     if (optional) offset += 1
-    key(Id.Root).map { key =>
-      val path = greedy(key)
-      // no bare key holds a `*`, so one right after the path marks an injection (§9)
-      val injection = at(offset, '*')
-      if (injection) offset += 1
-      Reference(path, optional, source.location(start), injection)
-    }
+    key(Id.Root).map(key => Reference(greedy(key), optional, source.location(start)))
   }
 
   /** The segments of a path with no braces after `current`, as many as there are. */
