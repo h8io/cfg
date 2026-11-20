@@ -119,6 +119,26 @@ injected:
 
 To keep the tag, write it again, `injected: @t`, or merge the field in rather than write it below.
 
+## A block of substitutions alone is what the first one finds
+
+Below a key, two or more substitutions alone, with no field and no `- `, make a map when the first finds a map and a
+sequence when it finds a sequence ([injections](substitutions.md#injections)). Nothing written in the block says
+which, so a change where the first is defined, maybe in another source, turns the block into the other kind, and the
+error, if any, lands at the second:
+
+```scala mdoc:passthrough
+Example.psi("""
+m { x: 1 }
+s: [a]
+block:
+  $s
+  $m
+""")
+```
+
+Brackets say what the block is: `{ $m, $n }` takes maps only, and anything else is an error. `[$m, $n]` is a
+sequence whatever they find, but one that is not a sequence stands in it as one element rather than failing.
+
 ## An empty block is written
 
 `key:` at the end of a line needs something deeper below it; an empty block is `{}` or `[]`
