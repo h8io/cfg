@@ -97,6 +97,28 @@ two:
 """)
 ```
 
+## A field added below a substitution drops its tag
+
+A substitution alone below a key is the key's value, and brings the tag of what it finds, as `key: $b` does. With a
+field below it, it is an [injection](substitutions.md#injections), which brings the fields and no tag. The fields come
+out the same either way; the tag stays only when the field is merged in from elsewhere:
+
+```scala mdoc:passthrough
+Example.psi("""
+b: @t { y: 1 }
+value:
+  $b
+merged:
+  $b
+merged.x: 1
+injected:
+  $b
+  x: 1
+""")
+```
+
+To keep the tag, write it again, `injected: @t`, or merge the field in rather than write it below.
+
 ## An empty block is written
 
 `key:` at the end of a line needs something deeper below it; an empty block is `{}` or `[]`
