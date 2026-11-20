@@ -15,7 +15,7 @@ configuration. Until session 10 it was DEF, *Declarative Extensible Format* (§1
 | File extensions | `.Ψ`, `.ψ` and `.psi`, searched in that order — one extension where file names ignore case |
 
 **Status:** implemented in `impl/psi` and published as `cfg-psi` from v0.1.0; the user's guide is
-on the docs site, `docs/psi.md` and `docs/psi-api.md`. This document stays the design notes:
+on the docs site, `docs/psi/`. This document stays the design notes:
 §2 lists what is settled, §13 what is still open, and §14 logs how each decision was reached so a
 later session does not reopen a question that was already argued through. Add to §14 rather than
 silently editing §2.

@@ -57,8 +57,9 @@ Run commands from the repository root.
 Before changing `impl/psi`, read the relevant sections of `design/format.md`, the design notes: it defines the
 semantics, lists what is open (§13), and logs how each decision was reached (§14), so a question already argued
 through is not reopened. A change to the format is decided with the user before it is coded, and recorded there, in
-its section and in §14. The user's guide, `docs/psi.md`, and the programmer's, `docs/psi-api.md`, follow every
-change they describe. `design/plan.md` is how the module was built, step by step; every step is done.
+its section and in §14. The user's guide, `docs/psi/` (one page a topic, traps in `caveats.md`), and the
+programmer's, `docs/psi/api.md` and `docs/psi/extending.md`, follow every change they describe. `design/plan.md` is
+how the module was built, step by step; every step is done.
 
 ## Architecture
 
@@ -73,8 +74,10 @@ change they describe. `design/plan.md` is how the module was built, step by step
   format, with a hand-written parser and no dependencies beyond `cfg`; files `.Ψ`, `.ψ` or `.psi`. Published from
   v0.1.0; its design notes are `design/format.md`.
 - **root** (artifact `cfg-all`) — aggregate; not published.
-- **pages** — documentation site (sources in `docs/`); not aggregated in root. Two halves: sbt runs mdoc and unidoc,
-  then Docusaurus (`pages/package.json`, Node ≥ 20) renders mdoc's output. The navigation is `pages/sidebars.js` — a new
+- **pages** — documentation site (sources in `docs/`, one page a topic); not aggregated in root. Its own sources,
+  `pages/src`, hold what the docs' mdoc blocks share (`Example.psi` shows a Psi source and what it loads as), and are
+  left out of the API docs. Two halves: sbt runs mdoc and unidoc, then Docusaurus (`pages/package.json`, Node ≥ 20)
+  renders mdoc's output. The navigation is `pages/sidebars.js` — a new
   page must be listed there. Docs are CommonMark, not MDX (`markdown.format: 'detect'`), and broken links fail the
   build.
 
