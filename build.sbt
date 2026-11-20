@@ -138,7 +138,7 @@ val pages = (project in file("pages"))
     // sbt 2 moves every target under the root's target/out; npm and release.sh expect the site's inputs here
     cleanFiles += baseDirectory.value / "target",
     ScalaUnidoc / unidoc / target := baseDirectory.value / "target" / s"scala-${scalaBinaryVersion.value}" / "unidoc",
-    ScalaUnidoc / unidoc / unidocProjectFilter := inAnyProject -- inProjects(root),
+    ScalaUnidoc / unidoc / unidocProjectFilter := inAnyProject -- inProjects(root, thisProjectRef.value),
     // sbt-unidoc concatenates the modules' separately resolved classpaths, so snakeyaml-engine 3.0.1 (pulled by
     // typesafe-config-yaml into hocon) shadows 3.2 (yaml). Use this project's own classpath, resolved as a whole.
     ScalaUnidoc / unidoc / fullClasspath := (Compile / fullClasspath).value,
