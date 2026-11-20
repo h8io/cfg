@@ -178,7 +178,7 @@ loader path.
   marker (§4): `- 5` can never be a scalar, `-5` and `"- 5"` always are.
 - **`null`** — the one reserved word. An unquoted scalar whose trimmed text is exactly `null`
   becomes `Node.INull`; `"null"` in quotes stays a scalar. Tags are kept: `@secret null` is an
-  `INull` with `tags = Set("secret")`. `true`, `false` and every other word remain plain scalars.
+  `INull` with `tag = Some("secret")`. `true`, `false` and every other word remain plain scalars.
   `null` is reserved only in value position — as a key it is an ordinary bare key.
 
 ## 4. Grammar sketch
@@ -250,9 +250,9 @@ server:
   alone, none tagged, are injections, and what the first that finds or gives anything finds or gives
   makes the block a map or a sequence (§9, session 34). Mixing fields and `- ` elements in one block
   is an error, and so is a second value, or a value among fields or elements.
-- **The tags after `key:` are the block's value's**: of the map, of the sequence, as here, or of
-  the one value, which may have tags of its own written before it, the two adding up as tags
-  written together do (§5): `a: @s⏎  @t x` is `a: @s @t x`.
+- **The tag after `key:` is the block's value's**: of the map, of the sequence, as here, or of
+  the one value, which may not have a tag of its own written before it: `a: @s⏎  @t x` is
+  `a: @s @t x`, two tags on one value, an error (§5).
 
   ```
   key: @tag
@@ -502,24 +502,22 @@ YAML, into one name; the protocol accepts that.
 Only tags written in the source reach `ISome.tags`; nothing is ever inferred, and there is no
 non-specific tag that resolves to nothing. This matches the rule already settled for `impl/yaml`.
 
-**A value takes any number of tags, and they form a set** — as an element takes CSS classes, which
-is the role tags are meant to play for a later Psi schema. They are written stacked, like
-annotations: `@pooled @readonly { … }`. Order carries no meaning, `@a @b` is the same as `@b @a`,
-and a tag written twice counts once: `@a @a x` is `@a x`, not an error.
+**A value has at most one tag** (session 37): `ISome.tag: Option[String]`, `None` when nothing was
+written. Two tags written on one value are an error, `@a @b x`, and so is one written twice,
+`@a @a x`: there is nothing to choose between, only a mistake. `impl/hocon` always gives `None`, and
+`impl/yaml` the one tag YAML allows a node.
 
-**Tags mean nothing at this level.** Psi and `cfg` are the low-level protocol; what a tag means,
-and how particular tags combine when values merge, is for the level above — whatever consumes the
-tree, and the planned Psi schema — to define. So the rules below are deliberately the neutral ones: a set,
-union on merge and graft, nothing dropped except by `:=`. They lose no tag a higher level might
-need, and they pre-empt none of its choices — that level can still give two tags a conflict, an
-order or a "later wins" of its own.
+**Tags mean nothing at this level**: what a tag means is for the level above — whatever consumes
+the tree, and the planned Psi schema. But where values meet, in a merge, a graft or a directive's
+result, this level says which tag the result keeps, and it is **the one written last, the one
+before it when none was written** — as values themselves go, the later over the earlier. A tag is
+never inherited by a value that replaces another, only by a map merged into one (§7). So the
+author of the config, not the application, settles which tag a node ends with: with several tags
+united, a conflict made by merging two sources could only be refused by the application, and
+fixed in the config by nothing short of `:=`.
 
-In the protocol `ISome.tag: Option[String]` becomes `ISome.tags: Set[String]`, empty when nothing
-was written — a change to `cfg` and every loader, made in step 2a of the plan together with the `!`
-above, so the API breaks once. `impl/hocon` always gives the empty set, `impl/yaml` at most one
-element, YAML allowing one tag per node.
-
-**`@-name` is reserved** for removing an inherited tag (§7) and is an error in v1. It costs nothing:
+**`@-name` is reserved** for removing an inherited tag (§7) and is an error in v1; with one tag to a
+value, its name may turn out to be unneeded, which is left for when it is designed. It costs nothing:
 a bare tag name follows `Id.SafeKeyPattern`, which cannot start with `-`, so `@-` never begins a
 legal tag. A tag whose name starts with `-` is written in backticks, ``@`-name` ``, and is an
 ordinary tag.
@@ -654,10 +652,10 @@ the stack is a `DirectiveCycle` at the call that closes it, naming the chain; an
 an error, as a backstop for a key that changes on every step (`?n=1`, `?n=2`, …), fixed in v1. A
 source parsed twice not through itself, a diamond, is no cycle: it is parsed again each time.
 
-**Tags before a directive in value position** are added to the tags of the node it produces, as
-tags before a whole-value `${…}` are added to the grafted node's (§9): `a: @t #include(…)`. In
-`[…]`, a tag before a call that gives a sequence is an error, its elements keeping their own tags,
-and alone on its line among fields or `- ` elements a call takes no tag (§9).
+**A tag before a directive in value position** replaces the tag of the node it produces, which keeps
+its own when none is written, as a tag before a whole-value `${…}` does with the grafted node's (§9):
+`a: @t #include(…)`. In `[…]`, a tag before a call that gives a sequence is an error, its elements
+keeping their own tags, and alone on its line among fields or `- ` elements a call takes no tag (§9).
 
 `#include` is the only built-in, reserved and possibly disabled (above):
 
@@ -750,21 +748,22 @@ the latest first (§10): an error about the map as a whole points first where it
 usually the file closest to the application, and lists the rest. `:=` starts the list anew. The root
 of a load lists the start of each source.
 
-**Tags in a merge.** When two maps merge, the result carries the union of their tags, as classes
-accumulate in CSS. Being untagged is not a reason to drop a tag:
+**Tags in a merge** (session 37). When two maps merge, the result carries the tag of the later if
+one is written there, and the earlier's otherwise. Being untagged is not a reason to drop a tag:
 
 ```
 routes: @ordered { a: 1 }
 routes { b: 2 }            // @ordered { a: 1, b: 2 }
-routes: @sorted { c: 3 }   // @ordered @sorted { a: 1, b: 2, c: 3 }
+routes: @sorted { c: 3 }   // @sorted { a: 1, b: 2, c: 3 }
 ```
 
-A replaced value carries only its own tags; with `:=` that holds for maps too. `:=` is also the
-only way to drop an inherited tag in v1 — it drops the fields with it. A finer tool is reserved,
-not designed: `@-name` (§5).
+A replaced value carries only its own tag; with `:=` that holds for maps too. So
+`timeout: @duration 5s` followed by `timeout: 10s` leaves `timeout` untagged: a scalar is replaced,
+not merged. `:=` is also the only way to drop an inherited tag in v1 — it drops the fields with it.
+A finer tool is reserved, not designed: `@-name` (§5).
 
 **Explicit replacement — `:=`.** A field written with `:=` discards whatever the key held before and
-takes the new value as is, with its own tags:
+takes the new value as is, with its own tag:
 
 ```
 // reference.conf
@@ -790,7 +789,7 @@ in practice it matters for maps, and anywhere the author wants the intent to be 
 in phase 3 and substitutions resolve in phase 4 (§8), so when one side of a `:` merge is a whole-value
 `${…}`, phase 3 cannot know whether it is merging two maps or replacing one value with another. It
 keeps both as they are, layers at the key, and merges them once resolved, as `:` merges anything:
-maps merge, their tags united, and anything else replaces what was before it. A call merges so
+maps merge, the later tag if written, and anything else replaces what was before it. A call merges so
 already, expanded before merging (§6); a substitution now does the same, only later.
 
 ```
@@ -851,10 +850,10 @@ from a substitution.
   not followed by a key, and a `[` not followed by an index, end the path and are text. Braces end
   a path where it would go on: `${name}.txt`. Inside quotes the braces stay, a `$` alone being
   text (§3).
-- Tags written before a whole-value `${…}` are added to the grafted node's own: with
-  `b: @x { … }`, `a: @y ${b}` gives `a` the tags `x` and `y`. The union is the same as in a merge
-  (§7), so a graft and a merge never disagree about tags.
-- A concatenation builds a new scalar, which carries only the tags written before it: in
+- A tag written before a whole-value `${…}` replaces the grafted node's own, which it keeps when
+  none is written: with `b: @x { … }`, `a: @y ${b}` gives `a` the tag `y`, and `a: ${b}` the tag `x`.
+  The rule is the one of a merge (§7), so a graft and a merge never disagree about tags.
+- A concatenation builds a new scalar, which carries only the tag written before it: in
   `@t "jdbc:${host}/db"` the result is tagged `t` alone, whatever `host` carries.
 - **A concatenation is one scalar with `${…}` inside it**: unquoted, `jdbc:${host}/db`, or quoted,
   `"jdbc:${host}/db"` and `"""…${x}…"""`. A `${…}` inside quotes concatenates even alone: `"${a}"` is
@@ -917,7 +916,7 @@ it gives it a place for one node, and it grafts; with none, it injects into the 
 - **What it finds must be a map among fields and a sequence alone on its line among `- `
   elements**, an error naming where it is defined otherwise: the place says what the author meant,
   so a mismatch is the author's mistake.
-- **No tags before it**: they would have no node to go to, the fields and elements keeping their
+- **No tag before it**: it would have no node to go to, the fields and elements keeping their
   own, so `@t $a` alone among fields or on its line among `- ` elements is an error, where `@t $a`
   after a key or a `- ` tags the one node it grafts. In `[…]` a tag goes to the one element when
   what it finds is no sequence, and is an error before a sequence.
@@ -1258,7 +1257,7 @@ mistake is worse than stopping.
      meta-field with no ambiguity, a key with `^` in it is written in backticks as any other, and
      `${a^…}` is an error today, so adding it later breaks no v1 file.
    - With a path, `id` says little — it is the path's last segment — but other meta-fields do:
-     `${workers^size}`, `${db^tags}`, `${db.url^source}`. The user had no use for `${field^id}` yet.
+     `${workers^size}`, `${db^tag}`, `${db.url^source}`. The user had no use for `${field^id}` yet.
    - With the options of item 4, presumably node, meta-field, then options: `${a^size; …}`.
 7. ~~**`#define`: a key with no value, expected at launch.**~~ — closed in session 25: `#prop` and
    `#env` stand where a value set at launch is expected, which is what `#define` was to name, and
@@ -2584,3 +2583,28 @@ Fixed on a review of session 32's code, the format unchanged, nothing put to the
   and with it every merge error and the keys a failed merge dropped, is gone. It was the one error
   at a composite location, so every error now stands at a `SourceLocation`, and the report writes
   no origin after a message.
+
+### Session 37 — 2026-11-20
+
+- **A value has at most one tag** (§5), the user's decision, reversing session 6's set: an
+  application has no way to settle several, and a set united on merge makes a conflict out of two
+  sources that only the application could refuse and only `:=` could fix in the config. Kept, in
+  the user's words, at least for now. `ISome.tags: Set[String]` becomes `ISome.tag: Option[String]`
+  again, in `cfg` and every loader; `impl/yaml` loses nothing, YAML allowing one tag per node.
+- **The tag written last wins, the one before it when none is written** (§5, §7, §9, §6), the
+  user's rule and session 3's, which session 6 dropped only because a node had become a set:
+  `b: @y $a` is tagged `y`, `b: $a` takes `a`'s, and `a: @t { … }` with `a.x: 1` stays `t`. It goes
+  wherever a union went, as I put it and the user agreed: a merge of maps, a graft, a tag before a
+  directive's result, and session 36's merge with a substitution, its layers read in turn.
+  Concatenations, injections and blocks of injections alone are unchanged.
+- **Two tags on one value are an error, a tag written twice too** (§5), the user's call over
+  collapsing a repeat: with nothing to choose between, a second tag is a mistake. So is the tag
+  after `key:` with one before the value in the block below, which §4 added up.
+- **A replacing value comes with its own tag, a map by `:=` included** (§7), the user's call of the
+  two I put: `timeout: @duration 5s` then `timeout: 10s` leaves `timeout` untagged, a trap the
+  user's guide states. Rejected: inheriting the tag on any replacement, which would tag a sequence
+  with what was written for the map it replaced.
+- **`@-name` stays reserved** (§5), the user's call; with one tag a name may prove unneeded, which
+  is left for its design.
+- Before 1.0 compatibility is not kept; I noted that going back to a set united on merge later
+  would change what a file with conflicting tags means.
