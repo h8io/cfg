@@ -306,9 +306,9 @@ private[psi] final class MarkerParser(
         case IntegerLiteral(text) => text
         case NameLiteral(value) => value
       }
-      name -> (Tree.Scalar(text, Set.empty, locate(offsets(argument.valueAt))): Tree.Value)
+      name -> (Tree.Scalar(text, None, locate(offsets(argument.valueAt))): Tree.Value)
     }
-    MapImpl(Id.Root, Tree.Map(entries.map(_._1), immutable.Map(entries*), Set.empty, locate(offsets(call.at))))
+    MapImpl(Id.Root, Tree.Map(entries.map(_._1), immutable.Map(entries*), None, locate(offsets(call.at))))
   }
 
   /** The markers every loader knows until handlers can be registered (plan step 10), each with its parameters. */

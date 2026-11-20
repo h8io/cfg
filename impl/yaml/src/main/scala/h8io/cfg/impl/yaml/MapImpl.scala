@@ -15,7 +15,7 @@ private[yaml] final case class MapImpl[+I <: Id](id: I, underlying: MappingNode)
     index.get(key).fold[INode[Id.Key]](Node.None(childId))(tuple => wrap(childId, tuple.getValueNode))
   }
 
-  override def tags: Set[String] = tagOf(underlying)
+  override def tag: Option[String] = tagOf(underlying)
 
   override def iterator: Iterator[Node.ISome[Id.Key]] =
     entries.iterator.map { case (key, tuple) => wrap(Id.Key(key, id), tuple.getValueNode) }

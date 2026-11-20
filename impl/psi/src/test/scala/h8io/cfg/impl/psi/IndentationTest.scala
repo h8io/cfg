@@ -36,20 +36,20 @@ class IndentationTest extends AnyFlatSpec with Matchers {
       "a: 1\nb: 1\nc: 12\nd: v\n"
   }
 
-  it should "give the tags after its key to its value, added to the value's own" in {
-    loaded("a: @s\n  @t x\nb: @m\n  k: v\nc: @q\n  - 1\nd: @n\n  null\ne: @e\n  {}")("a") shouldBe
-      Node.IScalar(Id.Key("a", Id.Root), Set("s", "t"), "x", at(2, 6))
+  it should "give the tag after its key to its value" in {
+    loaded("a: @s\n  x\nb: @m\n  k: v\nc: @q\n  - 1\nd: @n\n  null\ne: @e\n  {}")("a") shouldBe
+      Node.IScalar(Id.Key("a", Id.Root), Some("s"), "x", at(2, 3))
     shown("b: @m\n  k: v\nc: @q\n  - 1\nd: @n\n  null\ne: @e\n  {}\nf: @f\n  [1]\ng: @g\n  $b.k\nh: @h\n  \"${b.k}!\"") shouldBe
       "b: @m\n  k: v\nc: @q\n  - 1\nd: @n null\ne: @e {}\nf: @f\n  - 1\ng: @g v\nh: @h v!\n"
     shown("a: @t\n  '''\n  x\n  '''") shouldBe "a: @t x\n"
-    loaded("x: 1\nc: @c\n  \"${x}y\"")("c") shouldBe Node.IScalar(Id.Key("c", Id.Root), Set("c"), "1y",
+    loaded("x: 1\nc: @c\n  \"${x}y\"")("c") shouldBe Node.IScalar(Id.Key("c", Id.Root), Some("c"), "1y",
       ConcatenationLocation(at(3, 3), ::(ReferenceLocation(at(3, 4), "x", at(1, 4)), Nil)))
   }
 
   it should "inject a map's fields among fields, and take a substitution alone as its value" in {
     shown("m { x: 1 }\na:\n  $m\nb:\n  $m\n  y: 2\nc:\n  y: 2\n  ${m}") shouldBe
       "m:\n  x: 1\na:\n  x: 1\nb:\n  x: 1\n  y: 2\nc:\n  y: 2\n  x: 1\n"
-    shown("m: @u { x: 1 }\na: @t\n  $m") shouldBe "m: @u\n  x: 1\na: @t @u\n  x: 1\n"
+    shown("m: @u { x: 1 }\na: @t\n  $m") shouldBe "m: @u\n  x: 1\na: @t\n  x: 1\n"
   }
 
   it should "take a directive alone as its value, and among fields as a statement" in {

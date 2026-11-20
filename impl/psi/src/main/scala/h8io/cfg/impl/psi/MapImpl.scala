@@ -9,7 +9,7 @@ private[psi] final case class MapImpl[+I <: Id](id: I, tree: Tree.Map) extends N
     tree.entries.get(key).fold[INode[Id.Key]](Node.None(childId))(wrap(childId, _))
   }
 
-  override def tags: Set[String] = tree.tags
+  override def tag: Option[String] = tree.tag
 
   override def location: Location = tree.location
 

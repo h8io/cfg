@@ -28,8 +28,8 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
 
   private def field(key: Key, value: Value): Field = Field(::(key, Nil), Operator.Merge, value, None)
 
-  private def str(value: String, line: Int, column: Int, tags: String*): Scalar =
-    Scalar(value, tags.toSet, loc(line, column))
+  private def str(value: String, line: Int, column: Int, tag: Option[String] = None): Scalar =
+    Scalar(value, tag, loc(line, column))
 
   "parse" should "read an empty source, and one of blank lines and comments, as no statement" in {
     statements("") shouldBe Vector.empty
@@ -49,10 +49,10 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   it should "read the block form as a merge with a block, as `key: { … }` is" in {
     statements("a { b: 1 }\nc: {}\nd := { }\ne{}") shouldBe
       Vector(
-        field(k("a", 1, 1), Block(Vector(field(k("b", 1, 5), str("1", 1, 8))), Set.empty, loc(1, 3))),
-        field(k("c", 2, 1), Block(Vector.empty, Set.empty, loc(2, 4))),
-        Field(::(k("d", 3, 1), Nil), Operator.Replace, Block(Vector.empty, Set.empty, loc(3, 6)), None),
-        field(k("e", 4, 1), Block(Vector.empty, Set.empty, loc(4, 2)))
+        field(k("a", 1, 1), Block(Vector(field(k("b", 1, 5), str("1", 1, 8))), None, loc(1, 3))),
+        field(k("c", 2, 1), Block(Vector.empty, None, loc(2, 4))),
+        Field(::(k("d", 3, 1), Nil), Operator.Replace, Block(Vector.empty, None, loc(3, 6)), None),
+        field(k("e", 4, 1), Block(Vector.empty, None, loc(4, 2)))
       )
   }
 
@@ -65,16 +65,16 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
             Vector(
               Element(str("1", 1, 5), None),
               Element(str("two", 1, 8), None),
-              Element(Sequence(Vector.empty, Set.empty, loc(1, 15)), None),
-              Element(Block(Vector(field(k("x", 1, 20), str("4", 1, 23))), Set.empty, loc(1, 19)), None)
+              Element(Sequence(Vector.empty, None, loc(1, 15)), None),
+              Element(Block(Vector(field(k("x", 1, 20), str("4", 1, 23))), None, loc(1, 19)), None)
             ),
-            Set.empty,
+            None,
             loc(1, 4)
           )
         ),
         field(
           k("b", 2, 1),
-          Sequence(Vector(Element(str("1", 3, 3), None), Element(str("2", 4, 3), None)), Set.empty, loc(2, 4)))
+          Sequence(Vector(Element(str("1", 3, 3), None), Element(str("2", 4, 3), None)), None, loc(2, 4)))
       )
   }
 
@@ -87,20 +87,31 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     statements("a: 1, b: 2") shouldBe Vector(field(k("a", 1, 1), str("1", 1, 4)), field(k("b", 1, 7), str("2", 1, 10)))
   }
 
-  it should "read tags as a set, on any value" in {
-    statements("a: @x @y @x 1\nb: @m {}\nc: @s [@e 1]\nd: @n null") shouldBe
+  it should "read a tag on any value" in {
+    statements("a: @x 1\nb: @m {}\nc: @s [@e 1]\nd: @n null") shouldBe
       Vector(
-        field(k("a", 1, 1), str("1", 1, 13, "x", "y")),
-        field(k("b", 2, 1), Block(Vector.empty, Set("m"), loc(2, 7))),
-        field(k("c", 3, 1), Sequence(Vector(Element(str("1", 3, 11, "e"), None)), Set("s"), loc(3, 7))),
-        field(k("d", 4, 1), Null(Set("n"), loc(4, 7)))
+        field(k("a", 1, 1), str("1", 1, 7, Some("x"))),
+        field(k("b", 2, 1), Block(Vector.empty, Some("m"), loc(2, 7))),
+        field(k("c", 3, 1), Sequence(Vector(Element(str("1", 3, 11, Some("e")), None)), Some("s"), loc(3, 7))),
+        field(k("d", 4, 1), Null(Some("n"), loc(4, 7)))
       )
+  }
+
+  it should "report a second tag on one value, the same one written twice included" in {
+    errors("a: @x @y 1") shouldBe List(SecondTag(loc(1, 7)))
+    errors("a: @x @x 1") shouldBe List(SecondTag(loc(1, 7)))
+    errors("a: [@x @y 1, @z 2]") shouldBe List(SecondTag(loc(1, 8)))
+    errors("a: @x\n  @y 1") shouldBe List(SecondTag(loc(2, 3)))
+    errors("a: @x\n  @y\n    1") shouldBe List(SecondTag(loc(2, 3)))
+    errors("a:\n  - @x @y 1") shouldBe List(SecondTag(loc(2, 8)))
+    (SecondTag(loc(1, 7)).message, SecondTag(loc(1, 7)).hint) shouldBe
+      (("a second tag on one value, which takes at most one", Some("keep one of the tags")))
   }
 
   it should "read an unquoted null as null in value position only" in {
     statements("a: null\nb: \"null\"\nc: 'null'\nnull: nullx") shouldBe
       Vector(
-        field(k("a", 1, 1), Null(Set.empty, loc(1, 4))),
+        field(k("a", 1, 1), Null(None, loc(1, 4))),
         field(k("b", 2, 1), str("null", 2, 4)),
         field(k("c", 3, 1), str("null", 3, 4)),
         field(k("null", 4, 1), str("nullx", 4, 7))
@@ -125,7 +136,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
           Block(
             Vector(InjectionStatement(Id.Key("m", Id.Root), optional = false, loc(3, 3), Some(" d ")),
               field(k("y", 4, 3), str("2", 4, 6))),
-            Set.empty,
+            None,
             loc(3, 3))
         ))
   }
@@ -133,7 +144,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   "A substitution in brackets" should "be an injection of what it finds, with the tags written before it" in {
     statements("a: [@t $b]") match {
       case Vector(Field(_, _, Sequence(Vector(Element(substitution: Substitution, None, Put.Found)), _, _), _)) =>
-        substitution.tags shouldBe Set("t")
+        substitution.tag shouldBe Some("t")
       case other => fail(other.toString)
     }
   }
@@ -144,13 +155,13 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
         Field(
           ::(k("a", 1, 10), Nil),
           Operator.Merge,
-          Sequence(Vector(Element(str("1", 1, 23), Some(" e "))), Set.empty, loc(1, 13)),
+          Sequence(Vector(Element(str("1", 1, 23), Some(" e "))), None, loc(1, 13)),
           Some(" f ")),
         Field(
           ::(k("b", 4, 1), Nil),
           Operator.Merge,
           Block(
-            Vector(Field(::(k("c", 5, 2), Nil), Operator.Merge, str("2", 5, 5), Some(" h "))), Set.empty, loc(4, 3)),
+            Vector(Field(::(k("c", 5, 2), Nil), Operator.Merge, str("2", 5, 5), Some(" h "))), None, loc(4, 3)),
           Some(" g "))
       )
   }
@@ -267,8 +278,8 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   it should "be read on a line after its `:`, `:=` or tag, indented deeper" in {
     statements("a :=\n\n  [1]") shouldBe
       Vector(Field(::(k("a", 1, 1), Nil), Operator.Replace,
-        Sequence(Vector(Element(str("1", 3, 4), None)), Set.empty, loc(3, 3)), None))
-    statements("a: @s\n  @t x") shouldBe Vector(field(k("a", 1, 1), str("x", 2, 6, "s", "t")))
+        Sequence(Vector(Element(str("1", 3, 4), None)), None, loc(3, 3)), None))
+    statements("a: @s\n  x") shouldBe Vector(field(k("a", 1, 1), str("x", 2, 3, Some("s"))))
     errors("a:\n  `x`") shouldBe List(BacktickedValue(loc(2, 3)))
     // inside brackets indentation means nothing, and a value goes on the line of its tag
     errors("a: [\n  @t\n  1]") shouldBe List(ValueOnNextLine(loc(3, 3)))
@@ -360,32 +371,32 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   "A substitution" should "be read alone and unquoted as a graft, with its tags" in {
     statements("a: ${b.c[0]}\nd: @t ${?e}") shouldBe
       Vector(
-        field(k("a", 1, 1), Substitution(Id.Index(0, Id.Key("c", at("b"))), optional = false, Set.empty, loc(1, 4))),
-        field(k("d", 2, 1), Substitution(at("e"), optional = true, Set("t"), loc(2, 7)))
+        field(k("a", 1, 1), Substitution(Id.Index(0, Id.Key("c", at("b"))), optional = false, None, loc(1, 4))),
+        field(k("d", 2, 1), Substitution(at("e"), optional = true, Some("t"), loc(2, 7)))
       )
   }
 
   it should "parse back from the path of any Id below the root" in
     forAll(branches) { (path: Id.Branch) =>
       statements("a: ${" + path.path + "}") shouldBe
-        Vector(field(k("a", 1, 1), Substitution(path, optional = false, Set.empty, loc(1, 4))))
+        Vector(field(k("a", 1, 1), Substitution(path, optional = false, None, loc(1, 4))))
     }
 
   "A concatenation" should "be a scalar with a substitution inside it, or quoted around one alone" in {
     statements("a: jdbc:${h}/db\nb: @t \"${h}\"\nc: \"\"\"\n  x${h}\n  \"\"\"\nd: [${e}, x${e}]") shouldBe
       Vector(
         field(
-          k("a", 1, 1), Concatenation(Vector(Text("jdbc:"), ref(at("h"), 1, 9), Text("/db")), Set.empty, loc(1, 4))),
-        field(k("b", 2, 1), Concatenation(Vector(ref(at("h"), 2, 8)), Set("t"), loc(2, 7))),
-        field(k("c", 3, 1), Concatenation(Vector(Text("x"), ref(at("h"), 4, 4)), Set.empty, loc(3, 4))),
+          k("a", 1, 1), Concatenation(Vector(Text("jdbc:"), ref(at("h"), 1, 9), Text("/db")), None, loc(1, 4))),
+        field(k("b", 2, 1), Concatenation(Vector(ref(at("h"), 2, 8)), Some("t"), loc(2, 7))),
+        field(k("c", 3, 1), Concatenation(Vector(Text("x"), ref(at("h"), 4, 4)), None, loc(3, 4))),
         field(
           k("d", 6, 1),
           Sequence(
             Vector(
-              Element(Substitution(at("e"), optional = false, Set.empty, loc(6, 5)), None, Put.Found),
-              Element(Concatenation(Vector(Text("x"), ref(at("e"), 6, 12)), Set.empty, loc(6, 11)), None)
+              Element(Substitution(at("e"), optional = false, None, loc(6, 5)), None, Put.Found),
+              Element(Concatenation(Vector(Text("x"), ref(at("e"), 6, 12)), None, loc(6, 11)), None)
             ),
-            Set.empty,
+            None,
             loc(6, 4)
           )
         )
@@ -435,15 +446,15 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   it should "be read in value position, with its tags" in {
     statements("a: @t #x(1)\nb: [#y, #z(2)]") shouldBe
       Vector(
-        field(k("a", 1, 1), DirectiveValue(Call("x", Vector(arg("1", 1, 10)), loc(1, 7)), Set("t"))),
+        field(k("a", 1, 1), DirectiveValue(Call("x", Vector(arg("1", 1, 10)), loc(1, 7)), Some("t"))),
         field(
           k("b", 2, 1),
           Sequence(
             Vector(
-              Element(DirectiveValue(Call("y", Vector.empty, loc(2, 5)), Set.empty), None, Put.Found),
-              Element(DirectiveValue(Call("z", Vector(arg("2", 2, 12)), loc(2, 9)), Set.empty), None, Put.Found)
+              Element(DirectiveValue(Call("y", Vector.empty, loc(2, 5)), None), None, Put.Found),
+              Element(DirectiveValue(Call("z", Vector(arg("2", 2, 12)), loc(2, 9)), None), None, Put.Found)
             ),
-            Set.empty,
+            None,
             loc(2, 4)
           )
         )
@@ -451,7 +462,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   }
 
   it should "stand where its `#` does, in value position" in {
-    DirectiveValue(Call("x", Vector.empty, loc(2, 3)), Set("t")).location shouldBe loc(2, 3)
+    DirectiveValue(Call("x", Vector.empty, loc(2, 3)), Some("t")).location shouldBe loc(2, 3)
   }
 
   it should "keep the doc comment before it" in {
@@ -479,7 +490,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     parse("#") shouldBe Result(empty, List(MissingDirectiveName(loc(1, 1))))
     parse("a: #\nb: [#x(1.5), 2]") shouldBe
       Result(
-        Document(Vector(field(k("b", 2, 1), Sequence(Vector(Element(str("2", 2, 14), None)), Set.empty, loc(2, 4))))),
+        Document(Vector(field(k("b", 2, 1), Sequence(Vector(Element(str("2", 2, 14), None)), None, loc(2, 4))))),
         List(MissingDirectiveName(loc(1, 4)), InvalidLiteral(loc(2, 8), "1.5"))
       )
   }
@@ -543,8 +554,8 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
         Document(
           Vector(
             field(k("b", 1, 6), str("1", 1, 9)),
-            field(k("x", 2, 1), Block(Vector(field(k("d", 2, 12), str("2", 2, 15))), Set.empty, loc(2, 3))),
-            field(k("y", 3, 1), Block(Vector.empty, Set.empty, loc(3, 3)))
+            field(k("x", 2, 1), Block(Vector(field(k("d", 2, 12), str("2", 2, 15))), None, loc(2, 3))),
+            field(k("y", 3, 1), Block(Vector.empty, None, loc(3, 3)))
           )),
         List(MissingValue(loc(1, 4), "','"), ExpectedColon(loc(2, 7), "'='"), ExpectedColon(loc(3, 7), "'='"))
       )
@@ -575,11 +586,11 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
               k("a", 1, 1),
               Block(
                 Vector(
-                  field(k("b", 1, 5), Block(Vector(field(k("c", 1, 7), str("1", 1, 10))), Set.empty, loc(1, 6))),
+                  field(k("b", 1, 5), Block(Vector(field(k("c", 1, 7), str("1", 1, 10))), None, loc(1, 6))),
                   field(k("d", 1, 14), str("x", 1, 17)),
-                  field(k("e", 1, 22), Block(Vector(field(k("f", 1, 24), str("2", 1, 27))), Set.empty, loc(1, 23)))
+                  field(k("e", 1, 22), Block(Vector(field(k("f", 1, 24), str("2", 1, 27))), None, loc(1, 23)))
                 ),
-                Set.empty,
+                None,
                 loc(1,
                   4)
               )
@@ -599,7 +610,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
               k("a", 1, 1),
               Sequence(
                 Vector(Element(str("1", 1, 5), None), Element(str("3", 1, 12), None), Element(str("x", 1, 15), None)),
-                Set.empty,
+                None,
                 loc(1, 4))))),
         List(MissingValue(loc(1, 10), "','"), MissingSeparator(loc(1, 17), "'y'"))
       )
@@ -612,7 +623,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
           Vector(
             field(
               k("a", 1, 1),
-              Sequence(Vector(Element(str("x", 1, 5), None), Element(str("y", 1, 8), None)), Set.empty, loc(1, 4))))),
+              Sequence(Vector(Element(str("x", 1, 5), None), Element(str("y", 1, 8), None)), None, loc(1, 4))))),
         List(EmptyElement(loc(1, 7)))
       )
   }

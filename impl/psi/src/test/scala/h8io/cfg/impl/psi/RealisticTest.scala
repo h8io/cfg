@@ -116,7 +116,7 @@ class RealisticTest extends AnyFlatSpec with Matchers {
     root("alerts") match {
       case alerts: Node.IMap[?] =>
         alerts("on-failure") match {
-          case channels: Node.ISeq[?] => channels.iterator.map(_.tags).toList shouldBe List(Set("email"), Set("slack"))
+          case channels: Node.ISeq[?] => channels.iterator.map(_.tag).toList shouldBe List(Some("email"), Some("slack"))
           case other => fail(other.toString)
         }
       case other => fail(other.toString)

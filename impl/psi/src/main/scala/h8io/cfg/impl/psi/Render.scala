@@ -10,8 +10,8 @@ import h8io.cfg.impl.psi.Token.{KeyMode, Reference, Text, ValueMode}
   * sequence as `- ` elements; braces are left for the empty `{}` and `[]`. Tags go after the `:`, or after the `- ` of
   * an element, with the block below them. An element that is a map has its first field on the line of its `- `, and a
   * sequence its first element, `- - x`. Keys and tags are written as `Id.path` writes keys, bare when they can be and
-  * in backticks otherwise (`format.md` §3); tags in alphabetical order. A scalar is written bare when the lexer reads
-  * it back as the same scalar, in double quotes otherwise; a concatenation always in double quotes.
+  * in backticks otherwise (`format.md` §3). A scalar is written bare when the lexer reads it back as the same scalar,
+  * in double quotes otherwise; a concatenation always in double quotes.
   *
   * A merged tree holds what is still unresolved, which only a test or a debugger shows. An injection among `- `
   * elements and a block of injections alone are written on lines of their own; a sequence holding an injection that
@@ -29,11 +29,11 @@ private[psi] object Render {
   }
 
   /** `value` as it stands alone: a map as its fields and a sequence as its elements, at the top level, a block below
-    * its tags when it has any; anything else as written after a `:`.
+    * its tag when it has one; anything else as written after a `:`.
     */
   def value(value: Tree.Value): String = {
     val out = new StringBuilder
-    if (value.tags.isEmpty) contents(out, value, 0) else after(out, value, 0)
+    if (value.tag.isEmpty) contents(out, value, 0) else after(out, value, 0)
     out.result().stripPrefix(" ").stripSuffix("\n")
   }
 
@@ -57,9 +57,9 @@ private[psi] object Render {
       case _ => Vector(value)
     }
 
-  /** A value after a `:` or a `- ` that stands at `level`, its tags first, and the line ended. */
+  /** A value after a `:` or a `- ` that stands at `level`, its tag first, and the line ended. */
   private def after(out: StringBuilder, value: Tree.Value, level: Int): Unit = {
-    tags(out, value)
+    tag(out, value)
     if (block(value)) {
       val _ = out += '\n'
       contents(out, value, level + 1)
@@ -115,7 +115,7 @@ private[psi] object Render {
           )
           val _ = out += '\n'
         }
-      // only a value alone without tags, as `value` writes one
+      // only a value alone without a tag, as `value` writes one
       case _ =>
         oneLine(out, value)
         val _ = out += '\n'
@@ -135,7 +135,7 @@ private[psi] object Render {
     out ++= "[\n"
     sequence.elements.foreach { element =>
       indent(out, level + 1)
-      element.tags.toVector.sorted.foreach(tag => out ++= "@" ++= name(tag) += ' ')
+      element.tag.foreach(tag => out ++= "@" ++= name(tag) += ' ')
       element match {
         case map: Tree.Map if map.keys.nonEmpty =>
           out ++= "{\n"
@@ -157,12 +157,12 @@ private[psi] object Render {
     */
   private def dashed(out: StringBuilder, element: Tree.Value, level: Int): Unit =
     element match {
-      case _ if element.tags.isEmpty && block(element) =>
+      case _ if element.tag.isEmpty && block(element) =>
         val _ = out += ' '
         contents(out, element, level + 1, onDash = true)
       // a scalar that would read as a field after a `- ` is quoted
       case Tree.Scalar(text, _, _) if bare(text) && field(text) =>
-        tags(out, element)
+        tag(out, element)
         val _ = out += ' '
         quoted(out, Vector(Text(text)))
         val _ = out += '\n'
@@ -175,9 +175,9 @@ private[psi] object Render {
     lexer.next(KeyMode).kind.isInstanceOf[Token.Name] && lexer.fieldAhead()
   }
 
-  /** The tags of `value`, each after a space, as they go after a `:` or a `- `. */
-  private def tags(out: StringBuilder, value: Tree.Value): Unit =
-    value.tags.toVector.sorted.foreach(tag => out ++= " @" ++= name(tag))
+  /** The tag of `value`, after a space, as it goes after a `:` or a `- `. */
+  private def tag(out: StringBuilder, value: Tree.Value): Unit =
+    value.tag.foreach(tag => out ++= " @" ++= name(tag))
 
   /** A value on one line: a scalar, `null`, a substitution, or an empty map or sequence. */
   private def oneLine(out: StringBuilder, value: Tree.Value): Unit = {

@@ -11,7 +11,7 @@ private[yaml] final case class SeqImpl[+I <: Id](id: I, underlying: SequenceNode
     if (childId.fits(size)) wrap(childId, underlying.getValue.get(index)) else Node.None(childId)
   }
 
-  override def tags: Set[String] = tagOf(underlying)
+  override def tag: Option[String] = tagOf(underlying)
 
   override def iterator: Iterator[Node.ISome[Id.Index]] =
     underlying.getValue.asScala.iterator.zipWithIndex.map { case (value, i) => wrap(Id.Index(i, id), value) }

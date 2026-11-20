@@ -15,9 +15,9 @@ import java.net.URL
   * every source first; if there were none, the merge and substitution errors.
   *
   * ==Merging==
-  * Deep merge, the last one wins, in one rule for duplicate keys, dotted keys and the sources given: maps merge with
-  * their tags united, anything else is replaced; `:=` replaces a map too. Keys keep the order they first appeared in.
-  * No sources give an empty root map (§7).
+  * Deep merge, the last one wins, in one rule for duplicate keys, dotted keys and the sources given: maps merge,
+  * keeping the later tag if one is written there and the earlier otherwise, anything else is replaced; `:=` replaces a
+  * map too. Keys keep the order they first appeared in. No sources give an empty root map (§7).
   *
   * ==Launch values==
   * Nothing set at launch reaches a source on its own: `#prop(name)` reads a system property, or a map of those under

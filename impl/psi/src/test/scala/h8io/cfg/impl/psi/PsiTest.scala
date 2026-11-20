@@ -25,7 +25,7 @@ class PsiTest extends AnyFlatSpec with Matchers {
     val root = loaded(Psi())
     root.id shouldBe Id.Root
     root.isEmpty shouldBe true
-    root.tags shouldBe Set.empty
+    root.tag shouldBe None
     root.location shouldBe NoSourceLocation
     root("a") shouldBe Node.None(Id.Key("a", Id.Root))
   }
@@ -39,12 +39,12 @@ class PsiTest extends AnyFlatSpec with Matchers {
       case map: Node.IMap[?] =>
         map.id shouldBe server
         map.location shouldBe at(base, 2, 8)
-        map("host") shouldBe Node.IScalar(Id.Key("host", server), Set.empty, "localhost", at(base, 3, 9))
+        map("host") shouldBe Node.IScalar(Id.Key("host", server), None, "localhost", at(base, 3, 9))
         map("user") shouldBe Node.None(Id.Key("user", server))
         map.toList shouldBe
           List(
-            Node.IScalar(Id.Key("host", server), Set.empty, "localhost", at(base, 3, 9)),
-            Node.IScalar(Id.Key("port", server), Set.empty, "8080", at(base, 4, 9)))
+            Node.IScalar(Id.Key("host", server), None, "localhost", at(base, 3, 9)),
+            Node.IScalar(Id.Key("port", server), None, "8080", at(base, 4, 9)))
       case other => fail(other.toString)
     }
   }
@@ -53,11 +53,11 @@ class PsiTest extends AnyFlatSpec with Matchers {
     val list = Id.Key("list", Id.Root)
     loaded(Psi(base))("list") match {
       case seq: Node.ISeq[?] =>
-        seq.tags shouldBe Set("t")
+        seq.tag shouldBe Some("t")
         seq.location shouldBe at(base, 7, 10)
         seq.size shouldBe 3
-        seq(0) shouldBe Node.IScalar(Id.Index(0, list), Set.empty, "a", at(base, 7, 11))
-        seq(1) shouldBe Node.INull(Id.Index(1, list), Set.empty, at(base, 7, 14))
+        seq(0) shouldBe Node.IScalar(Id.Index(0, list), None, "a", at(base, 7, 11))
+        seq(1) shouldBe Node.INull(Id.Index(1, list), None, at(base, 7, 14))
         seq(2).id shouldBe Id.Index(2, list)
         seq(3) shouldBe Node.None(Id.Index(3, list))
         seq(-1) shouldBe Node.None(Id.Index(-1, list))
@@ -82,7 +82,7 @@ class PsiTest extends AnyFlatSpec with Matchers {
     root("server") match {
       case map: Node.IMap[?] =>
         map.location shouldBe MergedLocation(at(app, 1, 1), ::(at(base, 2, 8), Nil))
-        map("port") shouldBe Node.IScalar(Id.Key("port", server), Set.empty, "9090", at(app, 1, 14))
+        map("port") shouldBe Node.IScalar(Id.Key("port", server), None, "9090", at(app, 1, 14))
       case other => fail(other.toString)
     }
     root("pool") match {
@@ -93,7 +93,7 @@ class PsiTest extends AnyFlatSpec with Matchers {
 
   it should "load a source held as text, under the name given" in {
     loaded(Psi.parse("inline", "a: 1"))("a") shouldBe
-      Node.IScalar(Id.Key("a", Id.Root), Set.empty, "1", SourceLocation("inline", 1, 4))
+      Node.IScalar(Id.Key("a", Id.Root), None, "1", SourceLocation("inline", 1, 4))
   }
 
   "Errors" should "be reported for every source, an unreadable one included, in order" in {
@@ -144,13 +144,13 @@ class PsiTest extends AnyFlatSpec with Matchers {
 
   it should "resolve substitutions over the tree" in {
     val root = loaded(Psi.parse("s", "a: ${b}\nb: 1\nc: \"x${?psi-test-none}\""))
-    root("a") shouldBe Node.IScalar(Id.Key("a", Id.Root), Set.empty, "1",
+    root("a") shouldBe Node.IScalar(Id.Key("a", Id.Root), None, "1",
       ReferenceLocation(SourceLocation("s", 1, 4), "b", SourceLocation("s", 2, 4)))
-    root("c") shouldBe Node.IScalar(Id.Key("c", Id.Root), Set.empty, "x", SourceLocation("s", 3, 4))
+    root("c") shouldBe Node.IScalar(Id.Key("c", Id.Root), None, "x", SourceLocation("s", 3, 4))
   }
 
   "A node" should "not be made of a substitution left unresolved, which is a bug of the loader" in {
-    val substitution = Tree.Substitution(Id.Key("a", Id.Root), optional = false, Set.empty, SourceLocation("s", 1, 4))
+    val substitution = Tree.Substitution(Id.Key("a", Id.Root), optional = false, None, SourceLocation("s", 1, 4))
     the[IllegalStateException] thrownBy wrap(Id.Root, substitution) should have message
       "An unresolved substitution at s:1:4"
   }

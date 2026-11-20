@@ -65,7 +65,7 @@ private[psi] abstract class Launch(val name: String) extends Directive {
       }
       _ <- if (optional && default.nonEmpty) Left(OptionalWithDefault) else Right(())
       found <- value(key)
-      node <- found.orElse(default.map(d => Node.Scalar(Id.Root, Set.empty, d.value, d.location))) match {
+      node <- found.orElse(default.map(d => Node.Scalar(Id.Root, None, d.value, d.location))) match {
         case Some(node) => Right(Fragment(node))
         case None => if (optional) Right(Fragment.None) else Left(notSet(key))
       }
@@ -88,7 +88,7 @@ private[psi] object Launch {
 
     protected def value(key: String): Either[LaunchError, Option[Node.ISome[Id]]] =
       properties.get(key) match {
-        case Some(value) => Right(Some(Node.Scalar(Id.Root, Set.empty, value, SystemPropertyLocation(key))))
+        case Some(value) => Right(Some(Node.Scalar(Id.Root, None, value, SystemPropertyLocation(key))))
         case None =>
           val prefix = key + "."
           val under = properties.keys.filter(_.startsWith(prefix)).toVector.sorted
@@ -130,12 +130,12 @@ private[psi] object Launch {
         order.reverseIterator.foreach { branch =>
           val entries = branch.children.iterator.map {
             case (k, Left(name)) => k ->
-                (Tree.Scalar(properties(name), Set.empty, SystemPropertyLocation(name)): Tree.Value)
+                (Tree.Scalar(properties(name), None, SystemPropertyLocation(name)): Tree.Value)
             case (k, Right(child)) => k -> (built.get(child): Tree.Value)
           }.toVector
           val _ = built.put(
             branch,
-            Tree.Map(entries.map(_._1), entries.toMap, Set.empty, SystemPropertyLocation(branch.name)))
+            Tree.Map(entries.map(_._1), entries.toMap, None, SystemPropertyLocation(branch.name)))
         }
         built.get(root)
       }
@@ -147,6 +147,6 @@ private[psi] object Launch {
     protected def notSet(key: String): LaunchError = VariableNotSet(key)
 
     protected def value(key: String): Either[LaunchError, Option[Node.ISome[Id]]] =
-      Right(environment.get(key).map(value => Node.Scalar(Id.Root, Set.empty, value, EnvironmentLocation(key))))
+      Right(environment.get(key).map(value => Node.Scalar(Id.Root, None, value, EnvironmentLocation(key))))
   }
 }

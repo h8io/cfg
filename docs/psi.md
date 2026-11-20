@@ -62,6 +62,7 @@ backticks is never split.
 **Comments** are `//` to the end of the line and `/* … */`, which nest. `#` is not a comment: it starts a directive.
 
 **Tags** are names a value carries for the program that reads it, written before the value: `timeout: @duration 5s`.
+A value has one tag at most: `@a @b x` is an error.
 
 ```scala mdoc:passthrough
 example("""
@@ -155,9 +156,24 @@ cache := { size: 10 }
 """)
 ```
 
+Merged maps keep the tag of the later if one is written there, and the earlier's otherwise. A value that replaces
+another comes with its own tag only, a map after `:=` too: `timeout: @duration 5s` followed by `timeout: 10s` leaves
+`timeout` with no tag, which has to be written again.
+
+```scala mdoc:passthrough
+example("""
+routes: @ordered { a: 1 }
+routes { b: 2 }
+pool: @pooled { max: 10 }
+pool: @readonly { max: 4 }
+timeout: @duration 5s
+timeout: 10s
+""")
+```
+
 A [substitution](#substitutions) standing alone as a value merges too, once it is resolved: what it refers to is known
-only when every source is merged. A block written over it, or under it, merges with it when it turns out a map, its tags
-with the block's, and replaces it, or is replaced by it, when it does not, as `:` does with any value. So a block copied
+only when every source is merged. A block written over it, or under it, merges with it when it turns out a map, its tag
+by the rule above, and replaces it, or is replaced by it, when it does not, as `:` does with any value. So a block copied
 with `${…}` can have one of its fields changed:
 
 ```scala mdoc:passthrough
@@ -175,6 +191,8 @@ indexes in brackets: `${servers[0].host}`. Substitutions are resolved once every
 to its final state, whichever source set it.
 
 - `${path}` alone, unquoted, after a key or a `- ` puts the node there whatever it is: a block, a sequence, a value.
+  A tag written before it, `@t ${path}`, replaces the node's own, which it keeps otherwise; so does a tag before a
+  directive's result.
   Where nothing gives it a place of its own, among fields, on a line of its own among `- ` elements, or in `[…]`, it
   is an [injection](#injections).
 - Inside a value, `jdbc:${host}/db` or `"jdbc:${host}/db"`, it builds a string, and the node has to be a value.

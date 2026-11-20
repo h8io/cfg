@@ -19,12 +19,12 @@ import java.net.URL
   * step: a YAML file is taken exactly as written.
   *
   * ==Tags==
-  * Unlike the HOCON backend, this one reports tags. `tags` holds the tag written in the source, expanded through the
-  * tag handles in effect and without its leading `!`: `!!int` gives `tag:yaml.org,2002:int`, a local `!postgres` gives
-  * `postgres`, and so does the verbatim `!<postgres>`. YAML allows one tag per node, so the set has at most one
-  * element. It is empty whenever the tag was inferred by the resolver rather than written down, and also for the
-  * non-specific tag `!`, which says nothing about the type. Scalars are always carried as raw strings — a tag never
-  * converts a value, it only records what the author asked for, and acting on it is up to the consumer.
+  * Unlike the HOCON backend, this one reports tags. `tag` holds the tag written in the source, expanded through the tag
+  * handles in effect and without its leading `!`: `!!int` gives `tag:yaml.org,2002:int`, a local `!postgres` gives
+  * `postgres`, and so does the verbatim `!<postgres>`, YAML allowing one tag per node. It is `None` whenever the tag
+  * was inferred by the resolver rather than written down, and also for the non-specific tag `!`, which says nothing
+  * about the type. Scalars are always carried as raw strings — a tag never converts a value, it only records what the
+  * author asked for, and acting on it is up to the consumer.
   *
   * ==Depth==
   * A configuration nests at most 256 levels, each mapping and sequence one, the root's among them, aliases followed:

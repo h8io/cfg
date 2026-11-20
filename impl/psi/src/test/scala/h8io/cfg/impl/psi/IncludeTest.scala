@@ -13,7 +13,6 @@ import java.nio.file.attribute.PosixFilePermissions
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
 class IncludeTest extends AnyFlatSpec with Matchers {
-  private val NoTags = Set.empty[String]
 
   private def loader: PsiLoader =
     Psi.builder.withSystemProperties(Map.empty).build.fold(e => fail(e.toString), identity)
@@ -44,10 +43,10 @@ class IncludeTest extends AnyFlatSpec with Matchers {
     write(dir, "conf.d/nested.psi", "c: 3")
     val root = loaded(main)
     root("a") shouldBe
-      Node.IScalar(Id.Key("a", Id.Root), NoTags, "1", SourceLocation(url(dir.resolve("conf.d/extra.psi")), 1, 4))
-    root("b") shouldBe Node.IScalar(Id.Key("b", Id.Root), NoTags, "2", SourceLocation(url(main), 4, 4))
+      Node.IScalar(Id.Key("a", Id.Root), None, "1", SourceLocation(url(dir.resolve("conf.d/extra.psi")), 1, 4))
+    root("b") shouldBe Node.IScalar(Id.Key("b", Id.Root), None, "2", SourceLocation(url(main), 4, 4))
     root("c") shouldBe
-      Node.IScalar(Id.Key("c", Id.Root), NoTags, "3", SourceLocation(url(dir.resolve("conf.d/nested.psi")), 1, 4))
+      Node.IScalar(Id.Key("c", Id.Root), None, "3", SourceLocation(url(dir.resolve("conf.d/nested.psi")), 1, 4))
     root("n") match {
       case map: Node.IMap[?] =>
         map.location shouldBe SourceLocation(url(dir.resolve("conf.d/nested.psi")), 1, 1)
@@ -99,7 +98,7 @@ class IncludeTest extends AnyFlatSpec with Matchers {
     val entry = java.net.URI.create("jar:" + jar.toUri.toString + "!/conf/a.psi").toURL
     loader(entry).map(scalar(_, "v")) shouldBe
       Right(Node.IScalar(
-        Id.Key("v", Id.Root), NoTags, "jarred", SourceLocation("jar:" + jar.toUri.toString + "!/conf/b.psi", 1, 4)))
+        Id.Key("v", Id.Root), None, "jarred", SourceLocation("jar:" + jar.toUri.toString + "!/conf/b.psi", 1, 4)))
   }
 
   "#include(resource: …)" should "read from the class path, with the context class loader or Psi's own" in {

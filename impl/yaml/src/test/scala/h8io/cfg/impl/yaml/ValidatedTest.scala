@@ -21,7 +21,7 @@ class ValidatedTest extends AnyFlatSpec with Matchers with Inside {
   it should "accept an anchor reused outside its own subtree" in {
     val cfg = wrap(Id.Root, yaml"base: &b {x: 1}\nfirst: *b\nsecond: [*b, *b]")
     inside(cfg("first")) { case first: Node.IMap[?] =>
-      first("x") should matchPattern { case Node.Scalar(_, NoTags, "1", _) => }
+      first("x") should matchPattern { case Node.Scalar(_, None, "1", _) => }
     }
     inside(cfg("second")) { case second: Node.ISeq[?] => second.size shouldBe 2 }
   }

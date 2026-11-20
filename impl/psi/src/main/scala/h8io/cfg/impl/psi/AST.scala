@@ -62,28 +62,28 @@ private[psi] object AST {
     case object Replace extends Operator
   }
 
-  /** A value with the tags written before it; its location is where the value itself starts, past its tags. */
+  /** A value with the tag written before it; its location is where the value itself starts, past its tag. */
   sealed trait Value {
-    def tags: Set[String]
+    def tag: Option[String]
     def location: PsiLocation
   }
 
   /** A scalar, quoted or not, its escapes read and its layout applied. */
-  final case class Scalar(value: String, tags: Set[String], location: PsiLocation) extends Value
+  final case class Scalar(value: String, tag: Option[String], location: PsiLocation) extends Value
 
   /** `null`, unquoted. */
-  final case class Null(tags: Set[String], location: PsiLocation) extends Value
+  final case class Null(tag: Option[String], location: PsiLocation) extends Value
 
   /** `{ … }` in value position. */
-  final case class Block(statements: Vector[Statement], tags: Set[String], location: PsiLocation) extends Value
+  final case class Block(statements: Vector[Statement], tag: Option[String], location: PsiLocation) extends Value
 
   /** `[ … ]`. */
-  final case class Sequence(elements: Vector[Element], tags: Set[String], location: PsiLocation) extends Value
+  final case class Sequence(elements: Vector[Element], tag: Option[String], location: PsiLocation) extends Value
 
   /** `\${path}` or `\${?path}` unquoted and alone: the node it refers to, grafted whole, as a field's value or as an
     * element of a sequence (§9).
     */
-  final case class Substitution(path: Id.Branch, optional: Boolean, tags: Set[String], location: SourceLocation)
+  final case class Substitution(path: Id.Branch, optional: Boolean, tag: Option[String], location: SourceLocation)
       extends Value
 
   /** A block opened by indentation that holds substitutions and calls alone, two or more, none tagged: what the first
@@ -93,7 +93,7 @@ private[psi] object AST {
     * @param items
     *   in the order written
     */
-  final case class Injections(items: Vector[Injected], tags: Set[String], location: SourceLocation) extends Value
+  final case class Injections(items: Vector[Injected], tag: Option[String], location: SourceLocation) extends Value
 
   /** What a block of injections alone holds, in the order written (§9). */
   sealed trait Injected
@@ -117,18 +117,18 @@ private[psi] object AST {
     * @param parts
     *   text and substitutions in the order written, as the lexer read them
     */
-  final case class Concatenation(parts: Vector[Token.Part], tags: Set[String], location: SourceLocation) extends Value
+  final case class Concatenation(parts: Vector[Token.Part], tag: Option[String], location: SourceLocation) extends Value
 
   /** A block, a scalar or a concatenation, with the loader's markers to run over its value once its substitutions are
     * resolved (§5).
     */
   final case class Marked(value: Value, markers: Vector[MarkerParser.MarkerCall]) extends Value {
-    def tags: Set[String] = value.tags
+    def tag: Option[String] = value.tag
     def location: PsiLocation = value.location
   }
 
-  /** A directive in value position, which is to produce a node; the tags are added to that node's (§6). */
-  final case class DirectiveValue(call: Call, tags: Set[String]) extends Value {
+  /** A directive in value position, which is to produce a node; the tag replaces that node's (§6). */
+  final case class DirectiveValue(call: Call, tag: Option[String]) extends Value {
     def location: SourceLocation = call.location
   }
 

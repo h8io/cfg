@@ -11,10 +11,10 @@ scalar: !!int 42
 sequence: !identifiers [1]
 mapping: !postgres {host: localhost}
 """
-    tagOf(config) shouldBe Set.empty
-    tagOf(valueOf(config, "scalar")) shouldBe Set("tag:yaml.org,2002:int")
-    tagOf(valueOf(config, "sequence")) shouldBe Set("identifiers")
-    tagOf(valueOf(config, "mapping")) shouldBe Set("postgres")
+    tagOf(config) shouldBe None
+    tagOf(valueOf(config, "scalar")) shouldBe Some("tag:yaml.org,2002:int")
+    tagOf(valueOf(config, "sequence")) shouldBe Some("identifiers")
+    tagOf(valueOf(config, "mapping")) shouldBe Some("postgres")
   }
 
   it should "return no tags when the resolver inferred the tag" in {
@@ -24,10 +24,10 @@ sequence: [1]
 mapping: {host: localhost}
 nothing: ~
 """
-    tagOf(valueOf(config, "scalar")) shouldBe Set.empty
-    tagOf(valueOf(config, "sequence")) shouldBe Set.empty
-    tagOf(valueOf(config, "mapping")) shouldBe Set.empty
-    tagOf(valueOf(config, "nothing")) shouldBe Set.empty
+    tagOf(valueOf(config, "scalar")) shouldBe None
+    tagOf(valueOf(config, "sequence")) shouldBe None
+    tagOf(valueOf(config, "mapping")) shouldBe None
+    tagOf(valueOf(config, "nothing")) shouldBe None
   }
 
   it should "return no tags for the non-specific tag" in {
@@ -36,9 +36,9 @@ scalar: ! "42"
 sequence: ! [1]
 mapping: ! {host: localhost}
 """
-    tagOf(valueOf(config, "scalar")) shouldBe Set.empty
-    tagOf(valueOf(config, "sequence")) shouldBe Set.empty
-    tagOf(valueOf(config, "mapping")) shouldBe Set.empty
+    tagOf(valueOf(config, "scalar")) shouldBe None
+    tagOf(valueOf(config, "sequence")) shouldBe None
+    tagOf(valueOf(config, "mapping")) shouldBe None
   }
 
   it should "drop the leading ! of a local tag, so that it gives the same name as a verbatim one" in {
@@ -46,12 +46,12 @@ mapping: ! {host: localhost}
 local: !postgres {host: localhost}
 verbatim: !<postgres> {host: localhost}
 """
-    tagOf(valueOf(config, "local")) shouldBe Set("postgres")
-    tagOf(valueOf(config, "verbatim")) shouldBe Set("postgres")
+    tagOf(valueOf(config, "local")) shouldBe Some("postgres")
+    tagOf(valueOf(config, "verbatim")) shouldBe Some("postgres")
   }
 
   it should "return the tag of the document root" in {
-    tagOf(yaml"!postgres {host: localhost}") shouldBe Set("postgres")
+    tagOf(yaml"!postgres {host: localhost}") shouldBe Some("postgres")
   }
 
   it should "return the tag of the anchor for an alias" in {
@@ -60,6 +60,6 @@ anchored: !postgres &db {host: localhost}
 alias: *db
 """
     valueOf(config, "alias") should be theSameInstanceAs valueOf(config, "anchored")
-    tagOf(valueOf(config, "alias")) shouldBe Set("postgres")
+    tagOf(valueOf(config, "alias")) shouldBe Some("postgres")
   }
 }

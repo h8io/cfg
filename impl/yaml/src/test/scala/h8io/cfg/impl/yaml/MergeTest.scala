@@ -62,10 +62,10 @@ class MergeTest extends AnyFlatSpec with Matchers with Inside {
 
   it should "keep the tag and the location of the overlay" in {
     inside(merged("{a: 1}", "!postgres {a: 2}")) { case map: Node.IMap[?] =>
-      map.tags shouldBe Set("postgres")
+      map.tag shouldBe Some("postgres")
       map.location.description shouldBe s"$Label: 1:1"
     }
-    merged("{a: 1}", "{a: 2}").tags shouldBe Set.empty
+    merged("{a: 1}", "{a: 2}").tag shouldBe None
   }
 
   it should "merge a pair of mappings that aliases share once, its result shared too" in {

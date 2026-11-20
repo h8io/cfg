@@ -83,9 +83,9 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       case layers: Tree.Layers =>
         once(id, layers.layers.collectFirst { case Tree.Substitution(path, _, _, at) => new Following(at, path) })(
           layered(id, layers))
-      case Tree.Substitution(path, optional, tags, at) =>
+      case Tree.Substitution(path, optional, tag, at) =>
         once(id, Some(new Following(at, path)))(
-          reference(path, optional, at).flatMap(_.fold[Resolution](Right(None))(grafted(id, _, at, path, tags))))
+          reference(path, optional, at).flatMap(_.fold[Resolution](Right(None))(grafted(id, _, at, path, tag))))
       case concatenation: Tree.Concatenation =>
         once(id, first(concatenation))(this.concatenation(concatenation).map(Some(_)))
       case Tree.Marked(value, markers) =>
@@ -149,13 +149,13 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
   /** `map` at `id` completed, as [[completed]] does, not marked as being resolved: its caller marks it. */
   private def complete(id: Id, map: Tree.Map): Either[Failure, Tree.Map] = {
     val failures = mutable.ListBuffer.empty[Either[Failure, Unit]]
-    val nothing = Tree.Map.empty(Set.empty, map.location)
+    val nothing = Tree.Map.empty(None, map.location)
     var rest = List.empty[Tree.Map]
     val done = map.steps.foldLeft(map.copy(steps = Vector.empty)) { (current, step) =>
       step match {
         case Tree.Step.Injection(path, optional, at) =>
           // after a failure, into nothing, for its own errors alone
-          val into = if (failures.isEmpty) current else Tree.Map.empty(Set.empty, at)
+          val into = if (failures.isEmpty) current else Tree.Map.empty(None, at)
           val next = fields(id, into, path, optional, at) match {
             case Right(merged) if failures.isEmpty => merged
             case Right(_) => current
@@ -213,7 +213,7 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     else
       grow(size(found) - 1, 0, ResolutionTooLarge(at, Message.path(path), nodeLimit))
         // a map grafted is a map
-        .map(_ => over(current, graft(found, at, path, Set.empty).asInstanceOf[Tree.Map]))
+        .map(_ => over(current, graft(found, at, path, None).asInstanceOf[Tree.Map]))
 
   /** The elements of `found`, the sequence at `path`, injected at `at` where `around` levels stand around them. */
   private def elements(around: Int, found: Tree.Sequence, at: SourceLocation, path: Id.Branch)
@@ -222,7 +222,7 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     else
       grow(size(found) - 1, 0, ResolutionTooLarge(at, Message.path(path), nodeLimit))
         // a sequence grafted is a sequence
-        .map(_ => graft(found, at, path, Set.empty).asInstanceOf[Tree.Sequence].elements)
+        .map(_ => graft(found, at, path, None).asInstanceOf[Tree.Sequence].elements)
 
   /** What a block of injections alone at `id` gives (§4, §9), as [[read]] reads it, resolved. */
   private def gathered(id: Id, injections: Tree.Injections): Resolution =
@@ -235,11 +235,11 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
   /** A block of injections alone read as a map or a sequence, still to be resolved (§4, §9): what the first that finds
     * or gives anything, as written, finds or gives decides, and the block is then read as written with a map's fields
     * or a sequence's elements: its substitutions injections among fields or among `- ` elements, and what its calls
-    * gave put there, each of which must be the same. The block's tags are its own; none when nothing finds or gives
+    * gave put there, each of which must be the same. The block's tag is its own; none when nothing finds or gives
     * anything. Every substitution is resolved first, for its own errors.
     */
   private def read(injections: Tree.Injections): Either[Failure, Option[Either[Tree.Map, Tree.Sequence]]] = {
-    val Tree.Injections(items, tags, location) = injections
+    val Tree.Injections(items, tag, location) = injections
     val found = items.map(_.map(r => r -> reference(r.path, r.optional, r.location)))
     val first = found.collectFirst {
       case Left(AST.Injected.Given(call, value)) => Left(call -> value)
@@ -254,16 +254,16 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
           case Left(_) => Vector.empty
         }
         mismatched(items)(_.isInstanceOf[AST.Block], DirectiveNotMap.apply)
-          .toLeft(Some(Left(merging.block(Tree.Map.empty(tags, location), statements))))
+          .toLeft(Some(Left(merging.block(Tree.Map.empty(tag, location), statements))))
       case Some(Left((_, _: AST.Sequence)) | Right((_, _: Tree.Sequence))) =>
         val elements = items.flatMap {
           case Right(r) =>
-            Vector(AST.Element(AST.Substitution(r.path, r.optional, Set.empty, r.location), None, AST.Put.Elements))
+            Vector(AST.Element(AST.Substitution(r.path, r.optional, None, r.location), None, AST.Put.Elements))
           case Left(AST.Injected.Given(_, AST.Sequence(elements, _, _))) => elements
           case Left(_) => Vector.empty
         }
         mismatched(items)(_.isInstanceOf[AST.Sequence], DirectiveNotSequence.apply)
-          .toLeft(Some(Right(merging.sequence(elements, tags, location))))
+          .toLeft(Some(Right(merging.sequence(elements, tag, location))))
       case Some(Left((call, _))) => failed(DirectiveNotContainer(call.location, call.name))
       case Some(Right((r, other))) => failed(InjectionNotContainer(r.location, Message.path(r.path), other.location))
     }
@@ -279,31 +279,31 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       case Left(AST.Injected.Given(call, value)) if !fits(value) => failed(error(call.location, call.name))
     })
 
-  /** `value`, found by `\${path}` at `at`, grafted at `id` with the tags written before it added to its own. */
-  private def grafted(id: Id, value: Tree.Value, at: SourceLocation, path: Id.Branch, tags: Set[String]): Resolution =
-    placed(id, value, at, path, tags).map(Some(_))
+  /** `value`, found by `\${path}` at `at`, grafted at `id` with the tag written before it in place of its own. */
+  private def grafted(id: Id, value: Tree.Value, at: SourceLocation, path: Id.Branch, tag: Option[String]): Resolution =
+    placed(id, value, at, path, tag).map(Some(_))
 
   /** `value` grafted at `id`, as [[grafted]] does. */
-  private def placed(id: Id, value: Tree.Value, at: SourceLocation, path: Id.Branch, tags: Set[String])
+  private def placed(id: Id, value: Tree.Value, at: SourceLocation, path: Id.Branch, tag: Option[String])
       : Either[Failure, Tree.Value] =
     // the levels around the substitution, and those its value opens
     if (segments(id).size - 1 + height(value) > limit) failed(DepthExceeded(at, limit, fatal = false))
     else grow(size(value), 0, ResolutionTooLarge(at, Message.path(path), nodeLimit)).map(_ =>
-      graft(value, at, path, tags))
+      graft(value, at, path, tag))
 
   /** What an injection among elements finds: a sequence, whose elements are to stand in its place; none when an
     * optional one finds nothing. Anything else is an error for a `required` one, and stands there as one element
-    * otherwise, with the tags written before it, which a sequence's elements have no place for.
+    * otherwise, with the tag written before it in place of its own, which a sequence's elements have no place for.
     */
   private def injected(id: Id, injection: Tree.Injection): Resolution = {
-    val Tree.Injection(path, optional, tags, at, required) = injection
+    val Tree.Injection(path, optional, tag, at, required) = injection
     reference(path, optional, at).flatMap(_.fold[Resolution](Right(None)) {
-      case found: Tree.Sequence if tags.nonEmpty => failed(TaggedSequence(at, Message.path(path), found.location))
+      case found: Tree.Sequence if tag.nonEmpty => failed(TaggedSequence(at, Message.path(path), found.location))
       case found: Tree.Sequence =>
         // its elements stand where the injection does, below the sequence it stands in
         elements(segments(id).size - 1, found, at, path).map(e => Some(found.copy(elements = e)))
       case found if required => failed(InjectionNotSequence(at, Message.path(path), found.location))
-      case found => grafted(id, found, at, path, tags)
+      case found => grafted(id, found, at, path, tag)
     })
   }
 
@@ -323,19 +323,19 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       case _ => value
     }
 
-  /** `content` merged over `map` with `:`, their tags united: after the injections of `map`, when it has any, and with
-    * those of `content` after it.
+  /** `content` merged over `map` with `:`, its tag if written, `map`'s otherwise: after the injections of `map`, when
+    * it has any, and with those of `content` after it.
     */
   private def joined(map: Tree.Map, content: Tree.Map): Tree.Map = {
     val written = content.copy(steps = Vector.empty)
-    val tagged = map.copy(tags = map.tags ++ content.tags, location = Merge.again(content.location, map.location))
+    val tagged = map.copy(tag = content.tag.orElse(map.tag), location = Merge.again(content.location, map.location))
     if (map.steps.isEmpty) over(tagged, written).copy(steps = content.steps)
     else tagged.copy(steps = tagged.steps ++ (Tree.Step.Graft(written) +: content.steps))
   }
 
   /** What layers merged with `:` at `id` end up as (§7). They are read from the last back to the first that is no map,
     * which the maps after it replace, or which stands alone when none comes after it; the maps after it are then merged
-    * in turn as written, those a substitution finds with their tags. A layer that finds nothing puts nothing, and what
+    * in turn as written, those a substitution finds with their tag. A layer that finds nothing puts nothing, and what
     * stands before the first that is no map is not resolved, as what a value replaces is not.
     */
   private def layered(id: Id, layers: Tree.Layers): Resolution = {
@@ -345,16 +345,16 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       rest match {
         case Nil => Right((() => Right(None), maps))
         case (map: Tree.Map) :: earlier => back(earlier, map :: maps)
-        case Tree.Substitution(path, optional, tags, at) :: earlier =>
+        case Tree.Substitution(path, optional, tag, at) :: earlier =>
           reference(path, optional, at) match {
             case Right(None) => back(earlier, maps)
             case Right(Some(found: Tree.Map)) =>
-              placed(id, found, at, path, tags) match {
+              placed(id, found, at, path, tag) match {
                 // a map grafted is a map
                 case Right(map) => back(earlier, map.asInstanceOf[Tree.Map] :: maps)
                 case Left(failure) => Left(failure)
               }
-            case Right(Some(found)) => Right((() => placed(id, found, at, path, tags).map(Some(_)), maps))
+            case Right(Some(found)) => Right((() => placed(id, found, at, path, tag).map(Some(_)), maps))
             case Left(failure) => Left(failure)
           }
         case (injections: Tree.Injections) :: earlier =>
@@ -516,7 +516,7 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
           case Nil => concatenation.location
           case first :: rest => ConcatenationLocation(concatenation.location, ::(first, rest))
         }
-        Tree.Scalar(texts.mkString, concatenation.tags, location)
+        Tree.Scalar(texts.mkString, concatenation.tag, location)
       }
     }
   }
@@ -596,27 +596,27 @@ private[psi] object Resolve {
     loop(id, Nil)
   }
 
-  /** `value` grafted at `at` by `\${path}`, with the tags written before it added to its own (§9, §10): every node of
+  /** `value` grafted at `at` by `\${path}`, with the tag written before it in place of its own (§9, §10): every node of
     * it keeps its origin under a reference to the path it was taken by.
     */
-  private[psi] def graft(value: Tree.Value, at: SourceLocation, path: Id.Branch, tags: Set[String]): Tree.Value = {
-    def moved(value: Tree.Value, id: Id.Branch, tags: Set[String]): Tree.Value = {
+  private[psi] def graft(value: Tree.Value, at: SourceLocation, path: Id.Branch, tag: Option[String]): Tree.Value = {
+    def moved(value: Tree.Value, id: Id.Branch, tag: Option[String]): Tree.Value = {
       val location = ReferenceLocation(at, Message.path(id), value.location)
       value match {
-        case scalar: Tree.Scalar => scalar.copy(tags = scalar.tags ++ tags, location = location)
-        case node: Tree.Null => node.copy(tags = node.tags ++ tags, location = location)
+        case scalar: Tree.Scalar => scalar.copy(tag = tag.orElse(scalar.tag), location = location)
+        case node: Tree.Null => node.copy(tag = tag.orElse(node.tag), location = location)
         case sequence: Tree.Sequence =>
-          val elements = sequence.elements.zipWithIndex.map { case (e, i) => moved(e, Id.Index(i, id), Set.empty) }
-          sequence.copy(elements = elements, tags = sequence.tags ++ tags, location = location)
+          val elements = sequence.elements.zipWithIndex.map { case (e, i) => moved(e, Id.Index(i, id), None) }
+          sequence.copy(elements = elements, tag = tag.orElse(sequence.tag), location = location)
         case map: Tree.Map =>
-          val entries = map.entries.map { case (key, child) => key -> moved(child, Id.Key(key, id), Set.empty) }
-          map.copy(entries = entries, tags = map.tags ++ tags, location = location)
+          val entries = map.entries.map { case (key, child) => key -> moved(child, Id.Key(key, id), None) }
+          map.copy(entries = entries, tag = tag.orElse(map.tag), location = location)
         // a node is resolved whole before it is grafted
         case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Marked | _: Tree.Injection | _: Tree.Injections |
             _: Tree.Layers =>
           throw new IllegalStateException("An unresolved substitution at " + value.location.description + " grafted")
       }
     }
-    moved(value, path, tags)
+    moved(value, path, tag)
   }
 }

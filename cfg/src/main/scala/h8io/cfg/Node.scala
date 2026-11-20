@@ -37,14 +37,14 @@ object Node {
     def unapply[I <: Id](node: INone[I]): Option[I] = Some(node.id)
   }
 
-  /** A node that is physically present in the source (has [[tags]] and a [[location]]). */
+  /** A node that is physically present in the source (has a [[tag]] and a [[location]]). */
   sealed trait ISome[+I <: Id] extends INode[I] {
 
-    /** The tags written on this node in the source, by name, without the syntax that marks them: `@duration` in Psi and
-      * `!duration` in YAML both give `duration`. Order carries no meaning, and nothing is ever inferred, so the set is
-      * empty when no tag was written or the backend has none.
+    /** The tag written on this node in the source, by name, without the syntax that marks it: `@duration` in Psi and
+      * `!duration` in YAML both give `duration`. Nothing is ever inferred, so it is `None` when no tag was written or
+      * the backend has none.
       */
-    def tags: Set[String]
+    def tag: Option[String]
 
     /** Source location of this node. */
     def location: Location
@@ -59,12 +59,12 @@ object Node {
     *
     * @param id
     *   path of this node
-    * @param tags
-    *   the tags written on the node
+    * @param tag
+    *   the tag written on the node
     * @param location
     *   source location
     */
-  final case class INull[+I <: Id](id: I, tags: Set[String], location: Location) extends ISome[I] with NodeError {
+  final case class INull[+I <: Id](id: I, tag: Option[String], location: Location) extends ISome[I] with NodeError {
     def node: INull[I] = this
   }
 
@@ -72,8 +72,9 @@ object Node {
   type Null = INull[Id]
 
   object Null {
-    def apply[I <: Id](id: I, tags: Set[String], location: Location): INull[I] = INull(id, tags, location)
-    def unapply[I <: Id](node: INull[I]): Option[(I, Set[String], Location)] = Some((node.id, node.tags, node.location))
+    def apply[I <: Id](id: I, tag: Option[String], location: Location): INull[I] = INull(id, tag, location)
+    def unapply[I <: Id](node: INull[I]): Option[(I, Option[String], Location)] =
+      Some((node.id, node.tag, node.location))
   }
 
   /** A leaf node holding a single string value.
@@ -82,23 +83,23 @@ object Node {
     *
     * @param id
     *   path of this node
-    * @param tags
-    *   the tags written on the node
+    * @param tag
+    *   the tag written on the node
     * @param value
     *   raw string representation
     * @param location
     *   source location
     */
-  final case class IScalar[+I <: Id](id: I, tags: Set[String], value: String, location: Location) extends ISome[I]
+  final case class IScalar[+I <: Id](id: I, tag: Option[String], value: String, location: Location) extends ISome[I]
 
   /** Type alias for [[IScalar]] with an unspecified path type. */
   type Scalar = IScalar[Id]
 
   object Scalar {
-    def apply[I <: Id](id: I, tags: Set[String], value: String, location: Location): IScalar[I] =
-      IScalar(id, tags, value, location)
-    def unapply[I <: Id](node: IScalar[I]): Option[(I, Set[String], String, Location)] =
-      Some((node.id, node.tags, node.value, node.location))
+    def apply[I <: Id](id: I, tag: Option[String], value: String, location: Location): IScalar[I] =
+      IScalar(id, tag, value, location)
+    def unapply[I <: Id](node: IScalar[I]): Option[(I, Option[String], String, Location)] =
+      Some((node.id, node.tag, node.value, node.location))
   }
 
   /** A container node (map or sequence): an iterable over its present children.
