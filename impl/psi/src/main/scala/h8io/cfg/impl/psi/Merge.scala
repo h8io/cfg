@@ -14,7 +14,7 @@ private[psi] final class Merge {
   /** The sources in order, each with where its root stands. */
   def sources(documents: ::[(AST.Document, SourceLocation)]): Result[Tree.Map] = {
     val (first, site) = documents.head
-    val root = documents.tail.foldLeft(block(Tree.Map.empty(Set.empty, site), first.statements)) {
+    val root = documents.tail.foldLeft(block(Tree.Map.empty(None, site), first.statements)) {
       case (root, (document, site)) =>
         block(root.copy(location = Merge.again(site, root.location)), document.statements)
     }
@@ -39,7 +39,7 @@ private[psi] final class Merge {
       case Nil => put(map, keys.head.name, operator, value)
       case rest @ ::(_, _) =>
         val nested = AST.Field(rest, operator, value, None)
-        put(map, keys.head.name, AST.Operator.Merge, AST.Block(Vector(nested), Set.empty, keys.head.location))
+        put(map, keys.head.name, AST.Operator.Merge, AST.Block(Vector(nested), None, keys.head.location))
     }
 
   private def put(map: Tree.Map, key: String, operator: AST.Operator, value: AST.Value): Tree.Map =
@@ -48,32 +48,33 @@ private[psi] final class Merge {
       case _ => map.updated(key, tree(value))
     }
 
-  /** `value` merged with a `:` over `earlier`: maps merge, their tags united, and anything else replaces what was
-    * there, with only its own tags. Where either may turn out a map or not, a substitution or a block of injections
-    * alone, and the other may be a map, both are kept as layers, merged so once resolved (§7).
+  /** `value` merged with a `:` over `earlier`: maps merge, the later tag if written and the earlier otherwise, and
+    * anything else replaces what was there, with only its own tag. Where either may turn out a map or not, a
+    * substitution or a block of injections alone, and the other may be a map, both are kept as layers, merged so once
+    * resolved (§7).
     */
   private def merged(earlier: Tree.Value, value: AST.Value): Tree.Value =
     (earlier, value) match {
-      case (map: Tree.Map, AST.Block(statements, tags, location)) =>
-        block(map.copy(tags = map.tags ++ tags, location = Merge.again(location, map.location)), statements)
-      case (earlier: Tree.Layer, AST.Substitution(path, optional, tags, location)) =>
-        Tree.Layers(earlier, Tree.Substitution(path, optional, tags, location))
+      case (map: Tree.Map, AST.Block(statements, tag, location)) =>
+        block(map.copy(tag = tag.orElse(map.tag), location = Merge.again(location, map.location)), statements)
+      case (earlier: Tree.Layer, AST.Substitution(path, optional, tag, location)) =>
+        Tree.Layers(earlier, Tree.Substitution(path, optional, tag, location))
       case (earlier: Tree.Layer, injections: AST.Injections) => Tree.Layers(earlier, this.injections(injections))
-      case (Merge.Unknown(earlier), AST.Block(statements, tags, location)) =>
-        Tree.Layers(earlier, block(Tree.Map.empty(tags, location), statements))
+      case (Merge.Unknown(earlier), AST.Block(statements, tag, location)) =>
+        Tree.Layers(earlier, block(Tree.Map.empty(tag, location), statements))
       case _ => tree(value)
     }
 
   /** A value with nothing before it to merge with. */
   private def tree(value: AST.Value): Tree.Value =
     value match {
-      case AST.Scalar(text, tags, location) => Tree.Scalar(text, tags, location)
-      case AST.Null(tags, location) => Tree.Null(tags, location)
-      case AST.Block(statements, tags, location) => block(Tree.Map.empty(tags, location), statements)
-      case AST.Sequence(elements, tags, location) => sequence(elements, tags, location)
-      case AST.Substitution(path, optional, tags, location) => Tree.Substitution(path, optional, tags, location)
+      case AST.Scalar(text, tag, location) => Tree.Scalar(text, tag, location)
+      case AST.Null(tag, location) => Tree.Null(tag, location)
+      case AST.Block(statements, tag, location) => block(Tree.Map.empty(tag, location), statements)
+      case AST.Sequence(elements, tag, location) => sequence(elements, tag, location)
+      case AST.Substitution(path, optional, tag, location) => Tree.Substitution(path, optional, tag, location)
       case injections: AST.Injections => this.injections(injections)
-      case AST.Concatenation(parts, tags, location) => Tree.Concatenation(parts, tags, location)
+      case AST.Concatenation(parts, tag, location) => Tree.Concatenation(parts, tag, location)
       case AST.Marked(value, markers) => Tree.Marked(tree(value), markers)
       case AST.DirectiveValue(call, _) => unexpanded(call)
     }
@@ -84,20 +85,20 @@ private[psi] final class Merge {
       case gave: AST.Injected.Given => Left(gave)
       case AST.Injected.Referring(reference) => Right(reference)
     }
-    Tree.Injections(kept, injections.tags, injections.location)
+    Tree.Injections(kept, injections.tag, injections.location)
   }
 
   /** A sequence of `elements`, with nothing before it to merge with. */
-  private[psi] def sequence(elements: Vector[AST.Element], tags: Set[String], location: PsiLocation): Tree.Sequence =
-    Tree.Sequence(elements.map(element), tags, location)
+  private[psi] def sequence(elements: Vector[AST.Element], tag: Option[String], location: PsiLocation): Tree.Sequence =
+    Tree.Sequence(elements.map(element), tag, location)
 
   /** An element of a sequence, where a substitution may be an injection (§9). */
   private def element(element: AST.Element): Tree.Value =
     (element.value, element.put) match {
-      case (AST.Substitution(path, optional, tags, location), AST.Put.Found) =>
-        Tree.Injection(path, optional, tags, location, required = false)
-      case (AST.Substitution(path, optional, tags, location), AST.Put.Elements) =>
-        Tree.Injection(path, optional, tags, location, required = true)
+      case (AST.Substitution(path, optional, tag, location), AST.Put.Found) =>
+        Tree.Injection(path, optional, tag, location, required = false)
+      case (AST.Substitution(path, optional, tag, location), AST.Put.Elements) =>
+        Tree.Injection(path, optional, tag, location, required = true)
       case (value, _) => tree(value)
     }
 

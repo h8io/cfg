@@ -22,54 +22,56 @@ class ResolveTest extends AnyFlatSpec with Matchers {
   private def keyed(names: String*): Id.Key =
     names.tail.foldLeft(Id.Key(names.head, Id.Root))((parent, name) => Id.Key(name, parent))
 
-  private val NoTags = Set.empty[String]
-
   "A substitution" should "graft a scalar at its own position, located where it was taken from" in {
-    loaded("a: ${b}\nb: 1")("a") shouldBe Node.IScalar(keyed("a"), NoTags, "1", ref(1, 4, "b", at(2, 4)))
+    loaded("a: ${b}\nb: 1")("a") shouldBe Node.IScalar(keyed("a"), None, "1", ref(1, 4, "b", at(2, 4)))
   }
 
-  it should "graft a map whole, every node of it at its new position, its tags united with those written" in {
+  it should "graft a map whole, every node of it at its new position, the tag written in place of its own" in {
     val root = loaded("a: @y ${b}\nb: @x { c: 1, d: [2] }")
     root("a") match {
       case map: Node.IMap[?] =>
         map.id shouldBe keyed("a")
-        map.tags shouldBe Set("x", "y")
+        map.tag shouldBe Some("y")
         map.location shouldBe ref(1, 7, "b", at(2, 7))
-        map("c") shouldBe Node.IScalar(keyed("a", "c"), NoTags, "1", ref(1, 7, "b.c", at(2, 12)))
+        map("c") shouldBe Node.IScalar(keyed("a", "c"), None, "1", ref(1, 7, "b.c", at(2, 12)))
         map("d") match {
           case seq: Node.ISeq[?] =>
             seq.location shouldBe ref(1, 7, "b.d", at(2, 18))
-            seq(0) shouldBe Node.IScalar(Id.Index(0, keyed("a", "d")), NoTags, "2", ref(1, 7, "b.d[0]", at(2, 19)))
+            seq(0) shouldBe Node.IScalar(Id.Index(0, keyed("a", "d")), None, "2", ref(1, 7, "b.d[0]", at(2, 19)))
           case other => fail(other.toString)
         }
       case other => fail(other.toString)
     }
     root("b") match {
-      case map: Node.IMap[?] => map.tags shouldBe Set("x")
+      case map: Node.IMap[?] => map.tag shouldBe Some("x")
+      case other => fail(other.toString)
+    }
+    loaded("a: ${b}\nb: @x { c: 1 }")("a") match {
+      case map: Node.IMap[?] => map.tag shouldBe Some("x")
       case other => fail(other.toString)
     }
   }
 
   it should "chain the references of a chain of substitutions" in {
     loaded("a: ${b}\nb: ${c}\nc: 1")("a") shouldBe
-      Node.IScalar(keyed("a"), NoTags, "1", ref(1, 4, "b", ref(2, 4, "c", at(3, 4))))
+      Node.IScalar(keyed("a"), None, "1", ref(1, 4, "b", ref(2, 4, "c", at(3, 4))))
   }
 
   it should "graft null as null" in {
-    loaded("a: ${n}\nn: null")("a") shouldBe Node.INull(keyed("a"), NoTags, ref(1, 4, "n", at(2, 4)))
+    loaded("a: ${n}\nn: null")("a") shouldBe Node.INull(keyed("a"), None, ref(1, 4, "n", at(2, 4)))
   }
 
   it should "look into a sequence and below a substitution" in {
     val root = loaded("s: [0, { k: v }]\nt: ${s[1].k}\nu: ${w.k}\nw: ${s[1]}")
-    root("t") shouldBe Node.IScalar(keyed("t"), NoTags, "v", ref(2, 4, "s[1].k", at(1, 13)))
-    root("u") shouldBe Node.IScalar(keyed("u"), NoTags, "v", ref(3, 4, "w.k", ref(4, 4, "s[1].k", at(1, 13))))
+    root("t") shouldBe Node.IScalar(keyed("t"), None, "v", ref(2, 4, "s[1].k", at(1, 13)))
+    root("u") shouldBe Node.IScalar(keyed("u"), None, "v", ref(3, 4, "w.k", ref(4, 4, "s[1].k", at(1, 13))))
   }
 
   "An optional substitution" should "drop its field when nothing is there, and graft what is" in {
     val root = loaded("a: ${?x}\nb: ${?c}\nc: 1")
     root("a") shouldBe Node.None(keyed("a"))
     root.size shouldBe 2
-    root("b") shouldBe Node.IScalar(keyed("b"), NoTags, "1", ref(2, 4, "c", at(3, 4)))
+    root("b") shouldBe Node.IScalar(keyed("b"), None, "1", ref(2, 4, "c", at(3, 4)))
   }
 
   it should "leave nothing to look into" in {
@@ -82,25 +84,25 @@ class ResolveTest extends AnyFlatSpec with Matchers {
       case seq: Node.ISeq[?] => seq.toList.collect { case s: Node.IScalar[?] => s.value } shouldBe List("1", "2")
       case other => fail(other.toString)
     }
-    root("t") shouldBe Node.IScalar(keyed("t"), NoTags, "2", ref(2, 4, "s[1]", at(1, 22)))
+    root("t") shouldBe Node.IScalar(keyed("t"), None, "2", ref(2, 4, "s[1]", at(1, 22)))
     root("u") shouldBe Node.None(keyed("u"))
   }
 
   it should "count in a sequence when it grafts something" in {
     val root = loaded("s: [${?x}, 1]\nt: ${s[1]}\nu: ${s[0]}\nx: 0")
-    root("t") shouldBe Node.IScalar(keyed("t"), NoTags, "1", ref(2, 4, "s[1]", at(1, 12)))
-    root("u") shouldBe Node.IScalar(keyed("u"), NoTags, "0", ref(3, 4, "s[0]", ref(1, 5, "x", at(4, 4))))
+    root("t") shouldBe Node.IScalar(keyed("t"), None, "1", ref(2, 4, "s[1]", at(1, 12)))
+    root("u") shouldBe Node.IScalar(keyed("u"), None, "0", ref(3, 4, "s[0]", ref(1, 5, "x", at(4, 4))))
   }
 
   it should "read as empty in a concatenation" in {
-    loaded("e: \"${?x}\"")("e") shouldBe Node.IScalar(keyed("e"), NoTags, "", at(1, 4))
+    loaded("e: \"${?x}\"")("e") shouldBe Node.IScalar(keyed("e"), None, "", at(1, 4))
   }
 
   "A concatenation" should "join scalars, with a reference per substitution and only its own tags" in {
     loaded("h: @t db\np: 5432\nurl: @u \"jdbc:${h}:${p}/x${?none}\"")("url") shouldBe
       Node.IScalar(
         keyed("url"),
-        Set("u"),
+        Some("u"),
         "jdbc:db:5432/x",
         ConcatenationLocation(at(3, 9), ::(ref(3, 15, "h", at(1, 7)), ref(3, 20, "p", at(2, 4)) :: Nil)))
   }
@@ -139,8 +141,12 @@ class ResolveTest extends AnyFlatSpec with Matchers {
   it should "merge a map over what it finds, maps merging and anything else replaced, either way" in {
     def shown(text: String): String = Psi.parse("s", text).fold(e => fail(e.toString), _("a").toString)
     shown("a: $b\na.x: 1\nb { y: 2 }") shouldBe "y: 2\nx: 1"
-    // as `:` merges two maps, their tags united
+    // as `:` merges two maps, the later tag if written, the earlier otherwise
     shown("b: @t { y: 2 }\na: $b\na.x: 1") shouldBe "@t\n  y: 2\n  x: 1"
+    shown("b: @t { y: 2 }\na: $b\na: @u { x: 1 }") shouldBe "@u\n  y: 2\n  x: 1"
+    shown("b: @t { y: 2 }\na: @u { x: 1 }\na: $b") shouldBe "@t\n  x: 1\n  y: 2"
+    shown("b { y: 2 }\na: @u { x: 1 }\na: $b") shouldBe "@u\n  x: 1\n  y: 2"
+    shown("b: @t { y: 2 }\na: @u $b\na.x: 1") shouldBe "@u\n  y: 2\n  x: 1"
     shown("b: 5\na: $b\na.x: 1") shouldBe "x: 1"
     shown("a { x: 1 }\na: $b\nb { y: 2 }") shouldBe "x: 1\ny: 2"
     Psi.parse("s", "a { x: 1 }\na: $b\nb: 5").fold(e => fail(e.toString), _("a")) match {
@@ -195,7 +201,7 @@ class ResolveTest extends AnyFlatSpec with Matchers {
 
   "A path" should "be looked up in the tree alone, which the system properties do not reach" in {
     val properties = Map("java.home" -> "/j", "a" -> "launched")
-    loaded("a: x\nt: ${a}", properties)("t") shouldBe Node.IScalar(keyed("t"), NoTags, "x", ref(2, 4, "a", at(1, 4)))
+    loaded("a: x\nt: ${a}", properties)("t") shouldBe Node.IScalar(keyed("t"), None, "x", ref(2, 4, "a", at(1, 4)))
     errors("h: ${java.home}\ni: ${HOME}", properties) shouldBe
       List(UnresolvedSubstitution(at(1, 4), "java.home"), UnresolvedSubstitution(at(2, 4), "HOME"))
   }
@@ -212,8 +218,8 @@ class ResolveTest extends AnyFlatSpec with Matchers {
   }
 
   "A graft" should "not take a substitution left unresolved, which is a bug of the loader" in {
-    val substitution = Tree.Substitution(keyed("a"), optional = false, NoTags, at(1, 4))
-    the[IllegalStateException] thrownBy Resolve.graft(substitution, at(2, 4), keyed("b"), NoTags) should have message
+    val substitution = Tree.Substitution(keyed("a"), optional = false, None, at(1, 4))
+    the[IllegalStateException] thrownBy Resolve.graft(substitution, at(2, 4), keyed("b"), None) should have message
       "An unresolved substitution at s:1:4 grafted"
   }
 }

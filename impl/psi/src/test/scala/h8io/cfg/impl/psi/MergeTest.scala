@@ -29,16 +29,15 @@ class MergeTest extends AnyFlatSpec with Matchers {
 
   private def loc(line: Int, column: Int, source: String = "s0"): SourceLocation = SourceLocation(source, line, column)
 
-  private def str(value: String, line: Int, column: Int, tags: String*): Scalar =
-    Scalar(value, tags.toSet, loc(line, column))
+  private def str(value: String, line: Int, column: Int): Scalar = Scalar(value, None, loc(line, column))
 
-  private def map(sites: SourceLocation*)(entries: (String, Value)*): Tree.Map = tagged()(sites*)(entries*)
+  private def map(sites: SourceLocation*)(entries: (String, Value)*): Tree.Map = tagged(None)(sites*)(entries*)
 
-  private def tagged(tags: String*)(sites: SourceLocation*)(entries: (String, Value)*): Tree.Map =
+  private def tagged(tag: Option[String])(sites: SourceLocation*)(entries: (String, Value)*): Tree.Map =
     Tree.Map(
       entries.map(_._1).toVector,
       immutable.Map(entries*),
-      tags.toSet,
+      tag,
       sites.tail.toList match {
         case Nil => sites.head
         case first :: rest => MergedLocation(sites.head, ::[PsiLocation](first, rest))
@@ -51,8 +50,8 @@ class MergeTest extends AnyFlatSpec with Matchers {
     root("b: 1\na: null\nc: [x, {d: 2}]\ne {}") shouldBe
       top(
         "b" -> str("1", 1, 4),
-        "a" -> Null(Set.empty, loc(2, 4)),
-        "c" -> Sequence(Vector(str("x", 3, 5), map(loc(3, 8))("d" -> str("2", 3, 12))), Set.empty, loc(3, 4)),
+        "a" -> Null(None, loc(2, 4)),
+        "c" -> Sequence(Vector(str("x", 3, 5), map(loc(3, 8))("d" -> str("2", 3, 12))), None, loc(3, 4)),
         "e" -> map(loc(4, 3))()
       )
   }
@@ -67,14 +66,14 @@ class MergeTest extends AnyFlatSpec with Matchers {
 
   it should "replace anything but a map with the last value, keeping the key's place" in {
     root("a: 1\nb: [1]\na: 2\nb: [2, 3]") shouldBe
-      top("a" -> str("2", 3, 4), "b" -> Sequence(Vector(str("2", 4, 5), str("3", 4, 8)), Set.empty, loc(4, 4)))
+      top("a" -> str("2", 3, 4), "b" -> Sequence(Vector(str("2", 4, 5), str("3", 4, 8)), None, loc(4, 4)))
     root("a { x: 1 }\na: 2\nb: 3\nb { y: 4 }") shouldBe
       top("a" -> str("2", 2, 4), "b" -> map(loc(4, 3))("y" -> str("4", 4, 8)))
   }
 
   it should "take null as any value that is not a map" in {
     root("a { x: 1 }\na: null\nb: null\nb { y: 2 }") shouldBe
-      top("a" -> Null(Set.empty, loc(2, 4)), "b" -> map(loc(4, 3))("y" -> str("2", 4, 8)))
+      top("a" -> Null(None, loc(2, 4)), "b" -> map(loc(4, 3))("y" -> str("2", 4, 8)))
   }
 
   it should "read a dotted key as nested blocks, each standing at its key" in {
@@ -107,27 +106,29 @@ class MergeTest extends AnyFlatSpec with Matchers {
           "c" -> str("2", 1, 20)))
   }
 
-  "Tags" should "be united when maps merge" in {
+  "A tag" should "be the later one when maps merge, if one is written there, and the earlier otherwise" in {
+    root("r: @o { a: 1 }\nr { b: 2 }") shouldBe
+      top("r" -> tagged(Some("o"))(loc(2, 3), loc(1, 7))("a" -> str("1", 1, 12), "b" -> str("2", 2, 8)))
     root("r: @o { a: 1 }\nr { b: 2 }\nr: @s { c: 3 }") shouldBe
       top(
-        "r" -> tagged("o", "s")(loc(3, 7), loc(2, 3), loc(1, 7))(
+        "r" -> tagged(Some("s"))(loc(3, 7), loc(2, 3), loc(1, 7))(
           "a" -> str("1", 1, 12),
           "b" -> str("2", 2, 8),
           "c" -> str("3", 3, 12)))
   }
 
-  it should "be only its own on a value that replaces another, a map replaced with `:=` included" in {
+  it should "be only the one of a value that replaces another, a map replaced with `:=` included" in {
     root("a: @x 1\na: 2\nb: @x { c: 1 }\nb := @y { d: 2 }") shouldBe
-      top("a" -> str("2", 2, 4), "b" -> tagged("y")(loc(4, 9))("d" -> str("2", 4, 14)))
+      top("a" -> str("2", 2, 4), "b" -> tagged(Some("y"))(loc(4, 9))("d" -> str("2", 4, 14)))
   }
 
   "A substitution" should "be kept unresolved, alone or in a concatenation" in {
     root("a: @t ${b.c}\nd: x${?e}") shouldBe
       top(
-        "a" -> Substitution(Id.Key("c", Id.Key("b", Id.Root)), optional = false, Set("t"), loc(1, 7)),
+        "a" -> Substitution(Id.Key("c", Id.Key("b", Id.Root)), optional = false, Some("t"), loc(1, 7)),
         "d" -> Concatenation(
           Vector(Text("x"), Reference(Id.Key("e", Id.Root), optional = true, loc(2, 5))),
-          Set.empty,
+          None,
           loc(2, 4))
       )
   }
@@ -136,12 +137,12 @@ class MergeTest extends AnyFlatSpec with Matchers {
     root("a: ${x}\na: 5\nb: 5\nb: ${x}\nc: \"${x}\"\nc { }") shouldBe
       top(
         "a" -> str("5", 2, 4),
-        "b" -> Substitution(Id.Key("x", Id.Root), optional = false, Set.empty, loc(4, 4)),
+        "b" -> Substitution(Id.Key("x", Id.Root), optional = false, None, loc(4, 4)),
         "c" -> map(loc(6, 3))())
   }
 
   private def sub(path: String, line: Int, column: Int, optional: Boolean = false): Substitution =
-    Substitution(Id.Key(path, Id.Root), optional, Set.empty, loc(line, column))
+    Substitution(Id.Key(path, Id.Root), optional, None, loc(line, column))
 
   it should "keep a map and a substitution merged either way as layers, for resolution, `:=` replacing" in {
     root("a: ${s}\nb { p: 1 }\nc: ${?s}\nd: 1\na { p: 1 }\nb: ${s}\nc: ${t}\nd := ${s}") shouldBe
@@ -180,9 +181,9 @@ class MergeTest extends AnyFlatSpec with Matchers {
     val merged = root("pool { min: 1, max: 10, idle: 30s }\nport: 1", "pool := { max: 4 }\nport: 2\nhost: h")
     merged shouldBe
       map(loc(1, 1, "s1"), loc(1, 1))(
-        "pool" -> map(loc(1, 9, "s1"))("max" -> Scalar("4", Set.empty, loc(1, 16, "s1"))),
-        "port" -> Scalar("2", Set.empty, loc(2, 7, "s1")),
-        "host" -> Scalar("h", Set.empty, loc(3, 7, "s1"))
+        "pool" -> map(loc(1, 9, "s1"))("max" -> Scalar("4", None, loc(1, 16, "s1"))),
+        "port" -> Scalar("2", None, loc(2, 7, "s1")),
+        "host" -> Scalar("h", None, loc(3, 7, "s1"))
       )
     merged.location shouldBe MergedLocation(loc(1, 1, "s1"), ::(loc(1, 1), Nil))
   }
@@ -190,7 +191,7 @@ class MergeTest extends AnyFlatSpec with Matchers {
   it should "merge maps across sources" in {
     root("a { x: 1 }", "a { y: 2 }", "") shouldBe
       map(loc(1, 1, "s2"), loc(1, 1, "s1"), loc(1, 1))(
-        "a" -> map(loc(1, 3, "s1"), loc(1, 3))("x" -> str("1", 1, 8), "y" -> Scalar("2", Set.empty, loc(1, 8, "s1"))))
+        "a" -> map(loc(1, 3, "s1"), loc(1, 3))("x" -> str("1", 1, 8), "y" -> Scalar("2", None, loc(1, 8, "s1"))))
   }
 
   "A directive" should "be a bug of the loader when it reaches merging unexpanded" in {

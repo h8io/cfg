@@ -42,9 +42,9 @@ class InjectionTest extends AnyFlatSpec with Matchers {
   it should "keep where each field came from, its own tags and none of the map's" in {
     loaded("a: @t { x: @u 1 }\nb { $a }")("b") match {
       case map: Node.IMap[?] =>
-        map.tags shouldBe Set.empty
+        map.tag shouldBe None
         map("x") shouldBe
-          Node.IScalar(Id.Key("x", Id.Key("b", Id.Root)), Set("u"), "1", ReferenceLocation(at(2, 5), "a.x", at(1, 15)))
+          Node.IScalar(Id.Key("x", Id.Key("b", Id.Root)), Some("u"), "1", ReferenceLocation(at(2, 5), "a.x", at(1, 15)))
       case other => fail(other.toString)
     }
   }
@@ -103,7 +103,7 @@ class InjectionTest extends AnyFlatSpec with Matchers {
     shown("a: []\nb: [a, $a, z]", "b") shouldBe "- a\n- z"
     shown("a: x\nb: [a, $a, z]", "b") shouldBe "- a\n- x\n- z"
     shown("a { x: 1 }\nb: [$a]", "b") shouldBe "- x: 1"
-    shown("a: @u x\nb: [@t $a]", "b") shouldBe "- @t @u x"
+    shown("a: @u x\nb: [@t $a]", "b") shouldBe "- @t x"
     shown("b: [a, $?nope, ${?nope}, z]", "b") shouldBe "- a\n- z"
     // brackets around it nest a sequence whole
     shown("a: [x, y]\nb: [a, [$a], z]", "b") shouldBe "- a\n- - x\n  - y\n- z"
@@ -134,7 +134,7 @@ class InjectionTest extends AnyFlatSpec with Matchers {
   }
 
   "A substitution alone after a key, on its line or below it" should "be the key's value, whole" in {
-    loaded("a: @u x\nb:\n  @t $a")("b") shouldBe Node.IScalar(Id.Key("b", Id.Root), Set("t", "u"), "x",
+    loaded("a: @u x\nb:\n  @t $a")("b") shouldBe Node.IScalar(Id.Key("b", Id.Root), Some("t"), "x",
       ReferenceLocation(at(3, 6), "a", at(1, 7)))
     shown("a: [x]\nb:\n  $a", "b") shouldBe "- x"
     shown("a: @u { x: 1 }\nb:\n  $a", "b") shouldBe "@u\n  x: 1"

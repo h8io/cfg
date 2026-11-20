@@ -62,25 +62,25 @@ private[psi] final class Expand private (
           val values = (e.value, e.put) match {
             case (AST.DirectiveValue(call, _), AST.Put.Elements) =>
               run(call, stack, depth + 2).fold(Vector.empty[AST.Value])(injected(call, _, depth + 1))
-            case (AST.DirectiveValue(call, tags), AST.Put.Found) =>
-              run(call, stack, depth + 2).fold(Vector.empty[AST.Value])(spread(call, tags, _, depth + 1))
+            case (AST.DirectiveValue(call, tag), AST.Put.Found) =>
+              run(call, stack, depth + 2).fold(Vector.empty[AST.Value])(spread(call, tag, _, depth + 1))
             case (other, _) => this.value(other, stack, depth + 1).toVector
           }
           values.map(v => e.copy(value = v))
         }
         Some(sequence.copy(elements = elements))
-      case AST.DirectiveValue(call, tags) =>
-        run(call, stack, depth + 1).fold(Option.empty[AST.Value])(placed(call, tags, _, depth))
+      case AST.DirectiveValue(call, tag) =>
+        run(call, stack, depth + 1).fold(Option.empty[AST.Value])(placed(call, tag, _, depth))
       // what a call gives is kept, to be put once substitutions are resolved (§9)
-      case AST.Injections(items, tags, location) =>
+      case AST.Injections(items, tag, location) =>
         val expanded = items.flatMap {
           case AST.Injected.Calling(call) =>
             run(call, stack, depth + 1)
-              .fold(Option.empty[AST.Value])(placed(call, Set.empty, _, depth))
+              .fold(Option.empty[AST.Value])(placed(call, None, _, depth))
               .map(AST.Injected.Given(call, _))
           case other => Some(other)
         }
-        if (expanded.isEmpty) None else Some(AST.Injections(expanded, tags, location))
+        if (expanded.isEmpty) None else Some(AST.Injections(expanded, tag, location))
       case _ => Some(value)
     }
 
@@ -97,17 +97,17 @@ private[psi] final class Expand private (
         Vector.empty
     }
 
-  /** A fragment in value position with `depth` levels around it, with the tags written before the call added to its
+  /** A fragment in value position with `depth` levels around it, with the tag written before the call in place of its
     * own; none when it does not fit there.
     */
-  private def placed(call: AST.Call, tags: Set[String], fragment: Fragment.Some, depth: Int): Option[AST.Value] =
+  private def placed(call: AST.Call, tag: Option[String], fragment: Fragment.Some, depth: Int): Option[AST.Value] =
     fragment match {
       case Fragment.Parsed(document, root, errors, sources) =>
         this.errors ++= errors
         included ++= sources
-        if (fits(call, depth + 1 + levels(document.statements))) Some(AST.Block(document.statements, tags, root))
+        if (fits(call, depth + 1 + levels(document.statements))) Some(AST.Block(document.statements, tag, root))
         else None
-      case Fragment.Built(node) => fitting(call)(built(call, node, tags, depth))
+      case Fragment.Built(node) => fitting(call)(built(call, node, tag, depth))
     }
 
   /** A fragment injected among the elements of a sequence, `depth` levels deep: the elements of a sequence, in its
@@ -116,7 +116,7 @@ private[psi] final class Expand private (
   private def injected(call: AST.Call, fragment: Fragment.Some, depth: Int): Vector[AST.Value] =
     fragment match {
       case Fragment.Built(seq: Node.ISeq[?]) =>
-        fitting(call)(seq.iterator.map(built(call, _, Set.empty, depth)).toVector).getOrElse(Vector.empty)
+        fitting(call)(seq.iterator.map(built(call, _, None, depth)).toVector).getOrElse(Vector.empty)
       // a source parsed is a map
       case _ =>
         report(DirectiveNotSequence(call.location, call.name))
@@ -124,15 +124,15 @@ private[psi] final class Expand private (
     }
 
   /** A fragment in `[…]`, `depth` levels deep: the elements of a sequence, in its place, or anything else as one
-    * element, with the tags written before the call, which a sequence's elements have no place for (§9).
+    * element, with the tag written before the call, which a sequence's elements have no place for (§9).
     */
-  private def spread(call: AST.Call, tags: Set[String], fragment: Fragment.Some, depth: Int): Vector[AST.Value] =
+  private def spread(call: AST.Call, tag: Option[String], fragment: Fragment.Some, depth: Int): Vector[AST.Value] =
     fragment match {
-      case Fragment.Built(_: Node.ISeq[?]) if tags.nonEmpty =>
+      case Fragment.Built(_: Node.ISeq[?]) if tag.nonEmpty =>
         report(TaggedDirectiveSequence(call.location, call.name))
         Vector.empty
       case Fragment.Built(_: Node.ISeq[?]) => injected(call, fragment, depth)
-      case _ => placed(call, tags, fragment, depth).toVector
+      case _ => placed(call, tag, fragment, depth).toVector
     }
 
   /** Whether a fragment reaching `depth` levels fits under the limit; reported at the call when it does not. */
@@ -154,25 +154,25 @@ private[psi] final class Expand private (
   /** The fields of `map` standing `depth` levels deep. */
   private def statements(call: AST.Call, map: Node.IMap[?], depth: Int): Vector[AST.Statement] =
     map.iterator.map { child =>
-      val value = built(call, child, Set.empty, depth)
+      val value = built(call, child, None, depth)
       AST.Field(::(AST.Key(child.id.key, call.location), Nil), AST.Operator.Merge, value, None)
     }.toVector
 
   /** `node` as a value of the syntax tree with `depth` levels around it, its location kept as an origin behind the
     * call; a container past the limit throws [[TooDeep]].
     */
-  private def built(call: AST.Call, node: Node.ISome[Id], tags: Set[String], depth: Int): AST.Value = {
+  private def built(call: AST.Call, node: Node.ISome[Id], tag: Option[String], depth: Int): AST.Value = {
     val location = DirectiveLocation(call.location, call.name, node.location)
     node match {
-      case Node.IScalar(_, own, value, _) => AST.Scalar(value, own ++ tags, location)
-      case Node.INull(_, own, _) => AST.Null(own ++ tags, location)
+      case Node.IScalar(_, own, value, _) => AST.Scalar(value, tag.orElse(own), location)
+      case Node.INull(_, own, _) => AST.Null(tag.orElse(own), location)
       case map: Node.IMap[?] =>
         if (depth >= limit) throw TooDeep
-        AST.Block(statements(call, map, depth + 1), map.tags ++ tags, location)
+        AST.Block(statements(call, map, depth + 1), tag.orElse(map.tag), location)
       case seq: Node.ISeq[?] =>
         if (depth >= limit) throw TooDeep
-        val elements = seq.iterator.map(e => AST.Element(built(call, e, Set.empty, depth + 1), None)).toVector
-        AST.Sequence(elements, seq.tags ++ tags, location)
+        val elements = seq.iterator.map(e => AST.Element(built(call, e, None, depth + 1), None)).toVector
+        AST.Sequence(elements, tag.orElse(seq.tag), location)
     }
   }
 
@@ -221,8 +221,8 @@ private[psi] final class Expand private (
     else {
       val keys = names.filter(bound.contains)
       val entries = keys.map(key =>
-        key -> (Tree.Scalar(bound(key).value, Set.empty, bound(key).valueLocation): Tree.Value))
-      Some(MapImpl(Id.Root, Tree.Map(keys, immutable.Map(entries*), Set.empty, call.location)))
+        key -> (Tree.Scalar(bound(key).value, None, bound(key).valueLocation): Tree.Value))
+      Some(MapImpl(Id.Root, Tree.Map(keys, immutable.Map(entries*), None, call.location)))
     }
   }
 

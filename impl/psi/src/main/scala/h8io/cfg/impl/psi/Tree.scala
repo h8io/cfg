@@ -11,28 +11,28 @@ import scala.collection.immutable
 private[psi] object Tree {
 
   sealed trait Value {
-    def tags: Set[String]
+    def tag: Option[String]
     def location: PsiLocation
   }
 
-  final case class Scalar(value: String, tags: Set[String], location: PsiLocation) extends Value
+  final case class Scalar(value: String, tag: Option[String], location: PsiLocation) extends Value
 
-  final case class Null(tags: Set[String], location: PsiLocation) extends Value
+  final case class Null(tag: Option[String], location: PsiLocation) extends Value
 
-  final case class Sequence(elements: Vector[Value], tags: Set[String], location: PsiLocation) extends Value
+  final case class Sequence(elements: Vector[Value], tag: Option[String], location: PsiLocation) extends Value
 
   /** `\${path}` or `\${?path}`, alone and unquoted: a graft. */
-  final case class Substitution(path: Id.Branch, optional: Boolean, tags: Set[String], location: SourceLocation)
+  final case class Substitution(path: Id.Branch, optional: Boolean, tag: Option[String], location: SourceLocation)
       extends Layer
 
   /** `\${path}` or `\${?path}` among the elements of a sequence, an injection: the elements of the sequence it finds,
     * in its place (§9). What a `required` one finds must be a sequence; any other puts anything else as one element,
-    * with its tags.
+    * with its tag, or the one written before it.
     */
   final case class Injection(
       path: Id.Branch,
       optional: Boolean,
-      tags: Set[String],
+      tag: Option[String],
       location: SourceLocation,
       required: Boolean)
       extends Value
@@ -46,7 +46,7 @@ private[psi] object Tree {
     */
   final case class Injections(
       items: Vector[Either[AST.Injected.Given, Token.Reference]],
-      tags: Set[String],
+      tag: Option[String],
       location: SourceLocation)
       extends Layer
 
@@ -60,8 +60,8 @@ private[psi] object Tree {
     */
   final case class Layers(layers: Vector[Layer]) extends Layer {
 
-    /** What the layers end up as says its tags. */
-    def tags: Set[String] = Set.empty
+    /** What the layers end up as says its tag. */
+    def tag: Option[String] = None
 
     def location: PsiLocation = layers.last.location
   }
@@ -77,11 +77,11 @@ private[psi] object Tree {
   }
 
   /** A scalar with `\${…}` inside it. */
-  final case class Concatenation(parts: Vector[Token.Part], tags: Set[String], location: SourceLocation) extends Value
+  final case class Concatenation(parts: Vector[Token.Part], tag: Option[String], location: SourceLocation) extends Value
 
   /** A block with the loader's markers to run over its value, a scalar or a concatenation, once resolved (§5). */
   final case class Marked(value: Value, markers: Vector[MarkerParser.MarkerCall]) extends Value {
-    def tags: Set[String] = value.tags
+    def tag: Option[String] = value.tag
     def location: PsiLocation = value.location
   }
 
@@ -96,7 +96,7 @@ private[psi] object Tree {
   final case class Map(
       keys: Vector[String],
       entries: immutable.Map[String, Value],
-      tags: Set[String],
+      tag: Option[String],
       location: PsiLocation,
       steps: Vector[Step] = Vector.empty)
       extends Layer {
@@ -110,7 +110,7 @@ private[psi] object Tree {
   }
 
   object Map {
-    def empty(tags: Set[String], location: PsiLocation): Map = Map(Vector.empty, immutable.Map.empty, tags, location)
+    def empty(tag: Option[String], location: PsiLocation): Map = Map(Vector.empty, immutable.Map.empty, tag, location)
   }
 
   /** What is merged into a map after its first injection, in order (§9). */

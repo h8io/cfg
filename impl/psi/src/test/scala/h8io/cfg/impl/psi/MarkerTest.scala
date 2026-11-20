@@ -7,8 +7,6 @@ import org.scalatest.matchers.should.Matchers
 class MarkerTest extends AnyFlatSpec with Matchers {
   private def at(line: Int, column: Int): SourceLocation = SourceLocation("s", line, column)
 
-  private val NoTags = Set.empty[String]
-
   private def marker(markerName: String, params: Parameter*)(
       body: (Node.IMap[Id.Root], String) => Either[MarkerError, String]): Marker =
     new Marker {
@@ -58,13 +56,13 @@ class MarkerTest extends AnyFlatSpec with Matchers {
   "The loader's markers" should "run left to right over the block's value, after the built-in ones" in {
     val root =
       loaded(loader(upper, reverse), "a: \"\"\"< upper ~~\n    abc\n  d\n  \"\"\"\nb: '''upper\n  x\\ty\n  '''")
-    root("a") shouldBe Node.IScalar(Id.Key("a", Id.Root), NoTags, "D\nCBA", at(1, 4))
+    root("a") shouldBe Node.IScalar(Id.Key("a", Id.Root), None, "D\nCBA", at(1, 4))
     value(root("b")) shouldBe "X\\TY"
   }
 
-  they should "run over a block indented below its key, which takes the tags after the key" in {
-    loaded(loader(upper), "u: @s\n  @t \"\"\"upper\n  abc\n  \"\"\"")("u") shouldBe
-      Node.IScalar(Id.Key("u", Id.Root), Set("s", "t"), "ABC", at(2, 6))
+  they should "run over a block indented below its key, which takes the tag after the key" in {
+    loaded(loader(upper), "u: @s\n  \"\"\"upper\n  abc\n  \"\"\"")("u") shouldBe
+      Node.IScalar(Id.Key("u", Id.Root), Some("s"), "ABC", at(2, 3))
   }
 
   they should "get the value with its escapes read and its substitutions resolved" in {
@@ -72,7 +70,7 @@ class MarkerTest extends AnyFlatSpec with Matchers {
     root("u") shouldBe
       Node.IScalar(
         Id.Key("u", Id.Root),
-        Set("t"),
+        Some("t"),
         "JDBC:DB\t",
         ConcatenationLocation(at(2, 7), ::(ReferenceLocation(at(3, 8), "h", at(1, 4)), Nil)))
     value(root("v")) shouldBe "JDBC:DB\t"
@@ -88,8 +86,8 @@ class MarkerTest extends AnyFlatSpec with Matchers {
     loaded(loader(replace), "a: \"\"\"replace(1, to: x)\n  v\n  \"\"\"").size shouldBe 1
     received shouldBe
       List(
-        Node.IScalar(Id.Key("from", Id.Root), NoTags, "1", at(1, 15)),
-        Node.IScalar(Id.Key("to", Id.Root), NoTags, "x", at(1, 22)))
+        Node.IScalar(Id.Key("from", Id.Root), None, "1", at(1, 15)),
+        Node.IScalar(Id.Key("to", Id.Root), None, "x", at(1, 22)))
     loaded(loader(replace), "a: \"\"\"replace('y')\n  v\n  \"\"\"").size shouldBe 1
     received.map(value) shouldBe List("y")
   }
@@ -137,16 +135,16 @@ class MarkerTest extends AnyFlatSpec with Matchers {
   }
 
   it should "be resolved before it is wrapped, grafted or shown, which would be a bug of the loader" in {
-    val marked = Tree.Marked(Tree.Scalar("v", NoTags, at(1, 4)), Vector.empty)
+    val marked = Tree.Marked(Tree.Scalar("v", None, at(1, 4)), Vector.empty)
     the[IllegalStateException] thrownBy wrap(Id.Root, marked) should have message "An unresolved substitution at s:1:4"
-    the[IllegalStateException] thrownBy Resolve.graft(marked, at(2, 4), Id.Key("b", Id.Root), NoTags) should
+    the[IllegalStateException] thrownBy Resolve.graft(marked, at(2, 4), Id.Key("b", Id.Root), None) should
       have message "An unresolved substitution at s:1:4 grafted"
     the[IllegalStateException] thrownBy Render.value(marked) should have message "Unresolved markers at s:1:4"
-    val written = AST.Marked(AST.Scalar("v", Set("t"), at(1, 4)), Vector.empty)
-    (written.tags, written.location) shouldBe ((Set("t"), at(1, 4)))
-    val onNull = Tree.Marked(Tree.Null(NoTags, at(1, 4)), Vector.empty)
+    val written = AST.Marked(AST.Scalar("v", Some("t"), at(1, 4)), Vector.empty)
+    (written.tag, written.location) shouldBe ((Some("t"), at(1, 4)))
+    val onNull = Tree.Marked(Tree.Null(None, at(1, 4)), Vector.empty)
     the[IllegalStateException] thrownBy
-      Resolve(Tree.Map(Vector("a"), Map("a" -> onNull), NoTags, at(1, 1))) should have message
+      Resolve(Tree.Map(Vector("a"), Map("a" -> onNull), None, at(1, 1))) should have message
       "Markers on a non-scalar at s:1:4"
   }
 }

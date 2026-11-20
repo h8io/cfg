@@ -5,7 +5,6 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class LaunchTest extends AnyFlatSpec with Matchers {
-  private val NoTags = Set.empty[String]
 
   private def at(line: Int, column: Int): SourceLocation = SourceLocation("s", line, column)
 
@@ -40,7 +39,7 @@ class LaunchTest extends AnyFlatSpec with Matchers {
     loaded("port: #prop(\"app.port\")")("port") shouldBe
       Node.IScalar(
         Id.Key("port", Id.Root),
-        NoTags,
+        None,
         "8080",
         DirectiveLocation(at(1, 7), "prop", SystemPropertyLocation("app.port")))
   }
@@ -64,7 +63,7 @@ class LaunchTest extends AnyFlatSpec with Matchers {
     loaded("home: #env(HOME)")("home") shouldBe
       Node.IScalar(
         Id.Key("home", Id.Root),
-        NoTags,
+        None,
         "/home/x",
         DirectiveLocation(at(1, 7), "env", EnvironmentLocation("HOME")))
   }
@@ -77,7 +76,7 @@ class LaunchTest extends AnyFlatSpec with Matchers {
     // nothing drops the field, so that an earlier definition of the key stands
     value(loaded("port: 80\nport: #prop(nope, optional: true)")("port")) shouldBe "80"
     loaded("port: #env(NOPE, optional: false, default: 80)")("port") shouldBe
-      Node.IScalar(Id.Key("port", Id.Root), NoTags, "80", DirectiveLocation(at(1, 7), "env", at(1, 44)))
+      Node.IScalar(Id.Key("port", Id.Root), None, "80", DirectiveLocation(at(1, 7), "env", at(1, 44)))
     // a value set wins over the default
     value(loaded("port: #prop(\"app.port\", default: 80)")("port")) shouldBe "8080"
   }

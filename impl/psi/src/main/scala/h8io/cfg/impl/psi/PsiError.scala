@@ -281,6 +281,15 @@ final case class ReservedTagRemoval(location: SourceLocation) extends PsiError {
   def message: String = "'@-' is reserved for removing an inherited tag"
 }
 
+/** A second tag on one value, which has at most one (`format.md` §5): `@a @b x`, `@a @a x`, or a tag after a key with
+  * another before the one value in the block below it.
+  */
+final case class SecondTag(location: SourceLocation) extends PsiError {
+  def message: String = "a second tag on one value, which takes at most one"
+
+  override def hint: Option[String] = Some("keep one of the tags")
+}
+
 /** `@name(`: a tag takes no arguments. */
 final case class TagArguments(location: SourceLocation) extends PsiError {
   def message: String = "arguments to a tag, which takes none"

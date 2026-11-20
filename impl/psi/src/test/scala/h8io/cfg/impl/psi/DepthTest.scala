@@ -58,7 +58,7 @@ class DepthTest extends AnyFlatSpec with Matchers {
     parsed("x: 1\na: [[[[]]]]\nb: 2") shouldBe
       Result(
         AST.Document(Vector(AST.Field(::(AST.Key("x", at(1, 1)), Nil), AST.Operator.Merge,
-          AST.Scalar("1", Set.empty, at(1, 4)), None))),
+          AST.Scalar("1", None, at(1, 4)), None))),
         List(beyond(2, 7)))
   }
 

@@ -12,8 +12,6 @@ import java.nio.file.{Files, Path}
 class DirectiveTest extends AnyFlatSpec with Matchers {
   private def at(line: Int, column: Int, source: String = "s"): SourceLocation = SourceLocation(source, line, column)
 
-  private val NoTags = Set.empty[String]
-
   private def directive(
       directiveName: String,
       params: Parameter*)(
@@ -72,11 +70,11 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
       .build
       .fold(e => fail(e.toString), identity)
     val root = loaded(built, "a: 1\nb: #prop(a)\nc: #env(E)")
-    root("a") shouldBe Node.IScalar(keyed("a"), NoTags, "1", at(1, 4))
+    root("a") shouldBe Node.IScalar(keyed("a"), None, "1", at(1, 4))
     root("b") shouldBe
-      Node.IScalar(keyed("b"), NoTags, "2", DirectiveLocation(at(2, 4), "prop", SystemPropertyLocation("a")))
+      Node.IScalar(keyed("b"), None, "2", DirectiveLocation(at(2, 4), "prop", SystemPropertyLocation("a")))
     root("c") shouldBe
-      Node.IScalar(keyed("c"), NoTags, "3", DirectiveLocation(at(3, 4), "env", EnvironmentLocation("E")))
+      Node.IScalar(keyed("c"), None, "3", DirectiveLocation(at(3, 4), "env", EnvironmentLocation("E")))
   }
 
   "A call" should "be reported when its directive is unknown or disabled" in {
@@ -98,8 +96,8 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     received.map(_.toList) shouldBe
       Some(
         List(
-          Node.IScalar(keyed("a"), NoTags, "1", at(1, 13)),
-          Node.IScalar(keyed("c"), NoTags, "3", at(1, 7))))
+          Node.IScalar(keyed("a"), None, "1", at(1, 13)),
+          Node.IScalar(keyed("c"), None, "3", at(1, 7))))
     loaded(loader(d), "#d(1, 2)").isEmpty shouldBe true
     received.map(_.toList.map(_.id)) shouldBe Some(List(keyed("a"), keyed("b")))
     received.map(_.location) shouldBe Some(at(1, 1))
@@ -141,23 +139,26 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     }
   }
 
-  "A fragment of a Node" should "keep its locations behind the call, its tags with those written" in {
-    val scalar = Node.IScalar(Id.Root, Set("t"), "v", SourceLocation("y", 3, 8))
-    loaded(loader(constant("k", Fragment(scalar))), "a: @u #k")("a") shouldBe
-      Node.IScalar(keyed("a"), Set("t", "u"), "v", DirectiveLocation(at(1, 7), "k", SourceLocation("y", 3, 8)))
+  "A fragment of a Node" should "keep its locations behind the call, and its tag unless one is written" in {
+    val scalar = Node.IScalar(Id.Root, Some("t"), "v", SourceLocation("y", 3, 8))
+    val root = loaded(loader(constant("k", Fragment(scalar))), "a: @u #k\nb: #k")
+    root("a") shouldBe
+      Node.IScalar(keyed("a"), Some("u"), "v", DirectiveLocation(at(1, 7), "k", SourceLocation("y", 3, 8)))
+    root("b") shouldBe
+      Node.IScalar(keyed("b"), Some("t"), "v", DirectiveLocation(at(2, 4), "k", SourceLocation("y", 3, 8)))
   }
 
   it should "merge as a map in statement position, overridden by the fields below it" in {
     val root = loaded(loader(constant("m", Fragment(node("x: 1\ny: [2, null]\nz { w: 3 }")))), "x: 0\n#m\nz { v: 4 }")
     def from(line: Int, column: Int) = DirectiveLocation(at(2, 1), "m", SourceLocation("y", line, column))
-    root("x") shouldBe Node.IScalar(keyed("x"), NoTags, "1", from(1, 4))
+    root("x") shouldBe Node.IScalar(keyed("x"), None, "1", from(1, 4))
     root("y") match {
       case seq: Node.ISeq[?] =>
         seq.location shouldBe from(2, 4)
         seq.toList shouldBe
           List(
-            Node.IScalar(Id.Index(0, keyed("y")), NoTags, "2", from(2, 5)),
-            Node.INull(Id.Index(1, keyed("y")), NoTags, from(2, 8)))
+            Node.IScalar(Id.Index(0, keyed("y")), None, "2", from(2, 5)),
+            Node.INull(Id.Index(1, keyed("y")), None, from(2, 8)))
       case other => fail(other.toString)
     }
     root("z") match {
@@ -171,16 +172,16 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
   it should "stand as a map in value position" in {
     loaded(loader(constant("m", Fragment(node("x: 1")))), "a: @t #m")("a") match {
       case map: Node.IMap[?] =>
-        map.tags shouldBe Set("t")
+        map.tag shouldBe Some("t")
         map.location shouldBe DirectiveLocation(at(1, 7), "m", SourceLocation("y", 1, 1))
         map("x") shouldBe
-          Node.IScalar(keyed("a", "x"), NoTags, "1", DirectiveLocation(at(1, 7), "m", SourceLocation("y", 1, 4)))
+          Node.IScalar(keyed("a", "x"), None, "1", DirectiveLocation(at(1, 7), "m", SourceLocation("y", 1, 4)))
       case other => fail(other.toString)
     }
   }
 
   it should "not stand in statement position unless it is a map" in {
-    val scalar = Node.IScalar(Id.Root, NoTags, "v", SourceLocation("y", 1, 1))
+    val scalar = Node.IScalar(Id.Root, None, "v", SourceLocation("y", 1, 1))
     errors(loader(constant("k", Fragment(scalar))), "#k") shouldBe List(DirectiveNotMap(at(1, 1), "k"))
   }
 
@@ -191,15 +192,15 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
         case other => Left(Problem(other.toString))
       }
     }
-    val root = loaded(loader(parsing, constant("k", Fragment(Node.IScalar(Id.Root, NoTags, "v", at(9, 9))))),
+    val root = loaded(loader(parsing, constant("k", Fragment(Node.IScalar(Id.Root, None, "v", at(9, 9))))),
       "#p(text: \"a: 1\\nb: #k\")\nc: @x #p(\"d: 2\")")
-    root("a") shouldBe Node.IScalar(keyed("a"), NoTags, "1", at(1, 4, "t"))
-    root("b") shouldBe Node.IScalar(keyed("b"), NoTags, "v", DirectiveLocation(at(2, 4, "t"), "k", at(9, 9)))
+    root("a") shouldBe Node.IScalar(keyed("a"), None, "1", at(1, 4, "t"))
+    root("b") shouldBe Node.IScalar(keyed("b"), None, "v", DirectiveLocation(at(2, 4, "t"), "k", at(9, 9)))
     root("c") match {
       case map: Node.IMap[?] =>
-        map.tags shouldBe Set("x")
+        map.tag shouldBe Some("x")
         map.location shouldBe at(1, 1, "t")
-        map("d") shouldBe Node.IScalar(keyed("c", "d"), NoTags, "2", at(1, 4, "t"))
+        map("d") shouldBe Node.IScalar(keyed("c", "d"), None, "2", at(1, 4, "t"))
       case other => fail(other.toString)
     }
   }
@@ -278,7 +279,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     }
     val main = write(dir, "main.psi", "#inc(\"ok.psi\")\n#inc(\"optional.psi\")")
     loader(include)(main.toUri.toURL).map(_("x")) shouldBe
-      Right(Node.IScalar(keyed("x"), NoTags, "1", SourceLocation(dir.resolve("ok.psi").toUri.toURL.toString, 1, 4)))
+      Right(Node.IScalar(keyed("x"), None, "1", SourceLocation(dir.resolve("ok.psi").toUri.toURL.toString, 1, 4)))
     val broken = write(dir, "broken.psi", "#inc(\"missing.psi\")\n#inc(\"bytes.psi\")")
     val url = broken.toUri.toURL.toString
     loader(include)(broken.toUri.toURL).left.map(_.errors) shouldBe

@@ -44,7 +44,7 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
         )
       case Tree.Layers(layers) => Tree.Layers(layers.map(layer => located(layer).asInstanceOf[Tree.Layer]))
       case map: Tree.Map =>
-        Tree.Map(map.keys, map.entries.map { case (k, v) => k -> located(v) }, map.tags, nowhere)
+        Tree.Map(map.keys, map.entries.map { case (k, v) => k -> located(v) }, map.tag, nowhere)
       // no loader's marker in these trees
       case marked: Tree.Marked => fail(marked.toString)
     }
@@ -61,9 +61,9 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     Render.document(tree("")) shouldBe ""
   }
 
-  it should "write tags after a `:`, the block of a map below them, tags sorted, and tags of every value" in {
-    Render.document(tree("m: @z @a { k: @t v }\nn: @n null\no: @o []")) shouldBe
-      "m: @a @z\n  k: @t v\nn: @n null\no: @o []\n"
+  it should "write a tag after a `:`, the block of a map below it, and the tag of every value" in {
+    Render.document(tree("m: @z { k: @t v }\nn: @n null\no: @o []")) shouldBe
+      "m: @z\n  k: @t v\nn: @n null\no: @o []\n"
   }
 
   it should "write a sequence as `- ` elements, the first line of a map or sequence on the line of its `- `" in {
@@ -84,24 +84,24 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   }
 
   it should "write a scalar bare only when it reads back as itself" in {
-    Render.value(Tree.Scalar("http://h:8080/x?y=1", Set.empty, nowhere)) shouldBe "http://h:8080/x?y=1"
-    Render.value(Tree.Scalar("it's", Set.empty, nowhere)) shouldBe "it's"
+    Render.value(Tree.Scalar("http://h:8080/x?y=1", None, nowhere)) shouldBe "http://h:8080/x?y=1"
+    Render.value(Tree.Scalar("it's", None, nowhere)) shouldBe "it's"
     for (text <- List("", "null", "a b", "a,b", "a}", "'a'", "@a", "#a", "{a", "[a", "a\"b", "a`b", "//a", "a${b}"))
-      Render.value(Tree.Scalar(text, Set.empty, nowhere)) should startWith("\"")
+      Render.value(Tree.Scalar(text, None, nowhere)) should startWith("\"")
   }
 
   it should "escape in quotes what may not stand raw there, and a literal `${`" in {
-    Render.value(Tree.Scalar("q\"b\\d$x${y}\b\f\n\r\t", Set.empty, nowhere)) shouldBe
+    Render.value(Tree.Scalar("q\"b\\d$x${y}\b\f\n\r\t", None, nowhere)) shouldBe
       "\"q\\\"b\\\\d$x\\${y}\\b\\f\\n\\r\\t\""
-    Render.value(Tree.Scalar("a\u0001\u200B\u0085\u2028\u2029\uD800z\uDC00", Set.empty, nowhere)) shouldBe
+    Render.value(Tree.Scalar("a\u0001\u200B\u0085\u2028\u2029\uD800z\uDC00", None, nowhere)) shouldBe
       "\"a\\u0001\\u200B\\u0085\\u2028\\u2029\\uD800z\\uDC00\""
-    Render.value(Tree.Scalar("\uD83D\uDE00 \u00A0", Set.empty, nowhere)) shouldBe "\"\uD83D\uDE00 \u00A0\""
+    Render.value(Tree.Scalar("\uD83D\uDE00 \u00A0", None, nowhere)) shouldBe "\"\uD83D\uDE00 \u00A0\""
   }
 
   it should "quote a scalar with half a surrogate pair, which no encoding writes, escaping that half" in {
-    Render.value(Tree.Scalar("\uD800", Set.empty, nowhere)) shouldBe "\"\\uD800\""
-    Render.value(Tree.Scalar("a\uDC00", Set.empty, nowhere)) shouldBe "\"a\\uDC00\""
-    Render.value(Tree.Scalar("a\uD83D\uDE00", Set.empty, nowhere)) shouldBe "a\uD83D\uDE00"
+    Render.value(Tree.Scalar("\uD800", None, nowhere)) shouldBe "\"\\uD800\""
+    Render.value(Tree.Scalar("a\uDC00", None, nowhere)) shouldBe "\"a\\uDC00\""
+    Render.value(Tree.Scalar("a\uD83D\uDE00", None, nowhere)) shouldBe "a\uD83D\uDE00"
   }
 
   it should "write substitutions, and concatenations in quotes" in {
@@ -110,7 +110,7 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   }
 
   it should "read back every example as the tree it was written from" in {
-    roundTrip("a: 1\nb { c: x, d { } }\ne: null\nm: @z @a { k: @t v }\nc: [1, [2], {d: 3}, {}, @t {e: 4}]")
+    roundTrip("a: 1\nb { c: x, d { } }\ne: null\nm: @z { k: @t v }\nc: [1, [2], {d: 3}, {}, @t {e: 4}]")
     roundTrip("a: [\"x:\", @t \"z:\", \"-\", [[{b: 1, c: [@t {d: 2}]}]], @u [], $x]")
     roundTrip("`a b`: @`t:x` \"q\\\"b\\\\d$x\\${y}\"\nf: x${g}y\nh: \"${i}\"\ns: \"\"")
   }
@@ -124,8 +124,8 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
       Gen.oneOf("null", "", "a b", "${x}", "\uD800", "a\uDC00", "\uDC00\uD800", "\uD83D\uDE00")
     )
 
-  private val tagSets: Gen[Set[String]] =
-    Gen.frequency(3 -> Gen.const(Set.empty[String]), 1 -> Gen.listOf(strings).map(_.toSet))
+  private val tagOptions: Gen[Option[String]] =
+    Gen.frequency(3 -> Gen.const(None), 1 -> strings.map(Some(_)))
 
   private val path: Gen[Id.Branch] = {
     val step = Gen.oneOf(strings.map(Left(_)), Gen.choose(0, Int.MaxValue).map(Right(_)))
@@ -158,17 +158,17 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     val leaves = Gen.oneOf(
       for {
         t <- strings
-        g <- tagSets
+        g <- tagOptions
       } yield Tree.Scalar(t, g, nowhere),
-      tagSets.map(Tree.Null(_, nowhere)),
+      tagOptions.map(Tree.Null(_, nowhere)),
       for {
         p <- path
         o <- arbitrary[Boolean]
-        g <- tagSets
+        g <- tagOptions
       } yield Tree.Substitution(p, o, g, nowhere),
       for {
         p <- parts
-        g <- tagSets
+        g <- tagOptions
       } yield Tree.Concatenation(p, g, nowhere)
     )
     // a sequence of `- ` elements, an injection alone on its line among them, with one element at least
@@ -177,10 +177,10 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
       es <- Gen.listOfN(n,
         Gen.frequency(4 -> values(depth - 1, inBrackets = false),
           1 -> references.map(r =>
-            Tree.Injection(r.path, r.optional, Set.empty, nowhere, required = true))))
-      g <- tagSets
+            Tree.Injection(r.path, r.optional, None, nowhere, required = true))))
+      g <- tagOptions
     } yield {
-      val elements = if (es.nonEmpty && es.forall(_.isInstanceOf[Tree.Injection])) Tree.Null(Set.empty, nowhere) +: es
+      val elements = if (es.nonEmpty && es.forall(_.isInstanceOf[Tree.Injection])) Tree.Null(None, nowhere) +: es
       else es
       Tree.Sequence(elements.toVector, g, nowhere)
     }
@@ -193,10 +193,10 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
           1 ->
             (for {
               r <- references
-              g <- tagSets
+              g <- tagOptions
             } yield Tree.Injection(r.path, r.optional, g, nowhere, required = false)))
       )
-      g <- tagSets
+      g <- tagOptions
     } yield Tree.Sequence(es.toVector, g, nowhere)
     // in brackets a substitution is an injection, which stands among elements only
     val held = if (inBrackets) leaves.suchThat(!_.isInstanceOf[Tree.Substitution]) else leaves
@@ -215,7 +215,7 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     for {
       n <- Gen.choose(2, 3)
       rs <- Gen.listOfN(n, references)
-      g <- tagSets
+      g <- tagOptions
     } yield Tree.Injections(rs.toVector.map(Right(_)), g, nowhere)
 
   /** What a key written again holds: a map, a substitution or a block of injections alone, no two maps in a row, which
@@ -224,7 +224,7 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   private def layers(depth: Int): Gen[Tree.Layers] = {
     val substitutions = for {
       r <- references
-      g <- tagSets
+      g <- tagOptions
     } yield Tree.Substitution(r.path, r.optional, g, nowhere)
     val layer: Gen[Tree.Layer] = Gen.oneOf(substitutions, injections, maps(depth - 1))
     for {
@@ -242,7 +242,7 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
       n <- Gen.choose(0, 4)
       entries <- Gen.listOfN(
         n, Gen.zip(strings, if (depth == 0) values(0) else Gen.frequency(5 -> values(depth), 1 -> layers(depth))))
-      g <- tagSets
+      g <- tagOptions
     } yield {
       val unique = entries.foldLeft(Vector.empty[(String, Tree.Value)]) { case (all, (k, v)) =>
         if (all.exists(_._1 == k)) all else all :+ (k -> v)
@@ -251,7 +251,7 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     }
 
   it should "write any tree so that it parses and merges back to the same tree" in
-    forAll(maps(3).map(_.copy(tags = Set.empty)), minSuccessful(1000)) { (root: Tree.Map) =>
+    forAll(maps(3).map(_.copy(tag = None)), minSuccessful(1000)) { (root: Tree.Map) =>
       val written = Render.document(root)
       // through bytes, as a file is: what no encoding writes fails here, not in a user's file
       val bytes = StandardCharsets.UTF_8
@@ -274,10 +274,10 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     val reference = Reference(Id.Key("a", Id.Root), optional = false, nowhere)
     val sequence = Tree.Sequence(
       Vector(
-        Tree.Injection(reference.path, optional = false, Set.empty, nowhere, required = false),
-        Tree.Injections(Vector(Right(reference), Right(reference)), Set.empty, nowhere)
+        Tree.Injection(reference.path, optional = false, None, nowhere, required = false),
+        Tree.Injections(Vector(Right(reference), Right(reference)), None, nowhere)
       ),
-      Set.empty,
+      None,
       nowhere
     )
     the[IllegalStateException] thrownBy Render.value(sequence) should have message
@@ -286,15 +286,15 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
 
   it should "not write layers alone, which a key written again for each writes" in {
     val nowhere = SourceLocation("s", 1, 1)
-    val sub = Tree.Substitution(Id.Key("a", Id.Root), optional = false, Set.empty, nowhere)
+    val sub = Tree.Substitution(Id.Key("a", Id.Root), optional = false, None, nowhere)
     the[IllegalStateException] thrownBy Render.value(Tree.Layers(sub, sub)) should have message
       "Layers at s:1:1 with no key to write again"
   }
 
   it should "not write what a call gave in a block of injections, which has no source" in {
     val nowhere = SourceLocation("s", 1, 1)
-    val gave = AST.Injected.Given(AST.Call("d", Vector.empty, nowhere), AST.Null(Set.empty, nowhere))
-    the[IllegalStateException] thrownBy Render.value(Tree.Injections(Vector(Left(gave)), Set.empty, nowhere)) should
+    val gave = AST.Injected.Given(AST.Call("d", Vector.empty, nowhere), AST.Null(None, nowhere))
+    the[IllegalStateException] thrownBy Render.value(Tree.Injections(Vector(Left(gave)), None, nowhere)) should
       have message "What '#d' at s:1:1 gave in a block of injections has no source"
   }
 

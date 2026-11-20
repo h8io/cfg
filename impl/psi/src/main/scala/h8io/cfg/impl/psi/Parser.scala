@@ -437,11 +437,11 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
         keys(head, dotted(token) :: rest, doc)
       case Colon =>
         below(lineColumn)
-        AST.Field(path, AST.Operator.Merge, within(rest.size)(value(next(ValueMode), Set.empty)), doc)
+        AST.Field(path, AST.Operator.Merge, within(rest.size)(value(next(ValueMode), None)), doc)
       case Replace =>
         below(lineColumn)
-        AST.Field(path, AST.Operator.Replace, within(rest.size)(value(next(ValueMode), Set.empty)), doc)
-      case LeftBrace => AST.Field(path, AST.Operator.Merge, within(rest.size)(block(token, Set.empty)), doc)
+        AST.Field(path, AST.Operator.Replace, within(rest.size)(value(next(ValueMode), None)), doc)
+      case LeftBrace => AST.Field(path, AST.Operator.Merge, within(rest.size)(block(token, None)), doc)
       case Tag(_) => fail(token, TagAfterKey(token.location))
       case Newline =>
         val after = skipNewlines(KeyMode)
@@ -468,20 +468,22 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     }
   }
 
-  /** A value from `token`, after the tags already read before it. */
-  @tailrec private def value(token: Token, tags: Set[String]): AST.Value =
+  /** A value from `token`, after the tag already read before it; a second one is reported (`format.md` §5). */
+  @tailrec private def value(token: Token, tag: Option[String]): AST.Value =
     token.kind match {
-      case Tag(name) => value(next(ValueMode), tags + name)
+      case Tag(name) =>
+        if (tag.isDefined) record(SecondTag(token.location))
+        value(next(ValueMode), tag.orElse(Some(name)))
       case Scalar(parts, quoted, markers) =>
-        val value = scalar(token, parts, quoted, tags)
+        val value = scalar(token, parts, quoted, tag)
         if (markers.isEmpty) value else AST.Marked(value, markers)
-      case LeftBrace => block(token, tags)
+      case LeftBrace => block(token, tag)
       case LeftBracket =>
         enter(token)
         val elements = items(ValueMode, Some(Closing(RightBracket, token.location)), documented = true)(sequenceElement)
         ended()
-        AST.Sequence(elements, tags, token.location)
-      case Directive(name) => AST.DirectiveValue(call(token, name), tags)
+        AST.Sequence(elements, tag, token.location)
+      case Directive(name) => AST.DirectiveValue(call(token, name), tag)
       case Name(_, _) => fail(token, BacktickedValue(token.location))
       // inside `[…]` indentation means nothing, and a value goes on its tag's line (§4)
       case Newline if layouts.headOption.flatten.isEmpty =>
@@ -492,7 +494,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
           // a separator, a closing bracket, the end or a doc comment, where skipping stops or which it drops
           case _ => fail(after, MissingValue(token.location, describe(token.kind)))
         }
-      case Newline => indented(token, tags)
+      case Newline => indented(token, tag)
       case DocComment(_) => fail(token, MisplacedDocComment(token.location))
       case _ => fail(token, MissingValue(token.location, describe(token.kind)))
     }
@@ -500,15 +502,15 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
   /** A scalar: a substitution when it is one unquoted `${…}` and nothing else, a concatenation when it holds any other,
     * `null` when it is that word unquoted (§3, §9).
     */
-  private def scalar(token: Token, parts: Vector[Part], quoted: Boolean, tags: Set[String]): AST.Value = {
+  private def scalar(token: Token, parts: Vector[Part], quoted: Boolean, tag: Option[String]): AST.Value = {
     unquoted = !quoted
     substituted = parts.exists(_.isInstanceOf[Reference])
     parts match {
-      case Vector(Reference(path, optional, _)) if !quoted => AST.Substitution(path, optional, tags, token.location)
-      case _ if substituted => AST.Concatenation(parts, tags, token.location)
+      case Vector(Reference(path, optional, _)) if !quoted => AST.Substitution(path, optional, tag, token.location)
+      case _ if substituted => AST.Concatenation(parts, tag, token.location)
       case _ =>
         val value = text(parts)
-        if (!quoted && value == "null") AST.Null(tags, token.location) else AST.Scalar(value, tags, token.location)
+        if (!quoted && value == "null") AST.Null(tag, token.location) else AST.Scalar(value, tag, token.location)
     }
   }
 
@@ -519,9 +521,9 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     deeper = layouts.headOption.flatten.fold(column)(region => math.max(region.width, column))
 
   /** The value below `newline`, which ends the line of a `:`, a tag or a `- `: a block indented deeper than [[deeper]],
-    * with `tags` written before it; with no line deeper, an error (§4).
+    * with `tag` written before it; with no line deeper, an error (§4).
     */
-  private def indented(newline: Token, tags: Set[String]): AST.Value = {
+  private def indented(newline: Token, tag: Option[String]): AST.Value = {
     val threshold = deeper
     val mark = lexer.mark()
     @tailrec def first(): Token = {
@@ -538,17 +540,17 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     after.kind match {
       case End | RightBrace | RightBracket | RightParen => fail(newline, NothingIndented(newline.location))
       case _ if after.location.column <= threshold => fail(newline, NothingIndented(newline.location))
-      case _ => content(after.location, tags, after.location.column)
+      case _ => content(after.location, tag, after.location.column)
     }
   }
 
   /** A block opened by indentation, its first token at `at`, the lines of its block starting at its column: a map, a
-    * sequence of `- ` elements, one value, which takes `tags` too, or substitutions and calls alone, two or more, which
+    * sequence of `- ` elements, one value, which takes `tag` too, or substitutions and calls alone, two or more, which
     * what they find or give makes a map or a sequence (§4, §9). Among fields or `- ` elements, a substitution or a call
     * alone on its line is an injection. The first item on its line goes below to a block deeper than `first`, as it
     * would after a `- `.
     */
-  private def content(at: SourceLocation, tags: Set[String], first: Int): AST.Value = {
+  private def content(at: SourceLocation, tag: Option[String], first: Int): AST.Value = {
     val elements = Vector.newBuilder[AST.Element]
     val fields = Vector.newBuilder[AST.Statement]
     // a value with its doc comment, where that stands, and its first token
@@ -601,10 +603,9 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
             ()
           case _ =>
             val start = itemMark
-            val tags = this.tags(token)
             // tags alone on their line, their value in a block below: a block in a block, which counts as a level
             var below = false
-            if (tags.nonEmpty) {
+            if (tagged(token)) {
               val ahead = lexer.mark()
               val after = next(KeyMode)
               if (after.kind.isInstanceOf[Name] && lexer.fieldAhead()) fail(after, TagBeforeField(token.location))
@@ -619,7 +620,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
               levels += 1
             }
             val value =
-              try this.value(first, Set.empty)
+              try this.value(first, None)
               finally if (below) levels -= 1
             kind match {
               case Fields => field(value, doc, first)
@@ -634,27 +635,29 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     } finally if (counted) levels -= 1
     ended()
     kind match {
-      case Elements => AST.Sequence(elements.result(), tags, at)
-      case Fields => AST.Block(fields.result(), tags, at)
+      case Elements => AST.Sequence(elements.result(), tag, at)
+      case Fields => AST.Block(fields.result(), tag, at)
       case _ =>
         val all = values.result()
         val items = all.flatMap { case (value, _, _) => injection(value) }
         all match {
           case _ +: _ +: _ if items.size == all.size =>
             AST.Injections(
-              items.map(_.fold[AST.Injected](AST.Injected.Calling(_), AST.Injected.Referring(_))), tags, at)
-          case (value, doc, _) +: rest =>
+              items.map(_.fold[AST.Injected](AST.Injected.Calling(_), AST.Injected.Referring(_))), tag, at)
+          case (value, doc, start) +: rest =>
+            // the tag after the key and one before the value are two on one value (§4, §5)
+            if (tag.isDefined && value.tag.isDefined) record(SecondTag(start.location))
             doc.foreach { case (_, at) => record(MisplacedDocComment(at)) }
             rest.foreach { case (_, _, at) => record(SecondValue(at.location)) }
-            lone(value, tags)
+            lone(value, tag)
           // every item broken, and reported
-          case _ => AST.Block(Vector.empty, tags, at)
+          case _ => AST.Block(Vector.empty, tag, at)
         }
     }
   }
 
   /** What `value`, alone on its line among fields or elements, injects: a call or a reference; none when it is anything
-    * else, reported as `otherwise`, or tagged, its tags having no node to go to.
+    * else, reported as `otherwise`, or tagged, its tag having no node to go to.
     */
   private def injected(value: AST.Value, at: Token, otherwise: => PsiError): Option[Either[AST.Call, Reference]] = {
     val item = injection(value)
@@ -669,38 +672,37 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
   /** What `value` injects where it stands alone: a call or a reference, untagged; none when it is anything else. */
   private def injection(value: AST.Value): Option[Either[AST.Call, Reference]] =
     value match {
-      case AST.Substitution(path, optional, tags, location) if tags.isEmpty =>
+      case AST.Substitution(path, optional, tag, location) if tag.isEmpty =>
         Some(Right(Reference(path, optional, location)))
-      case AST.DirectiveValue(call, tags) if tags.isEmpty => Some(Left(call))
+      case AST.DirectiveValue(call, tag) if tag.isEmpty => Some(Left(call))
       case _ => None
     }
 
-  /** The tags from `token` on, read past; none when it is no tag. */
-  private def tags(token: Token): Set[String] =
+  /** Whether `token` is a tag; the tags from it on are read past. */
+  private def tagged(token: Token): Boolean =
     token.kind match {
-      case Tag(name) =>
+      case Tag(_) =>
         val mark = lexer.mark()
-        val after = next(KeyMode)
-        val rest = tags(after)
-        if (rest.isEmpty) rewind(mark)
-        rest + name
-      case _ => Set.empty
+        if (!tagged(next(KeyMode))) rewind(mark)
+        true
+      case _ => false
     }
 
-  /** One value alone in a block opened by indentation, with the `tags` written before the block added to its own: a
-    * substitution or a call alone after a key or a `- ` is its value, whole (§4, §9).
+  /** One value alone in a block opened by indentation, which takes the `tag` written before the block when it has none
+    * of its own, a second being reported before: a substitution or a call alone after a key or a `- ` is its value,
+    * whole (§4, §9).
     */
-  private def lone(value: AST.Value, tags: Set[String]): AST.Value =
+  private def lone(value: AST.Value, tag: Option[String]): AST.Value =
     value match {
-      case v: AST.DirectiveValue => v.copy(tags = tags ++ v.tags)
-      case v: AST.Scalar => v.copy(tags = tags ++ v.tags)
-      case v: AST.Null => v.copy(tags = tags ++ v.tags)
-      case v: AST.Block => v.copy(tags = tags ++ v.tags)
-      case v: AST.Sequence => v.copy(tags = tags ++ v.tags)
-      case v: AST.Substitution => v.copy(tags = tags ++ v.tags)
-      case v: AST.Injections => v.copy(tags = tags ++ v.tags)
-      case v: AST.Concatenation => v.copy(tags = tags ++ v.tags)
-      case AST.Marked(inner, markers) => AST.Marked(lone(inner, tags), markers)
+      case v: AST.DirectiveValue => v.copy(tag = v.tag.orElse(tag))
+      case v: AST.Scalar => v.copy(tag = v.tag.orElse(tag))
+      case v: AST.Null => v.copy(tag = v.tag.orElse(tag))
+      case v: AST.Block => v.copy(tag = v.tag.orElse(tag))
+      case v: AST.Sequence => v.copy(tag = v.tag.orElse(tag))
+      case v: AST.Substitution => v.copy(tag = v.tag.orElse(tag))
+      case v: AST.Injections => v.copy(tag = v.tag.orElse(tag))
+      case v: AST.Concatenation => v.copy(tag = v.tag.orElse(tag))
+      case AST.Marked(inner, markers) => AST.Marked(lone(inner, tag), markers)
     }
 
   /** An element after its `- `, `dash`: a value on the dash's line, the lines of a block it opens aligned under its
@@ -711,23 +713,23 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     val first = next(KeyMode)
     deeper = dash.location.column
     first.kind match {
-      case Newline => AST.Element(indented(first, Set.empty), doc)
+      case Newline => AST.Element(indented(first, None), doc)
       case End | Comma | RightBrace | RightBracket | RightParen =>
         fail(first, MissingValue(first.location, describe(first.kind)))
       case _ =>
         rewind(mark)
-        AST.Element(content(first.location, Set.empty, dash.location.column), doc)
+        AST.Element(content(first.location, None, dash.location.column), doc)
     }
   }
 
-  private def block(open: Token, tags: Set[String]): AST.Block = {
+  private def block(open: Token, tag: Option[String]): AST.Block = {
     enter(open)
     val statements =
       items(
         KeyMode, Some(Closing(RightBrace, open.location)), documented = true, Some(new Region(-1, indented = false)))(
         statement)
     ended()
-    AST.Block(statements, tags, open.location)
+    AST.Block(statements, tag, open.location)
   }
 
   /** After a container or a directive, a word that follows is no second word of a scalar. */
@@ -738,7 +740,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
 
   /** An element in `[…]`, where a substitution or a call is an injection of what it finds or gives (§9). */
   private def sequenceElement(first: Token, doc: Option[String]): AST.Element = {
-    val read = value(first, Set.empty)
+    val read = value(first, None)
     read match {
       case _: AST.Substitution | _: AST.DirectiveValue => AST.Element(read, doc, AST.Put.Found)
       case _ => AST.Element(read, doc)

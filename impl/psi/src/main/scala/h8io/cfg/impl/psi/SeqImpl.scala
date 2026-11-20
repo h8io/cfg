@@ -9,7 +9,7 @@ private[psi] final case class SeqImpl[+I <: Id](id: I, tree: Tree.Sequence) exte
     if (childId.fits(size)) wrap(childId, tree.elements(index)) else Node.None(childId)
   }
 
-  override def tags: Set[String] = tree.tags
+  override def tag: Option[String] = tree.tag
 
   override def iterator: Iterator[Node.ISome[Id.Index]] =
     tree.elements.iterator.zipWithIndex.map { case (value, i) => wrap(Id.Index(i, id), value) }

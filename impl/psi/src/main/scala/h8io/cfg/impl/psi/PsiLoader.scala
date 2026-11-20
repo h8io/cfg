@@ -63,7 +63,7 @@ final class PsiLoader private[psi] (settings: Settings) {
           // those directives parsed right after the one that parsed them
           val sources = (name :: included) ++ rest.flatMap { case (_, name, included) => name :: included }
           Result(MapImpl(Id.Root, merged.value), PsiLoader.distinct(merged.errors).sortBy(_.location.order(sources)))
-        case Nil => Result.pure(MapImpl(Id.Root, Tree.Map.empty(Set.empty, NoSourceLocation)))
+        case Nil => Result.pure(MapImpl(Id.Root, Tree.Map.empty(None, NoSourceLocation)))
       }).toEither
     } yield root
   }

@@ -9,13 +9,13 @@ import org.scalatest.matchers.should.Matchers
 class MapImplTest extends AnyFlatSpec with Matchers with Inside {
   "apply" should "return a Node.Scalar object" in
     inside(MapImpl(Id.Root, yaml"scalar: 42")("scalar")) {
-      case Node.Scalar(Id.Key("scalar", Id.Root), NoTags, "42", location) =>
+      case Node.Scalar(Id.Key("scalar", Id.Root), None, "42", location) =>
         location.description shouldBe s"$Label: 1:9"
     }
 
   it should "return a Node.Null object" in {
     MapImpl(Id.Root, yaml"scalar: ~")("scalar") should matchPattern {
-      case Node.Null(Id.Key("scalar", Id.Root), NoTags, _) =>
+      case Node.Null(Id.Key("scalar", Id.Root), None, _) =>
     }
   }
 
@@ -29,8 +29,8 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside {
       val id = seq.id
       seq.iterator.map {
         inside(_) {
-          case Node.Scalar(Id.Index(_, `id`), NoTags, scalar, _) => Some(scalar)
-          case Node.Null(Id.Index(_, `id`), NoTags, _) => None
+          case Node.Scalar(Id.Index(_, `id`), None, scalar, _) => Some(scalar)
+          case Node.Null(Id.Index(_, `id`), None, _) => None
         }
       }.toList should contain theSameElementsInOrderAs List(Some("a"), None, Some("b"))
     }
@@ -39,8 +39,8 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside {
     inside(MapImpl(Id.Root, yaml"map: {a: ~, b: c}")("map")) { case map: Node.IMap[?] =>
       map.iterator.map {
         inside(_) {
-          case Node.Scalar(Id.Key(key, Id.Key("map", Id.Root)), NoTags, scalar, _) => key -> Some(scalar)
-          case Node.Null(Id.Key(key, Id.Key("map", Id.Root)), NoTags, _) => key -> None
+          case Node.Scalar(Id.Key(key, Id.Key("map", Id.Root)), None, scalar, _) => key -> Some(scalar)
+          case Node.Null(Id.Key(key, Id.Key("map", Id.Root)), None, _) => key -> None
         }
       }.toList should contain theSameElementsInOrderAs List("a" -> None, "b" -> Some("c"))
     }
@@ -51,15 +51,15 @@ class MapImplTest extends AnyFlatSpec with Matchers with Inside {
 dup: 1
 other: x
 dup: 2
-""")("dup") should matchPattern { case Node.Scalar(Id.Key("dup", Id.Root), NoTags, "2", _) => }
+""")("dup") should matchPattern { case Node.Scalar(Id.Key("dup", Id.Root), None, "2", _) => }
   }
 
   "tags" should "be empty when the source carries no tag" in {
-    MapImpl(Id.Root, yaml"a: 1").tags shouldBe Set.empty
+    MapImpl(Id.Root, yaml"a: 1").tag shouldBe None
   }
 
   it should "hold the tag written in the source" in {
-    MapImpl(Id.Root, yaml"!postgres {a: 1}").tags shouldBe Set("postgres")
+    MapImpl(Id.Root, yaml"!postgres {a: 1}").tag shouldBe Some("postgres")
   }
 
   "iterator" should "return a correct sequence of nodes" in {
@@ -70,8 +70,8 @@ b: c
 "null": "null"
 """).iterator.map {
       inside(_) {
-        case Node.Scalar(Id.Key(key, Id.Root), NoTags, scalar, _) => key -> Some(scalar)
-        case Node.Null(Id.Key(key, Id.Root), NoTags, _) => key -> None
+        case Node.Scalar(Id.Key(key, Id.Root), None, scalar, _) => key -> Some(scalar)
+        case Node.Null(Id.Key(key, Id.Root), None, _) => key -> None
       }
     }.toList should contain theSameElementsInOrderAs List("a" -> None, "b" -> Some("c"), "null" -> Some("null"))
   }
@@ -83,7 +83,7 @@ dup: 1
 other: x
 dup: 2
 """).iterator.map {
-      inside(_) { case Node.Scalar(Id.Key(key, Id.Root), NoTags, scalar, _) => key -> scalar }
+      inside(_) { case Node.Scalar(Id.Key(key, Id.Root), None, scalar, _) => key -> scalar }
     }.toList should contain theSameElementsInOrderAs List("other" -> "x", "dup" -> "2")
   }
 
@@ -112,8 +112,8 @@ a: 1
   }
 
   it should "keep the tag of the source mapping" in {
-    (MapImpl(Id.Root, yaml"!postgres {a: 1, b: 2}") - "a").tags shouldBe Set("postgres")
-    (MapImpl(Id.Root, yaml"{a: 1, b: 2}") - "a").tags shouldBe Set.empty
+    (MapImpl(Id.Root, yaml"!postgres {a: 1, b: 2}") - "a").tag shouldBe Some("postgres")
+    (MapImpl(Id.Root, yaml"{a: 1, b: 2}") - "a").tag shouldBe None
   }
 
   it should "return the existent node if key does not exist" in {
@@ -130,7 +130,7 @@ a: 1
     val text =
       "{a: !!str hello, b: !!int 1, c: !!seq [x], d: !!map {e: f}, g: !postgres h, i: 2, j: [k], l: &m {n: o}, " +
         "p: !!map &q {r: s}, t: *m, u: *q}"
-    val tags = (node: Node.IMap[?]) => node.iterator.map(child => child.id.key -> child.tags).toList
+    val tags = (node: Node.IMap[?]) => node.iterator.map(child => child.id.key -> child.tag).toList
     val shown = MapImpl(Id.Root, yaml"$text").toString
     shown should include("&q")
     tags(MapImpl(Id.Root, yaml"$shown")) shouldBe tags(MapImpl(Id.Root, yaml"$text"))
@@ -141,7 +141,7 @@ a: 1
   it should "render a scalar the core schema resolves with no tag" in {
     val shown = MapImpl(Id.Root, yaml"{a: Null, b: 0x10, c: TRUE, d: ~, e: 'Null', f: 1e3}").toString
     shown shouldBe "{a: Null, b: 0x10, c: TRUE, d: ~, e: 'Null', f: 1e3}\n"
-    MapImpl(Id.Root, yaml"$shown").iterator.map(_.tags).toSet shouldBe Set(NoTags)
+    MapImpl(Id.Root, yaml"$shown").iterator.map(_.tag).toSet shouldBe Set(None)
   }
 
   it should "render the entries sharing a key only once" in {

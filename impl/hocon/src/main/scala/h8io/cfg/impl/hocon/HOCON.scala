@@ -24,7 +24,7 @@ import java.net.URL
   * the parsed Java object, so the string stored in `Node.IScalar` may not match the original text in the file exactly
   * (e.g. a number written as `1e5` may come back as `100000.0`).
   *
-  * YAML tags are not propagated; `tags` is always empty.
+  * YAML tags are not propagated; `tag` is always `None`.
   *
   * ==Trusted input only==
   * Typesafe Config parses and resolves by recursion with no limit of its own: a source nested a few thousand levels
