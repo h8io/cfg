@@ -97,13 +97,18 @@ private[psi] object Token {
       case End => "the end of the source"
       case DocComment(_) => "a doc comment"
       case Name(value, quoted) => Message.quote(if (quoted) Id.Key(value, Id.Root).path else value)
-      case Tag(name) => Message.quote("@" + name)
+      case Tag(name) => Message.quote("@" + named(name))
       case Integer(value) => Message.quote(value)
-      case Directive(name) => Message.quote("#" + Id.Key(name, Id.Root).path)
+      case Directive(name) => Message.quote("#" + named(name))
       case Scalar(parts, quoted, _) =>
         val text = written(parts)
         if (quoted) "a quoted string " + Message.cut("\"" + text + "\"") else Message.quote(text)
     }
+
+  /** A tag's or a directive's name as written after its sign, in backticks when it is not bare; nothing when it is
+    * missing, the lexer having reported a `#` or an `@` with no name after it.
+    */
+  private def named(name: String): String = if (name.isEmpty) "" else Id.Key(name, Id.Root).path
 
   /** A scalar's parts as text, a substitution as `${path}`. */
   def written(parts: Vector[Part]): String =
