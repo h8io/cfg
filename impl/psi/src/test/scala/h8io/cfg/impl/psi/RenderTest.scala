@@ -43,7 +43,12 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
           nowhere
         )
       case Tree.Layers(layers) => Tree.Layers(layers.map(layer => located(layer).asInstanceOf[Tree.Layer]))
-      case map: Tree.Map =>
+      case written: Tree.Map =>
+        // a block merged over what may turn out no map is kept as written: its statements are what it holds
+        val map = written.steps.foldLeft(written.copy(steps = Vector.empty)) {
+          case (map, Tree.Step.Statements(statements)) => new Merge().block(map, statements)
+          case (_, step) => fail(step.toString)
+        }
         Tree.Map(map.keys, map.entries.map { case (k, v) => k -> located(v) }, map.tag, nowhere)
       // no loader's marker in these trees
       case marked: Tree.Marked => fail(marked.toString)

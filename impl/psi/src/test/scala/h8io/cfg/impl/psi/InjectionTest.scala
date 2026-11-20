@@ -321,6 +321,39 @@ class InjectionTest extends AnyFlatSpec with Matchers {
     // what is written after it merges as it is written, its errors included
     errors("b { $missing, x: $a, x { q: 2 } }") shouldBe
       List(UnresolvedSubstitution(at(1, 5), "missing"), UnresolvedSubstitution(at(1, 18), "a"))
+    // each group at the same keys, apart: what one resolved is not taken for another's
+    errors("a { $first, x: $one, $second, x: $two }") shouldBe
+      List(
+        UnresolvedSubstitution(at(1, 5), "first"),
+        UnresolvedSubstitution(at(1, 16), "one"),
+        UnresolvedSubstitution(at(1, 22), "second"),
+        UnresolvedSubstitution(at(1, 34), "two")
+      )
+    errors("a { $first, x { y: $one }, $second, x { y: $two } }") shouldBe
+      List(
+        UnresolvedSubstitution(at(1, 5), "first"),
+        UnresolvedSubstitution(at(1, 20), "one"),
+        UnresolvedSubstitution(at(1, 28), "second"),
+        UnresolvedSubstitution(at(1, 44), "two")
+      )
+    // what a group resolved elsewhere is kept, and counted once: `o`, resolved there first, copies 3 nodes, and each `x`
+    // 3 more
+    val counted = "a { $first, x: $o, $second, x: $o }\np: [1, 2]\no: $p"
+    errors(counted, loader(nodes = 9)) shouldBe
+      List(UnresolvedSubstitution(at(1, 5), "first"), UnresolvedSubstitution(at(1, 20), "second"))
+    errors(counted, loader(nodes = 8)) shouldBe
+      List(
+        UnresolvedSubstitution(at(1, 5), "first"),
+        UnresolvedSubstitution(at(1, 20), "second"),
+        ResolutionTooLarge(at(1, 32), "o", 8))
+    // and so is it from a group within a group
+    errors("a { $first, x { $f, y: $o, $s, y: $o }, $second }\np: [1]\no: $p", loader(nodes = 6)) shouldBe
+      List(
+        UnresolvedSubstitution(at(1, 5), "first"),
+        UnresolvedSubstitution(at(1, 17), "f"),
+        UnresolvedSubstitution(at(1, 28), "s"),
+        UnresolvedSubstitution(at(1, 41), "second")
+      )
   }
 
   "A block with an injection of its own, merged with one an injection brings" should "keep where each came from" in {

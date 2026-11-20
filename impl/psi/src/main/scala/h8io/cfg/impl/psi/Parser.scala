@@ -678,15 +678,23 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
       case _ => None
     }
 
-  /** Whether `token` is a tag; the tags from it on are read past. */
+  /** Whether `token` is a tag; the tags from it on are read past, however many, with no recursion. */
   private def tagged(token: Token): Boolean =
     token.kind match {
       case Tag(_) =>
-        val mark = lexer.mark()
-        if (!tagged(next(KeyMode))) rewind(mark)
+        pastTags()
         true
       case _ => false
     }
+
+  /** Reads past the tags ahead, up to the first token that is none. */
+  @tailrec private def pastTags(): Unit = {
+    val mark = lexer.mark()
+    next(KeyMode).kind match {
+      case Tag(_) => pastTags()
+      case _ => rewind(mark)
+    }
+  }
 
   /** One value alone in a block opened by indentation, which takes the `tag` written before the block when it has none
     * of its own, a second being reported before: a substitution or a call alone after a key or a `- ` is its value,

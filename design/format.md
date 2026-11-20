@@ -808,7 +808,10 @@ give `a { port: 1 }`, and for a block of injections alone (§9), calls in it inc
 depends on what its first item finds or gives. It holds at every depth of a recursive merge, and
 `a.port: 1` is `a { port: 1 }` (§4). What a value that is no map replaces, layers before it
 included, is not resolved, as what a value written over it is not; a lookup through the key, `${a.port}`,
-merges its layers first. `:=` replaces whatever stood there, as it always did.
+merges its layers first. `:=` replaces whatever stood there, as it always did. A block written over
+such a layer is kept as written and merged once the layer is resolved, field by field, as it would be
+where the substitution stands: a `:=` in it replaces at any depth, and a value in it replaces what is
+before it in turn.
 
 There is deliberately no append operator. Appending to a sequence or concatenating values is a job for
 an expression in value position — `a: ${b} + ${c}` — which can be added later (§13); replacement

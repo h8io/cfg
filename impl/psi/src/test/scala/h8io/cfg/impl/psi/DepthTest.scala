@@ -182,7 +182,11 @@ class DepthTest extends AnyFlatSpec with Matchers {
       Seq.fill(n)("a").mkString(".") + ": 1",
       "#x(" + "(" * n,
       "a: 1 " + "[" * n,
-      (1 to n).map(i => "a" + i.toString + ": $" + "{a" + (i + 1).toString + "}").mkString("\n")
+      (1 to n).map(i => "a" + i.toString + ": $" + "{a" + (i + 1).toString + "}").mkString("\n"),
+      // tags alone on their line, their value below: read past with no recursion
+      "a:\n  " + "@t " * n + "1",
+      "a:\n  - " + "@t " * n + "1",
+      "a:\n  " + "@t " * n + "\n    1"
     )
     inputs.map(text => Psi.parse("s", text).isLeft) shouldBe inputs.map(_ => true)
   }
