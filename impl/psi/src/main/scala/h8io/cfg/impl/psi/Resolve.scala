@@ -45,6 +45,9 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     */
   private val resolved = mutable.Map.empty[Id, Option[(Resolution, Int)]]
 
+  /** The positions `once` has begun resolving since a group of abandoned fields began, when one is being resolved. */
+  private var marked: Option[mutable.ListBuffer[Id]] = None
+
   /** The nodes grafts have copied, and the characters of the scalars concatenations have built. */
   private var nodes = 0L
   private var characters = 0L
@@ -57,7 +60,7 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
   private val merging = new Merge
 
   /** By position, the fields written after an injection that failed, merged into nothing, those between two injections
-    * apart: resolved once the map has failed, for their own errors alone.
+    * apart, in the order written: resolved once the map has failed, for their own errors alone.
     */
   private val abandoned = mutable.Map.empty[Id, List[Tree.Map]]
 
@@ -174,7 +177,7 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
         case Tree.Step.Graft(content) => over(current, content)
       }
     }
-    if (failures.nonEmpty) abandoned(id) = rest
+    if (failures.nonEmpty) abandoned(id) = rest.reverse
     failure(failures.toList).toLeft(done)
   }
 
@@ -185,9 +188,25 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     completion match {
       case Right(done) => this.map(id, done).map(Some(_))
       case Left(failure) =>
-        abandoned.remove(id).foreach(_.foreach(fields => this.map(id, fields)))
+        abandoned.remove(id).foreach(_.foreach(fields => apart(id, fields)))
         Left(failure)
     }
+
+  /** Abandoned `fields` of the map at `id` resolved for their own errors, apart from the other groups: they stand at
+    * the same positions, so what a group before resolved below `id` is forgotten after it, rather than taken for
+    * theirs. What it resolved elsewhere stays, not to be counted again.
+    */
+  private def apart(id: Id, fields: Tree.Map): Unit = {
+    val outer = marked
+    val begun = mutable.ListBuffer.empty[Id]
+    marked = Some(begun)
+    try {
+      val _ = this.map(id, fields)
+    } finally marked = outer
+    val (forgotten, kept) = begun.partition(below(_, id))
+    resolved --= forgotten
+    outer.foreach(_ ++= kept)
+  }
 
   /** The map `current` with the fields of the map at `path` merged into it; unchanged when an optional injection finds
     * nothing.
@@ -386,6 +405,7 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       case Some(None) => Left(Cycle)
       case None =>
         resolved(id) = None
+        marked.foreach(_ += id)
         val outer = deepest
         deepest = steps
         val done = resolution
@@ -537,6 +557,13 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
 }
 
 private[psi] object Resolve {
+
+  /** Whether `at` is a position below `id`. */
+  @tailrec private def below(at: Id, id: Id): Boolean =
+    at match {
+      case branch: Id.Branch => branch.parent == id || below(branch.parent, id)
+      case _ => false
+    }
 
   /** Why a node did not resolve: it failed, its error already reported, or it is part of a cycle not reported yet. */
   sealed trait Failure

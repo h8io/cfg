@@ -60,8 +60,9 @@ private[psi] final class Merge {
       case (earlier: Tree.Layer, AST.Substitution(path, optional, tag, location)) =>
         Tree.Layers(earlier, Tree.Substitution(path, optional, tag, location))
       case (earlier: Tree.Layer, injections: AST.Injections) => Tree.Layers(earlier, this.injections(injections))
+      // kept as written, so that a `:=` in it replaces what the earlier finds, once it is found
       case (Merge.Unknown(earlier), AST.Block(statements, tag, location)) =>
-        Tree.Layers(earlier, block(Tree.Map.empty(tag, location), statements))
+        Tree.Layers(earlier, Tree.Map.empty(tag, location).copy(steps = Merge.steps(statements)))
       case _ => tree(value)
     }
 
@@ -117,6 +118,15 @@ private[psi] object Merge {
         case _ => None
       }
   }
+
+  /** `statements` kept as steps, merged in order once what they merge over is known. */
+  private def steps(statements: Vector[AST.Statement]): Vector[Tree.Step] =
+    statements.foldLeft(Vector.empty[Tree.Step]) {
+      case (steps, statement) if steps.nonEmpty => step(steps, statement)
+      case (_, AST.InjectionStatement(path, optional, location, _)) =>
+        Vector(Tree.Step.Injection(path, optional, location))
+      case (_, statement) => Vector(Tree.Step.Statements(Vector(statement)))
+    }
 
   /** `steps` with `statement` after them: an injection a step of its own, any other statement among those after the
     * last.

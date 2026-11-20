@@ -172,6 +172,45 @@ class ResolveTest extends AnyFlatSpec with Matchers {
       "k:\n  p: 1\n  s: 1\n  q: 2"
   }
 
+  it should "merge a block over what it finds as written there, a `:=` in it replacing" in {
+    def shown(text: String): String = Psi.parse("s", text).fold(e => fail(e.toString), _("a").toString)
+    shown("b { n { old: 1 } }\na: $b\na { n := { fresh: 2 } }") shouldBe "n:\n  fresh: 2"
+    shown("b { n { old: 1 } }\na: $b\na.n := { fresh: 2 }") shouldBe "n:\n  fresh: 2"
+    shown("b: @t { n { old: 1 } }\na: $b\na: @u { n := { fresh: 2 } }") shouldBe "@u\n  n:\n    fresh: 2"
+    shown("a: $?b\na { n := { fresh: 2 } }") shouldBe "n:\n  fresh: 2"
+    // an injection in the block merges where it is written, before the `:=` or after it
+    shown("b { n { old: 1 }, k: 1 }\nc { n { c: 1 } }\na: $b\na { $c, n := { fresh: 2 } }") shouldBe
+      "n:\n  fresh: 2\nk: 1"
+    shown("b { n { old: 1 }, k: 1 }\nc { n { c: 1 } }\na: $b\na { n := { fresh: 2 }, $c }") shouldBe
+      "n:\n  fresh: 2\n  c: 1\nk: 1"
+    // over a block of injections alone, and with more merged after it
+    shown("b { n { old: 1 } }\nx { k: 1 }\na:\n  $b\n  $x\na { n := { fresh: 2 } }") shouldBe
+      "n:\n  fresh: 2\nk: 1"
+    shown("b { n { old: 1 } }\na: $b\na { n := { fresh: 2 } }\na { n { more: 3 } }") shouldBe
+      "n:\n  fresh: 2\n  more: 3"
+    // what is written replaces in turn, as it would where the substitution stands
+    shown("b { n { old: 1 } }\na: $b\na { n: 1, n { new: 2 } }") shouldBe "n:\n  new: 2"
+    errors("b { n { old: 1 } }\na: $b\na { n := { fresh: $missing } }") shouldBe
+      List(UnresolvedSubstitution(at(3, 19), "missing"))
+  }
+
+  "Layers within layers, which no source merges into" should "merge as the layers they hold, in turn" in {
+    val site = at(1, 1)
+    def map(key: String, value: String): Tree.Map =
+      Tree.Map(Vector(key), scala.collection.immutable.Map(key -> Tree.Scalar(value, None, site)), None, site)
+    def sub(key: String): Tree.Substitution = Tree.Substitution(Id.Key(key, Id.Root), optional = false, None, site)
+    val layers = Tree.Layers(Vector(sub("b"), Tree.Layers(Vector(sub("c"), map("z", "3")))))
+    val root = Tree.Map(
+      Vector("b", "c", "a"),
+      scala.collection.immutable.Map("b" -> map("x", "1"), "c" -> map("y", "2"), "a" -> layers),
+      None,
+      site)
+    val resolved =
+      Resolve(root, PsiLoader.DefaultDepthLimit, PsiLoader.DefaultNodeLimit, PsiLoader.DefaultCharacterLimit)
+    resolved.errors shouldBe Nil
+    Render.value(resolved.value.entries("a")) shouldBe "x: 1\ny: 2\nz: 3"
+  }
+
   it should "refer to itself only through a cycle" in {
     errors("a: $a.x\na.x: 1") shouldBe List(SubstitutionCycle(at(1, 4), "a.x"))
   }

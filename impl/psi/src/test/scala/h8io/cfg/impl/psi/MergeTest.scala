@@ -46,6 +46,14 @@ class MergeTest extends AnyFlatSpec with Matchers {
 
   private def top(entries: (String, Value)*): Tree.Map = map(loc(1, 1))(entries*)
 
+  /** A block merged over what may turn out no map, kept as written, its statements merged once that is resolved. */
+  private def written(site: SourceLocation)(statements: AST.Statement*): Tree.Map =
+    Tree.Map(Vector.empty, immutable.Map.empty, None, site, Vector(Step.Statements(statements.toVector)))
+
+  /** `key: value`, as parsed. */
+  private def field(key: String, line: Int, column: Int, value: AST.Value): AST.Field =
+    AST.Field(::(AST.Key(key, loc(line, column)), Nil), AST.Operator.Merge, value, None)
+
   "Merge" should "read a source with no duplicate keys as written, its keys in order" in {
     root("b: 1\na: null\nc: [x, {d: 2}]\ne {}") shouldBe
       top(
@@ -147,7 +155,7 @@ class MergeTest extends AnyFlatSpec with Matchers {
   it should "keep a map and a substitution merged either way as layers, for resolution, `:=` replacing" in {
     root("a: ${s}\nb { p: 1 }\nc: ${?s}\nd: 1\na { p: 1 }\nb: ${s}\nc: ${t}\nd := ${s}") shouldBe
       top(
-        "a" -> Layers(Vector(sub("s", 1, 4), map(loc(5, 3))("p" -> str("1", 5, 8)))),
+        "a" -> Layers(Vector(sub("s", 1, 4), written(loc(5, 3))(field("p", 5, 5, AST.Scalar("1", None, loc(5, 8)))))),
         "b" -> Layers(Vector(map(loc(2, 3))("p" -> str("1", 2, 8)), sub("s", 6, 4))),
         "c" -> Layers(Vector(sub("s", 3, 4, optional = true), sub("t", 7, 4))),
         "d" -> sub("s", 8, 6)
@@ -159,10 +167,31 @@ class MergeTest extends AnyFlatSpec with Matchers {
     root("g { h: ${x}, i: 1 }\ng { h { j: 1 } }\nk: ${x}\nk.l: 1") shouldBe
       top(
         "g" -> map(loc(2, 3), loc(1, 3))(
-          "h" -> Layers(Vector(sub("x", 1, 8), map(loc(2, 7))("j" -> str("1", 2, 12)))),
+          "h" ->
+            Layers(Vector(sub("x", 1, 8), written(loc(2, 7))(field("j", 2, 9, AST.Scalar("1", None, loc(2, 12)))))),
           "i" -> str("1", 1, 17)),
-        "k" -> Layers(Vector(sub("x", 3, 4), map(loc(4, 1))("l" -> str("1", 4, 6))))
+        "k" -> Layers(Vector(sub("x", 3, 4), written(loc(4, 1))(field("l", 4, 3, AST.Scalar("1", None, loc(4, 6))))))
       )
+  }
+
+  it should "keep a block merged over what may turn out no map as written, an injection in it a step of its own" in {
+    root("a: ${x}\na { $y, p := 1, $z }") shouldBe
+      top("a" -> Layers(Vector(
+        sub("x", 1, 4),
+        Tree.Map(
+          Vector.empty,
+          immutable.Map.empty,
+          None,
+          loc(2, 3),
+          Vector(
+            Step.Injection(Id.Key("y", Id.Root), optional = false, loc(2, 5)),
+            Step.Statements(Vector(
+              AST.Field(
+                ::(AST.Key("p", loc(2, 9)), Nil), AST.Operator.Replace, AST.Scalar("1", None, loc(2, 14)), None))),
+            Step.Injection(Id.Key("z", Id.Root), optional = false, loc(2, 17))
+          )
+        )
+      )))
   }
 
   it should "keep layers inside a layer, and add to the layers of a key" in {
@@ -170,8 +199,11 @@ class MergeTest extends AnyFlatSpec with Matchers {
       top(
         "a" -> Layers(Vector(
           sub("x", 1, 4),
-          map(loc(2, 3))("b" -> Layers(Vector(sub("y", 3, 6), map(loc(4, 5))()))),
-          sub("z", 6, 4))))
+          written(loc(2, 3))(
+            field("b", 3, 3, AST.Substitution(Id.Key("y", Id.Root), optional = false, None, loc(3, 6))),
+            field("b", 4, 3, AST.Block(Vector.empty, None, loc(4, 5)))),
+          sub("z", 6, 4)
+        )))
     root("a { x: 1 }\na { y: 2 }\na: ${s}") shouldBe
       top(
         "a" -> Layers(Vector(map(loc(2, 3), loc(1, 3))("x" -> str("1", 1, 8), "y" -> str("2", 2, 8)), sub("s", 3, 4))))
