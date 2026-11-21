@@ -627,7 +627,11 @@ for a marker, and the handler is not called. Every value is a scalar string, as 
 `cfg`: `true` and `"true"`, `2` and `"2"` arrive the same, and reading one, and reporting an
 argument it cannot read, is the handler's job. It gets as well a *context*: the call's location,
 the name and URL of the source the call stands in (a source given as text has no URL), and a way to
-parse another source.
+parse another source; and, from session 39, `#include`'s resolution of a target — the parameters
+`file`, `resource`, `url` and `optional`, and from the arguments given for them a URL, nothing for
+an optional target that is not there, or `#include`'s error, a file or a resource with no extension
+looked for with the extensions the handler names — and a way to read a URL's bytes through the
+load's read limit (§11).
 
 What a handler gives back is an error of its own, reported as the directive's failure at the call, or
 *nothing*, `Fragment.None` (session 34), or a *fragment*: Psi's own unexpanded tree, opaque to the handler, which it gets in one of
@@ -727,6 +731,36 @@ stands, which is the only way one reaches a source (§9).
   is given, `withSystemProperties(map)` and `withEnvironment(map)`. A loader for input it does not
   trust turns `#env` off, or gives it an empty map: the environment often holds secrets, and a
   value read is one a program may show.
+
+**Importing YAML and HOCON** (session 39): a YAML or a HOCON file read where the call stands, its
+tree what the call gives, by directives from two modules of their own, `cfg-psi-yaml` and
+`cfg-psi-hocon`, each built on its format's loader and on `cfg-psi`. Psi itself depends on nothing
+but `cfg`, and a program that reads YAML or HOCON alone takes no Psi with it.
+
+- **One directive a format**, `#yaml(…)` and `#hocon(…)`, registered under a name of the loader's
+  choosing (`withDirective("yaml", …)`), not `#include` choosing a reader by the extension.
+- **The target is written as `#include`'s is** (above): exactly one of `file`, `resource` and `url`,
+  a file relative to the source the call stands in, and `optional: true` for a target that is not
+  there, with the same errors. The context gives every handler that resolution (below), so that no
+  handler writes it again. A `file` or a `resource` with no extension is looked for as `.yaml` and
+  then `.yml` by `#yaml`, as `.conf` by `#hocon`.
+- **What it gives is the file's whole tree**, a fragment made from a `Node`: no Psi substitution
+  in it, its own resolved inside it; its locations behind the call's (§10), `app.psi:1:4 (#yaml from
+  db.yaml:3:8)`; every value a string. Where it stands it does what any call does (above): its map's
+  fields in statement position, any node in value position.
+- **A YAML file may hold any node at its root** in an import, a sequence or a scalar as well as a
+  mapping, where `cfg-yaml`'s own loader takes a mapping alone; the rest is that loader's: the core
+  schema, merge keys, an alias that makes a node contain itself an error, 256 levels at most, and
+  the tags written, which become Psi's. Its bytes are read through the load's read limit (§11), in
+  any encoding YAML allows.
+- **A HOCON file is resolved on its own**: its substitutions inside it, with no system property, no
+  environment variable and no `reference.conf` — not `ConfigFactory.load`, which lays the system
+  properties over a file and would set values at launch past `#prop` (§9, session 25). Typesafe
+  Config reads it, and the files its `include`s name, itself, past the load's read limit; and it
+  recurses with no limit (§13 item 10), so an import of HOCON is for trusted input only, the one
+  exception to Psi's rule that no input overflows the stack. HOCON has no tags.
+- **Its errors are one**: a file that cannot be read or parsed is the directive's failure at the
+  call, its message what the reader said of it, line included.
 
 ## 7. Merging
 
@@ -1207,6 +1241,10 @@ mistake is worse than stopping.
   read; every read after it gives nothing and is not reported, and the load fails. The error is
   the load's, not the fragment's, so that a directive of the program's own that drops the fragment
   does not drop it: to such a directive, the read gives an empty fragment.
+- **What a handler reads by itself is not counted** (session 39): the limit counts what goes
+  through the context, every Psi source and what a handler reads by its context's way to read a URL,
+  as `#yaml` does. `#hocon` leaves the reading to Typesafe Config, its file and the files it
+  includes past the limit, as any handler reading by itself does.
 
 **Messages and the report** (session 21):
 
@@ -1318,19 +1356,8 @@ mistake is worse than stopping.
 7. ~~**`#define`: a key with no value, expected at launch.**~~ — closed in session 25: `#prop` and
    `#env` stand where a value set at launch is expected, which is what `#define` was to name, and
    their `optional` and `default` say what happens when it is not set (§6).
-8. **Importing YAML and HOCON.** Raised by the user in session 18, for the future: a Psi source
-   pulling in a YAML or HOCON file, as `#include` pulls in a Psi one. Nothing decided. Noted so far:
-   - Psi depends on nothing but `cfg`, so the readers would come from `cfg-yaml` and `cfg-hocon` as
-     directives registered with the loader (plan step 10), not from Psi itself; or as `#include`
-     choosing a reader by the extension, which then has to be given the readers.
-   - What comes in is a `Node`, and a handler's fragment made from a `Node` holds no substitution
-     (§6): HOCON's own `${…}` is resolved by typesafe-config inside the imported file, and a Psi
-     `${…}` cannot reach into it before the merge, nor can it reach out of it.
-   - What maps how: YAML tags to Psi tags, as `cfg-yaml` already gives them; HOCON has none;
-     locations, which have to name the imported file and a line in it, as a `SourceLocation` does
-     for Psi; a key that is not bare, written in backticks when rendered.
-   - Open as well: where it merges, as a field's value or into the block it stands in, as
-     `#include` does; errors of the imported file in Psi's own error list or as one.
+8. ~~**Importing YAML and HOCON.**~~ — settled in session 39 (§6): directives `#yaml` and `#hocon`
+   from modules of their own, `cfg-psi-yaml` and `cfg-psi-hocon`. Raised by the user in session 18.
 9. ~~**Two included sources named alike.**~~ — closed in session 21: an included source is named by
    the URL it resolves to (§10). Raised by Codex's review of plan step 11: named as its argument
    was written, two files that two sources each include as `common.psi` gave errors located alike,
@@ -2688,3 +2715,24 @@ Fixed on a review of session 32's code, the format unchanged, nothing put to the
   built-in handlers not opened for registering under another name. It goes back to session 10's
   shape, `withMarkers(markers: (String, MarkerProcessor)*)`: the code of plan step 10 made the name
   a member, and I found no decision logged for it.
+
+### Session 39 — 2026-11-21
+
+- **Importing YAML and HOCON** (§6, §13 item 8), the user's calls on what I put: directives in
+  modules of their own, `cfg-psi-yaml` and `cfg-psi-hocon`, over making `cfg-yaml` and `cfg-hocon`
+  depend on `cfg-psi`, which I had recommended; one directive a format, not `#include` choosing by
+  the extension; the target written as `#include`'s, its resolution given to every handler by the
+  context; any node at the root of an imported YAML file.
+- **The read limit, a compromise**, the user's pick of what I put: `#yaml` reads its bytes through
+  the context and is counted; `#hocon` lets Typesafe Config read, since a HOCON file's `include`s
+  resolve against its own URL, which reading it from text would lose, and is not counted (§11).
+- Mine, from reading the loaders, put to the user with the design: `HOCON.apply` cannot be
+  reused, `ConfigFactory.load` laying the system properties over a file and adding
+  `reference.conf`, which would set values at launch past `#prop` (session 25). An import of HOCON
+  is for trusted input only, Typesafe Config recursing with no limit (§13 item 10).
+- Mine as well, decided in writing the design, not yet put to the user: environment variables
+  turned off in resolving a HOCON file, Typesafe Config falling back to them for a substitution the
+  file does not define, which would read the environment past `#env`; the extensions looked for,
+  `.yaml` then `.yml`, and `.conf`; a file's errors one failure of the directive, the reader's
+  message in it; `cfg-yaml` and `cfg-hocon` each given a function of their own for it, a node of
+  any kind from bytes, and a file resolved on its own.
