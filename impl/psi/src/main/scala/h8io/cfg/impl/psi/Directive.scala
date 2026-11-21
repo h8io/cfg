@@ -59,4 +59,32 @@ trait DirectiveContext {
 
   /** Parses a source held as `text`, named `name` in locations and known by its name for cycles. */
   def parse(name: String, text: String): Fragment
+
+  /** The target `arguments` name as `#include`'s do (`format.md` §6), by [[Target.parameters]]: exactly one of `file`,
+    * `resource` and `url`, a file relative to the source the call stands in, and `optional`. A file or a resource with
+    * no extension is looked for with each of `extensions` in turn, `.yaml` for one. The target is the first candidate
+    * there, or not known not to be, as a URL read from elsewhere is known only once read; none when no candidate is and
+    * the target is optional; `#include`'s error otherwise.
+    */
+  def target(arguments: Node.IMap[Id.Root], extensions: Seq[String]): Either[DirectiveError, Option[Target]]
+
+  /** The bytes at `url`, read with `#include`'s timeouts and counted against the load's read limit (§11); none once the
+    * limit is gone, by this read or one before it, the load reporting the limit itself. A URL that is not there fails
+    * as a `FileNotFoundException`.
+    */
+  def read(url: URL): Either[IOException, Option[Array[Byte]]]
+}
+
+/** A target found by [[DirectiveContext.target]]: its `url`, the argument it was `written` as, whether it is
+  * `optional`, and whether it is `known` to be there, as a file is. One that is not known, a URL read from elsewhere,
+  * is not there when reading it fails as a `FileNotFoundException`; one that is known and fails so cannot be read, as a
+  * file its permissions deny.
+  */
+final case class Target(url: URL, written: String, optional: Boolean, known: Boolean)
+
+object Target {
+
+  /** The parameters a target is written with, as `#include`'s: `file`, `resource`, `url` and `optional`, none required.
+    */
+  def parameters: Seq[Parameter] = Seq("file", "resource", "url", "optional").map(Parameter(_, required = false))
 }

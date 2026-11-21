@@ -17,6 +17,8 @@ sbt cfg/testFull
 sbt hocon/testFull
 sbt yaml/testFull
 sbt psi/testFull
+sbt psiYaml/testFull
+sbt psiHocon/testFull
 
 # Run a single test class
 sbt "yaml/testOnly h8io.cfg.impl.yaml.YAMLTest"
@@ -73,6 +75,10 @@ how the module was built, step by step; every step is done.
 - **`impl/psi`** (sbt project `psi`, artifact `cfg-psi`, package `h8io.cfg.impl.psi`) — Ψ (Psi), the project's own
   format, with a hand-written parser and no dependencies beyond `cfg`; files `.Ψ`, `.ψ` or `.psi`. Published from
   v0.1.0; its design notes are `design/format.md`.
+- **`impl/psi-yaml`**, **`impl/psi-hocon`** (sbt projects `psiYaml`, `psiHocon`, artifacts `cfg-psi-yaml`,
+  `cfg-psi-hocon`, packages `h8io.cfg.impl.psi.yaml`, `h8io.cfg.impl.psi.hocon`) — Psi's `#yaml` and `#hocon`, which
+  import a file through `cfg-yaml`'s `YAML.parse` and `cfg-hocon`'s `HOCON.isolated`; apart, so that neither Psi nor
+  the loaders depend on more (`format.md` §6).
 - **root** (artifact `cfg-all`) — aggregate; not published.
 - **pages** — documentation site (sources in `docs/`, one page a topic); not aggregated in root. Its own sources,
   `pages/src`, hold what the docs' mdoc blocks share (`Example.psi` shows a Psi source and what it loads as), and are

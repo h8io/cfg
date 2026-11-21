@@ -326,6 +326,56 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
       "app.psi:1:4 (#`a.b` from no source)"
   }
 
+  "A handler's context" should "find a target as #include does, with the handler's extensions" in {
+    var found: List[Either[DirectiveError, Option[Target]]] = Nil
+    val finding = directive("find", Target.parameters*) { (arguments, context) =>
+      found = context.target(arguments, Seq(".txt", ".text")) :: found
+      Right(Fragment.None)
+    }
+    val dir = Files.createTempDirectory("psi")
+    write(dir, "b.text", "x")
+    val app =
+      write(dir, "app.psi", "#find(file: a, optional: true)\n#find(file: a)\n#find(file: b)\n#find(url: x, file: y)")
+    loader(finding)(app.toUri.toURL).isRight shouldBe true
+    found.reverse shouldBe
+      List(
+        Right(None),
+        Left(IncludeNotFound("a")),
+        Right(Some(Target(dir.resolve("b.text").toUri.toURL, "b", optional = false, known = true))),
+        Left(IncludeTargets(List("file", "url")))
+      )
+    found = Nil
+    loader(finding).parse("s", "#find(url: \"http://localhost/x\")").isRight shouldBe true
+    found shouldBe List(Right(
+      Some(Target(URI.create("http://localhost/x").toURL, "http://localhost/x", optional = false, known = false))))
+  }
+
+  it should "read a URL's bytes through the load's read limit" in {
+    var read: List[Either[IOException, Option[Array[Byte]]]] = Nil
+    val reading = directive("read", Parameter("file", required = true)) { (arguments, context) =>
+      val url = context.url.get.toURI.resolve(arguments("file") match {
+        case Node.IScalar(_, _, file, _) => file
+        case other => fail(other.toString)
+      }).toURL
+      read = context.read(url) :: read
+      Right(Fragment.None)
+    }
+    val dir = Files.createTempDirectory("psi")
+    write(dir, "data", "0123456789")
+    val app = write(dir, "app.psi", "#read(data)\n#read(missing)")
+    loader(reading)(app.toUri.toURL).isRight shouldBe true
+    read.reverse match {
+      case Right(Some(bytes)) :: Left(_: java.io.FileNotFoundException) :: Nil =>
+        new String(bytes, StandardCharsets.UTF_8) shouldBe "0123456789"
+      case other => fail(other.toString)
+    }
+    read = Nil
+    val limited = Psi.builder.withDirective(reading._1, reading._2).withReadLimit(30, java.time.Duration.ofSeconds(9))
+      .build.fold(e => fail(e.toString), x => x)
+    limited(app.toUri.toURL).left.map(_.errors.map(_.getClass.getSimpleName)) shouldBe Left(List("ReadLimitExceeded"))
+    read shouldBe List(Right(None), Right(None))
+  }
+
   private def write(dir: Path, name: String, text: String): Path =
     Files.write(dir.resolve(name), text.getBytes(StandardCharsets.UTF_8))
 }

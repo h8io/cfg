@@ -85,3 +85,58 @@ server.port: 9090
 ```scala mdoc:passthrough
 println("loads as\n\n```\n" + included.trim + "\n```")
 ```
+
+## Importing YAML and HOCON
+
+Two modules of their own give a loader directives that read a YAML or a HOCON file where they stand, as `#include`
+reads a Psi one: `cfg-psi-yaml` and `cfg-psi-hocon`. Each is registered under the name the files call it by:
+
+```scala
+libraryDependencies += "io.h8" %% "cfg-psi-yaml" % "@VERSION@"
+
+val loader = Psi.builder.withDirective("yaml", h8io.cfg.impl.psi.yaml.Yaml).build
+```
+
+- The target is written as `#include`'s: `file`, `resource` or `url`, and `optional`. A file or a resource with no
+  extension is looked for as `.yaml` and then `.yml` by `#yaml`, as `.conf` by `#hocon`.
+- What it gives is the file's whole tree, every value a string. A YAML file may hold any node at its root, a sequence
+  or a single value as well as a mapping, and keeps the tags written in it.
+- A HOCON file is resolved on its own: its substitutions inside it, with no system property, no environment variable
+  and no `reference.conf` reaching it. A value set at launch comes in by `#prop` and `#env` only, as everywhere in Psi.
+- Psi's substitutions refer to what an import gives as to anything else, once it is merged; they do not reach into the
+  file while it is read.
+- A file that cannot be read or parsed is the directive's error, with what the reader said of it.
+- A YAML file is read under the limits on reading below. A HOCON file, and what it includes, Typesafe Config reads
+  itself, past them, and with no limit on how deep it goes: import HOCON you trust.
+
+```scala mdoc:invisible
+// Writes the files of the example below, and loads the Psi one
+val imported = {
+  val dir = java.nio.file.Files.createTempDirectory("psi")
+  def write(name: String, text: String) = java.nio.file.Files.write(dir.resolve(name), text.getBytes("UTF-8"))
+  write("db.yaml", "host: localhost\nport: !int 5432\n")
+  write("hosts.yaml", "- a.example\n- b.example\n")
+  write("cache.conf", "size: 100\nttl: ${size}s\n")
+  write("app.psi", "db: #yaml(file: db)\nhosts: #yaml(file: hosts)\ncache: #hocon(file: cache)\ndb.host: db.prod\n")
+  Psi.builder
+    .withDirective("yaml", h8io.cfg.impl.psi.yaml.Yaml)
+    .withDirective("hocon", h8io.cfg.impl.psi.hocon.Hocon)
+    .build
+    .flatMap(_(dir.resolve("app.psi").toUri.toURL))
+    .fold(e => e.toString, _.toString)
+}
+```
+
+With `db.yaml` holding `host: localhost` and `port: !int 5432`, `hosts.yaml` the list `- a.example` and
+`- b.example`, and `cache.conf` holding `size: 100` and `ttl: ${size}s`:
+
+```
+db: #yaml(file: db)
+hosts: #yaml(file: hosts)
+cache: #hocon(file: cache)
+db.host: db.prod
+```
+
+```scala mdoc:passthrough
+println("loads as\n\n```\n" + imported.trim + "\n```")
+```

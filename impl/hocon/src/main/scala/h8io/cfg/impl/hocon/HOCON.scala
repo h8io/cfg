@@ -1,6 +1,6 @@
 package h8io.cfg.impl.hocon
 
-import com.typesafe.config.{ConfigFactory, ConfigParseOptions}
+import com.typesafe.config.{ConfigFactory, ConfigParseOptions, ConfigResolveOptions}
 import h8io.cfg.{Id, Node}
 import io.h8.config.yaml.{ConfigLoader, YamlConfigFactory}
 
@@ -70,4 +70,16 @@ object HOCON {
         .getOrElse(loader.load)
         .root()
     )
+
+  /** Loads the HOCON or YAML file at `url` on its own: its substitutions resolved inside it and the files its
+    * `include`s name, and nowhere else — no system property, no environment variable, no `reference.conf`, unlike
+    * [[apply]], whose `ConfigFactory.load` lays the system properties over the file. What Psi's `#hocon` imports, where
+    * nothing set at launch may reach a value but by `#prop` and `#env`.
+    *
+    * @note
+    *   a `ConfigException` is thrown if the file cannot be read or parsed, or a substitution in it does not resolve
+    */
+  def isolated(url: URL): Node.IMap[Id.Root] =
+    wrap(
+      Id.Root, urlLoader.parseURL(url).resolve(ConfigResolveOptions.defaults().setUseSystemEnvironment(false)).root())
 }

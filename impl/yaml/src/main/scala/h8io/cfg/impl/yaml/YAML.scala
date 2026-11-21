@@ -5,6 +5,7 @@ import org.snakeyaml.engine.v2.api.YamlUnicodeReader
 import org.snakeyaml.engine.v2.exceptions.YamlEngineException
 import org.snakeyaml.engine.v2.nodes.{MappingNode, Node as YamlNode}
 
+import java.io.ByteArrayInputStream
 import java.net.URL
 
 /** YAML backend for the `cfg` protocol.
@@ -60,6 +61,17 @@ object YAML {
     *   next bytes waiting past the timeouts.
     */
   def apply(urls: URL*): Node.IMap[Id.Root] = load(urls, ConnectTimeout, ReadTimeout)
+
+  /** Composes one YAML document held as `bytes`, in any encoding YAML allows, its root any node: a mapping, a sequence
+    * or a scalar, an empty document an empty mapping. Its locations name it `name`. Nothing is overlaid and nothing is
+    * read: what Psi's `#yaml` imports, the bytes read through the load's read limit.
+    *
+    * @note
+    *   a `YamlEngineException` is thrown if the bytes cannot be parsed, hold more than one document, have a key that is
+    *   not a scalar or a node that an alias makes contain itself, or nest deeper than 256 levels, aliases followed
+    */
+  def parse(name: String, bytes: Array[Byte]): Node.ISome[Id.Root] =
+    wrap(Id.Root, compose(settings(name), new YamlUnicodeReader(new ByteArrayInputStream(bytes))))
 
   /** How long reading a URL waits for a connection, in milliseconds. */
   private[yaml] def ConnectTimeout: Int = 10000

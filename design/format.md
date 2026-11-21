@@ -630,8 +630,10 @@ the name and URL of the source the call stands in (a source given as text has no
 parse another source; and, from session 39, `#include`'s resolution of a target — the parameters
 `file`, `resource`, `url` and `optional`, and from the arguments given for them a URL, nothing for
 an optional target that is not there, or `#include`'s error, a file or a resource with no extension
-looked for with the extensions the handler names — and a way to read a URL's bytes through the
-load's read limit (§11).
+looked for with the extensions the handler names; with the URL, whether it is known to be there, as
+a file is and a URL from elsewhere is not until read, so that a file its permissions deny, which
+Java reports as not found, is told from one that is not there — and a way to read a URL's bytes
+through the load's read limit (§11).
 
 What a handler gives back is an error of its own, reported as the directive's failure at the call, or
 *nothing*, `Fragment.None` (session 34), or a *fragment*: Psi's own unexpanded tree, opaque to the handler, which it gets in one of

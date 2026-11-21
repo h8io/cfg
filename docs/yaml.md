@@ -27,6 +27,10 @@ val cfg = YAML(defaults, local) // a Node.IMap[Id.Root]
 recursively, and a scalar or a sequence is replaced by the later one outright. With no URLs, the tree is an empty
 map.
 
+`YAML.parse(name, bytes)` composes one document already read, its root any node, a sequence or a scalar as well as a
+mapping, and its locations named `name`. It is what Psi's `#yaml` imports
+([Directives](psi/directives.md#importing-yaml-and-hocon)).
+
 ## Tags
 
 `tag` is the tag written on a node, expanded through the tag handles in effect, without its leading `!`:

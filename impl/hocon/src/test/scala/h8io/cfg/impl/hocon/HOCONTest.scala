@@ -72,3 +72,25 @@ class HOCONTest extends AnyFlatSpec with Matchers {
     }
   }
 }
+
+class IsolatedTest extends AnyFlatSpec with Matchers {
+  private def file(text: String): URL = {
+    val path = Files.createTempFile("isolated", ".conf")
+    Files.write(path, text.getBytes("UTF-8"))
+    path.toUri.toURL
+  }
+
+  "HOCON.isolated" should "resolve a file's substitutions inside it" in {
+    HOCON.isolated(file("a: x\nb: ${a}")).apply("b") match {
+      case Node.IScalar(_, _, "x", _) => succeed
+      case other => fail(other.toString)
+    }
+  }
+
+  it should "reach no system property and no environment variable" in {
+    sys.props.contains("user.home") shouldBe true
+    a[ConfigException.UnresolvedSubstitution] should be thrownBy HOCON.isolated(file("h: ${user.home}"))
+    a[ConfigException.UnresolvedSubstitution] should be thrownBy HOCON.isolated(file("h: ${PATH}"))
+    HOCON.isolated(file("h: ${?PATH}")).size shouldBe 0
+  }
+}
