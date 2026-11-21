@@ -627,13 +627,15 @@ for a marker, and the handler is not called. Every value is a scalar string, as 
 `cfg`: `true` and `"true"`, `2` and `"2"` arrive the same, and reading one, and reporting an
 argument it cannot read, is the handler's job. It gets as well a *context*: the call's location,
 the name and URL of the source the call stands in (a source given as text has no URL), and a way to
-parse another source; and, from session 39, `#include`'s resolution of a target — the parameters
-`file`, `resource`, `url` and `optional`, and from the arguments given for them a URL, nothing for
-an optional target that is not there, or `#include`'s error, a file or a resource with no extension
-looked for with the extensions the handler names; with the URL, whether it is known to be there, as
-a file is and a URL from elsewhere is not until read, so that a file its permissions deny, which
-Java reports as not found, is told from one that is not there — and a way to read a URL's bytes
-through the load's read limit (§11).
+parse another source; and, from session 39, `#include`'s search for a target — the parameters
+`file`, `resource`, `url` and `optional`, and from the arguments given for them each candidate in
+turn, a file or a resource with no extension with each of the extensions the handler names, opened
+by a function the handler gives, the first it opens the result; a candidate known not to be there,
+a file, not opened, and one not known to be, a URL from elsewhere, not there when opening it fails
+as not found, the next then opened, so that a file its permissions deny, which Java reports as not
+found too, is told from one that is not there; nothing for an optional target with no candidate
+there, `#include`'s error otherwise — and a way to read a URL's bytes through the load's read limit
+(§11).
 
 What a handler gives back is an error of its own, reported as the directive's failure at the call, or
 *nothing*, `Fragment.None` (session 34), or a *fragment*: Psi's own unexpanded tree, opaque to the handler, which it gets in one of
@@ -1221,8 +1223,11 @@ mistake is worse than stopping.
   grafts, six times over, make 10⁷ nodes, and a scalar concatenated with itself, 25 times over,
   makes 3·10⁸ characters. The depth limit bounds neither, the tree growing wide. Counted are the
   nodes grafts copy and the characters of the scalars concatenations build, each before it is
-  built; the sources' own nodes and text are not, being the input, nor what a directive, a
-  loader's marker or a loader's formatter builds, being a handler's. The built-in `join` (§9) is
+  built; the sources' own nodes and text are not, being the input, nor what a loader's marker or a
+  loader's formatter builds, being a handler's. The nodes of a fragment a handler built from a
+  `Node` are, before the substitutions, each counted as it is built and every use of the fragment
+  counted again, a YAML alias as many times as it is used (session 39): the first call to go past
+  the limit is reported, as `FragmentTooLarge`, and gives nothing; grafts count on from there. The built-in `join` (§9) is
   counted as a concatenation, before it is built, and so is a concatenation holding what a
   formatter gave, once the formatter has given it. The first graft or concatenation to go past either
   limit is reported, as `ResolutionTooLarge` or `ConcatenationTooLong`, at its reference or its
@@ -2756,3 +2761,20 @@ Fixed on a review of sessions 36 and 38's code, the format unchanged, nothing pu
 - After the review, the user's call: `#hocon` looks for a file or a resource with no extension as
   `.json` and `.properties` too, after `.conf`, both being syntaxes HOCON takes. It reads the first
   found, as `#include` does; Typesafe Config's own search by name merges every one it finds.
+
+Fixed on a second review of sessions 39 and 36's code, nothing of the files' meaning changed:
+
+- **A fragment a handler built from a `Node` counts against the node limit** (§11), where a
+  handler's work was not counted: `#yaml` copied every use of an alias, and 316 bytes of YAML gave
+  131 056 nodes, 523 bytes took a 64 MB heap. Each node is counted before it is built, the limit
+  shared with grafts, which count on from what the fragments brought. Mine, put to the user. The
+  default limit, 1 000 000 nodes, does not keep a 64 MB heap from filling, from YAML aliases or from
+  Psi's own grafts alike (measured: some 350 000 nodes do); `withSizeLimit` sets it for such a heap.
+- **A target's candidates are tried in turn when their presence is known only once read**: the
+  context gave the first candidate not known not to be there, and lost the rest, so that over HTTP
+  `#yaml(file: data)` asked for `data.yaml` alone. The context's `target` gives way to `find`,
+  which opens each candidate by the handler's function, as `#include` did all along.
+- **What the calls of a block of injections alone gave refers to itself once merged**, as layers'
+  fields do since the first review: `a:⏎  #include(file: base)⏎  #include(file: other)` with
+  `y: $a.x` in `other` was a false cycle. A substitution there still finds its node resolved whole
+  first, so `$c` with `c { y: $a.x }` among them stays a cycle, as an injection is (§9).

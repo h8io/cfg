@@ -70,11 +70,11 @@ class HoconTest extends AnyFlatSpec with Matchers {
     val home = sys.props.contains("user.home") && sys.env.contains("PATH")
     home shouldBe true
     errors("a: #hocon(file: \"p.conf\")", "p.conf" -> "h: ${user.home}") match {
-      case DirectiveFailed(_, "hocon", HoconInvalid("p.conf", _)) :: Nil => succeed
+      case DirectiveFailed(_, "hocon", HoconInvalid(source, _)) :: Nil => source should endWith("/p.conf")
       case other => fail(other.toString)
     }
     errors("a: #hocon(file: \"e.conf\")", "e.conf" -> "h: ${PATH}") match {
-      case DirectiveFailed(_, "hocon", HoconInvalid("e.conf", _)) :: Nil => succeed
+      case DirectiveFailed(_, "hocon", HoconInvalid(source, _)) :: Nil => source should endWith("/e.conf")
       case other => fail(other.toString)
     }
     loaded("a: #hocon(file: \"o.conf\")", "o.conf" -> "h: ${?PATH}\nk: v").toString shouldBe "a:\n  k: v\n"
@@ -87,14 +87,14 @@ class HoconTest extends AnyFlatSpec with Matchers {
       case other => fail(other.toString)
     }
     errors("a: #hocon(file: \"bad.conf\")", "bad.conf" -> "a: [") match {
-      case DirectiveFailed(_, "hocon", HoconInvalid("bad.conf", _)) :: Nil => succeed
+      case DirectiveFailed(_, "hocon", HoconInvalid(source, _)) :: Nil => source should endWith("/bad.conf")
       case other => fail(other.toString)
     }
     // a file it includes that is not there is no target that is not there
     errors(
       "a: #hocon(file: \"i.conf\", optional: true)",
       "i.conf" -> "include required(file(\"gone.conf\"))") match {
-      case DirectiveFailed(_, "hocon", HoconInvalid("i.conf", _)) :: Nil => succeed
+      case DirectiveFailed(_, "hocon", HoconInvalid(source, _)) :: Nil => source should endWith("/i.conf")
       case other => fail(other.toString)
     }
   }
@@ -106,6 +106,8 @@ class HoconTest extends AnyFlatSpec with Matchers {
       { exchange =>
         val (status, body) = exchange.getRequestURI.getPath match {
           case "/ok.conf" => (200, "v: 1")
+          case "/app.psi" => (200, "a: #hocon(file: data)\nb: #hocon(file: none, optional: true)")
+          case "/data.json" => (200, "{\"v\": 2}")
           case "/fail.conf" => (500, "")
           case _ => (404, "")
         }
@@ -120,6 +122,8 @@ class HoconTest extends AnyFlatSpec with Matchers {
       val base = "http://" + server.getAddress.getHostString + ":" + server.getAddress.getPort.toString
       def parse(text: String) = loader.parse("s", text)
       parse("a: #hocon(url: \"" + base + "/ok.conf\")").map(_.toString) shouldBe Right("a:\n  v: 1\n")
+      // every extension asked for in turn, a URL's being known only once read
+      loader(java.net.URI.create(base + "/app.psi").toURL).map(_.toString) shouldBe Right("a:\n  v: 2\n")
       parse("a: #hocon(url: \"" + base + "/no.conf\", optional: true)\nb: 1").map(_.toString) shouldBe
         Right("b: 1\n")
       parse("a: #hocon(url: \"" + base + "/no.conf\")").left.map(_.errors) match {

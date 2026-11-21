@@ -326,28 +326,58 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
       "app.psi:1:4 (#`a.b` from no source)"
   }
 
-  "A handler's context" should "find a target as #include does, with the handler's extensions" in {
-    var found: List[Either[DirectiveError, Option[Target]]] = Nil
+  "A handler's context" should "find a target as #include does, with the handler's extensions, opened by the handler" in {
+    var found: List[Either[DirectiveError, Option[String]]] = Nil
+    var opened: List[String] = Nil
     val finding = directive("find", Target.parameters*) { (arguments, context) =>
-      found = context.target(arguments, Seq(".txt", ".text")) :: found
+      found = context.find(arguments, Seq(".txt", ".text")) { url =>
+        opened = url.toString :: opened
+        if (url.toString.contains("gone")) Left(new java.io.FileNotFoundException(url.toString))
+        else Right(url.toString.substring(url.toString.lastIndexOf('/') + 1))
+      } :: found
       Right(Fragment.None)
     }
     val dir = Files.createTempDirectory("psi")
     write(dir, "b.text", "x")
-    val app =
-      write(dir, "app.psi", "#find(file: a, optional: true)\n#find(file: a)\n#find(file: b)\n#find(url: x, file: y)")
+    write(dir, "gone.txt", "x")
+    val app = write(
+      dir,
+      "app.psi",
+      "#find(file: a, optional: true)\n#find(file: a)\n#find(file: b)\n#find(url: x, file: y)\n#find(file: gone)")
     loader(finding)(app.toUri.toURL).isRight shouldBe true
-    found.reverse shouldBe
-      List(
-        Right(None),
-        Left(IncludeNotFound("a")),
-        Right(Some(Target(dir.resolve("b.text").toUri.toURL, "b", optional = false, known = true))),
-        Left(IncludeTargets(List("file", "url")))
-      )
+    found.reverse match {
+      case List(
+            Right(None),
+            Left(IncludeNotFound("a")),
+            Right(Some("b.text")),
+            Left(IncludeTargets(List("file", "url"))),
+            // a file known to be there that fails as not found cannot be read, as one its permissions deny
+            Left(IncludeUnreadable("gone", _))
+          ) =>
+        succeed
+      case other => fail(other.toString)
+    }
+    // only the candidates there are opened
+    opened.map(url => url.substring(url.lastIndexOf('/') + 1)).reverse shouldBe List("b.text", "gone.txt")
     found = Nil
-    loader(finding).parse("s", "#find(url: \"http://localhost/x\")").isRight shouldBe true
-    found shouldBe List(Right(
-      Some(Target(URI.create("http://localhost/x").toURL, "http://localhost/x", optional = false, known = false))))
+    loader(finding).parse(
+      "s", "#find(url: \"http://localhost/x\")\n#find(url: \"http://localhost/gone\", optional: true)")
+      .isRight shouldBe true
+    found.reverse shouldBe List(Right(Some("x")), Right(None))
+  }
+
+  "A fragment a handler built" should "count its nodes against the node limit, grafts after them" in {
+    val three = node("p: 1\nq: 2")
+    val giving = directive("three")((_, _) => Right(Fragment(three)))
+    def limited(nodes: Int): PsiLoader =
+      Psi.builder.withDirective(giving._1, giving._2).withSizeLimit(nodes, 100).build.fold(
+        e => fail(e.toString), x => x)
+    limited(3).parse("s", "a: #three").isRight shouldBe true
+    errors(limited(5), "a: #three\nb: #three\nc: #three") shouldBe List(FragmentTooLarge(at(2, 4), "three", 5))
+    errors(limited(5), "a: #three\nb: $a") shouldBe List(ResolutionTooLarge(at(2, 4), "a", 5))
+    FragmentTooLarge(at(1, 1), "x", 5).message shouldBe "'#x' gives more than 5 nodes, fragments together"
+    FragmentTooLarge(at(1, 1), "x", 5).hint shouldBe
+      Some("give less, such as a YAML alias used fewer times, or build the loader with a higher withSizeLimit")
   }
 
   it should "read a URL's bytes through the load's read limit" in {

@@ -60,7 +60,7 @@ Psi.parse("app.psi", "a = 1").left.foreach(errors => println(errors.message))
 | `disableDirective(name)` | turns a directive off for good, as a loader for input it does not trust turns off `include` and `env` |
 | `withDepthLimit(n)` | limits depth to `n` rather than 256: lower for a thread with a smaller stack than the JVM's default |
 | `withReadLimit(bytes, time)` | limits reading the sources of a load, every read counted, rather than to 10 000 000 bytes and 60 seconds |
-| `withSizeLimit(nodes, characters)` | limits what resolving substitutions adds, the nodes grafts copy and the characters concatenations build, rather than to 1 000 000 and 10 000 000 |
+| `withSizeLimit(nodes, characters)` | limits what a load adds to its sources, the nodes grafts copy and directives' fragments bring and the characters concatenations build, rather than to 1 000 000 and 10 000 000: about 350 000 nodes fill a 64 MB heap |
 | `withDirective(name, directive)` | adds a directive of its own, called `#name` ([Extending](extending.md#directives)) |
 | `withMarker(name, marker)` | adds a marker of its own, written `name` ([Extending](extending.md#markers)) |
 | `withFormatter(name, formatter)` | adds a formatter of its own, called `${path; name(…)}` ([Extending](extending.md#formatters)) |

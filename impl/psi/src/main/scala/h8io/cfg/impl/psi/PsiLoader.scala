@@ -46,10 +46,12 @@ final class PsiLoader private[psi] (settings: Settings) {
       sources: Seq[Either[PsiError, Source]],
       budget: ReadBudget): Either[PsiErrors, Node.IMap[Id.Root]] = {
     val handlers = this.handlers
+    val nodes = new Expand.Nodes(nodeLimit)
     val parsed = Result.sequence(sources.map {
       case Right(source) =>
-        Expand(source, handlers, disabled, markers, formatters, depthLimit, budget).map { case (document, included) =>
-          Some((document, source.name, included))
+        Expand(source, handlers, disabled, markers, formatters, depthLimit, budget, nodes).map {
+          case (document, included) =>
+            Some((document, source.name, included))
         }
       case Left(error) => Result.failed(None, error)
     })
@@ -60,7 +62,7 @@ final class PsiLoader private[psi] (settings: Settings) {
         case (document, name, included) :: rest =>
           val located = rest.map { case (document, name, _) => (document, SourceLocation(name, 1, 1)) }
           val merged = Merge(::((document, SourceLocation(name, 1, 1)), located)).flatMap(tree =>
-            Resolve(tree, depthLimit, nodeLimit, characterLimit))
+            Resolve(tree, depthLimit, nodeLimit, characterLimit, nodes.used))
           // merging and resolving go by key, not by source: the errors are put back in the order of the sources,
           // those directives parsed right after the one that parsed them
           val sources = (name :: included) ++ rest.flatMap { case (_, name, included) => name :: included }

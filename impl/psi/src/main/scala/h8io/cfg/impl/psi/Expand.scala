@@ -22,7 +22,8 @@ private[psi] final class Expand private (
     markers: Map[String, Marker],
     formatters: Map[String, Formatter],
     limit: Int,
-    budget: ReadBudget) {
+    budget: ReadBudget,
+    nodes: Expand.Nodes) {
   import Expand.*
 
   private val errors = mutable.ListBuffer.empty[PsiError]
@@ -143,12 +144,20 @@ private[psi] final class Expand private (
       false
     }
 
-  /** `build`, or none when what it builds goes past the limit, which is reported at the call. */
+  /** `build`, or none when what it builds goes past the depth limit, which is reported at the call, or past the node
+    * limit, reported at the first call to go past it.
+    */
   private def fitting[A](call: AST.Call)(build: => A): Option[A] =
     try Some(build)
     catch {
       case TooDeep =>
         report(DepthExceeded(call.location, limit, fatal = false))
+        None
+      case TooLarge =>
+        if (!nodes.reported) {
+          nodes.reported = true
+          report(FragmentTooLarge(call.location, call.name, nodes.limit))
+        }
         None
     }
 
@@ -163,6 +172,8 @@ private[psi] final class Expand private (
     * call; a container past the limit throws [[TooDeep]].
     */
   private def built(call: AST.Call, node: Node.ISome[Id], tag: Option[String], depth: Int): AST.Value = {
+    // counted before it is built, so that an alias in YAML used over and over cannot take the heap (§11)
+    nodes.count()
     val location = DirectiveLocation(call.location, call.name, node.location)
     node match {
       case Node.IScalar(_, own, value, _) => AST.Scalar(value, tag.orElse(own), location)
@@ -257,8 +268,9 @@ private[psi] final class Expand private (
 
     def parse(name: String, text: String): Fragment = nested(Source(name, text))
 
-    def target(arguments: Node.IMap[Id.Root], extensions: Seq[String]): Either[DirectiveError, Option[Target]] =
-      Include.target(arguments, extensions, url)
+    def find[A](arguments: Node.IMap[Id.Root], extensions: Seq[String])(
+        open: URL => Either[IOException, A]): Either[DirectiveError, Option[A]] =
+      Include.find(arguments, extensions, url)(open)
 
     def read(url: URL): Either[IOException, Option[Array[Byte]]] = Source.bytes(url.toString, url, budget)
 
@@ -271,7 +283,7 @@ private[psi] final class Expand private (
       } else if (stack.length >= MaxDepth)
         Fragment.Parsed(AST.Document(Vector.empty), root, DirectiveTooDeep(call.location, MaxDepth) :: Nil, Nil)
       else {
-        val expand = new Expand(directives, disabled, markers, formatters, limit, budget)
+        val expand = new Expand(directives, disabled, markers, formatters, limit, budget, nodes)
         val document = expand.document(source, stack, base)
         Fragment.Parsed(document, root, expand.errors.toList, source.name :: expand.included.toList)
       }
@@ -286,6 +298,24 @@ private[psi] object Expand {
 
   /** A node a handler built that goes past the depth limit. */
   private case object TooDeep extends ControlThrowable
+
+  /** A node a handler built that goes past the node limit. */
+  private case object TooLarge extends ControlThrowable
+
+  /** The nodes the fragments handlers built bring into the syntax trees of one load, every use of a fragment counted,
+    * at most `limit`, the load's node limit, which grafts share once the sources are expanded (§11).
+    */
+  final class Nodes(val limit: Int) {
+    var used = 0L
+
+    /** Whether going past the limit has been reported. */
+    var reported = false
+
+    def count(): Unit = {
+      if (used >= limit) throw TooLarge
+      used += 1
+    }
+  }
 
   /** How many levels `statements` open below where they stand, a dotted key's keys after the first counted. */
   private def levels(statements: Vector[AST.Statement]): Int =
@@ -314,8 +344,9 @@ private[psi] object Expand {
       markers: Map[String, Marker],
       formatters: Map[String, Formatter],
       limit: Int,
-      budget: ReadBudget): Result[(AST.Document, List[String])] = {
-    val expand = new Expand(directives, disabled, markers, formatters, limit, budget)
+      budget: ReadBudget,
+      nodes: Nodes): Result[(AST.Document, List[String])] = {
+    val expand = new Expand(directives, disabled, markers, formatters, limit, budget, nodes)
     val document = expand.document(source, Nil, 0)
     Result((document, expand.included.toList), expand.errors.toList)
   }

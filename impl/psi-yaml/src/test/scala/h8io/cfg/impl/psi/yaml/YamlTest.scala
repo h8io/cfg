@@ -80,7 +80,9 @@ class YamlTest extends AnyFlatSpec with Matchers {
 
   it should "fail on a file that is no YAML, or cannot be read" in {
     errors("a: #yaml(file: \"bad.yaml\")", "bad.yaml" -> "a: [") match {
-      case DirectiveFailed(_, "yaml", YamlInvalid("bad.yaml", reason)) :: Nil => reason should include("bad.yaml")
+      case DirectiveFailed(_, "yaml", YamlInvalid(source, reason)) :: Nil =>
+        source should endWith("/bad.yaml")
+        reason should include("bad.yaml")
       case other => fail(other.toString)
     }
     val dir = directory("app.psi" -> "a: #yaml(file: \"locked.yaml\")", "locked.yaml" -> "a: 1")
@@ -110,6 +112,8 @@ class YamlTest extends AnyFlatSpec with Matchers {
       { exchange =>
         val (status, body) = exchange.getRequestURI.getPath match {
           case "/ok.yaml" => (200, "v: 1")
+          case "/app.psi" => (200, "a: #yaml(file: data, optional: true)\nb: #yaml(file: none, optional: true)")
+          case "/data.yml" => (200, "v: 2")
           case "/fail.yaml" => (500, "")
           case _ => (404, "")
         }
@@ -124,6 +128,8 @@ class YamlTest extends AnyFlatSpec with Matchers {
       val base = "http://" + server.getAddress.getHostString + ":" + server.getAddress.getPort.toString
       def parse(text: String) = loader().parse("s", text)
       parse("a: #yaml(url: \"" + base + "/ok.yaml\")").map(_.toString) shouldBe Right("a:\n  v: 1\n")
+      // every extension asked for in turn, a URL's being known only once read
+      loader()(java.net.URI.create(base + "/app.psi").toURL).map(_.toString) shouldBe Right("a:\n  v: 2\n")
       parse("a: #yaml(url: \"" + base + "/no.yaml\", optional: true)\nb: 1").map(_.toString) shouldBe Right("b: 1\n")
       parse("a: #yaml(url: \"" + base + "/no.yaml\")").left.map(_.errors) match {
         case Left(DirectiveFailed(_, "yaml", IncludeNotFound(_)) :: Nil) => succeed
@@ -134,6 +140,21 @@ class YamlTest extends AnyFlatSpec with Matchers {
         case other => fail(other.toString)
       }
     } finally server.stop(0)
+  }
+
+  it should "count every use of an alias against the node limit, before building it" in {
+    // each level four uses of the one before, 48 aliases, within snakeyaml-engine's 50: 4¹² leaves from 400 bytes
+    def ref(i: Int): String = if (i == 1) "a" else "b" + (i - 1).toString
+    val bomb = "a: &a [x, x, x, x]\n" +
+      (1 to 12).map(i =>
+        "b" + i.toString + ": &b" + i.toString + " [" + List.fill(4)("*" + ref(i)).mkString(", ") + "]")
+        .mkString("\n")
+    val dir = directory("app.psi" -> "a: #yaml(file: bomb)\nb: #yaml(file: bomb)", "bomb.yaml" -> bomb)
+    loader(_.withSizeLimit(1000, 1000))(dir.resolve("app.psi").toUri.toURL).fold(
+      _.errors, root => fail(root.toString)) match {
+      case FragmentTooLarge(at, "yaml", 1000) :: Nil => at.line shouldBe 1
+      case other => fail(other.toString)
+    }
   }
 
   "YamlInvalid" should "say what the parser said" in {

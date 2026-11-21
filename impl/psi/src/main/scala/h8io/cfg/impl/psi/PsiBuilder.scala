@@ -40,9 +40,10 @@ final class PsiBuilder private (settings: Settings) {
     */
   def withDepthLimit(limit: Int): PsiBuilder = new PsiBuilder(settings.copy(depthLimit = limit))
 
-  /** Limits what resolving the substitutions adds to the tree loaded, rather than to 1 000 000 nodes and 10 000 000
-    * characters (`format.md` §11): `nodes`, the nodes copied by grafts, and `characters`, those of the scalars built by
-    * concatenations, each at least 0. The sources' own nodes and text are not counted.
+  /** Limits what a load adds to the tree of its sources, rather than to 1 000 000 nodes and 10 000 000 characters
+    * (`format.md` §11): `nodes`, those the fragments directives build bring, every use counted, and those grafts copy,
+    * and `characters`, those of the scalars built by concatenations, each at least 0. The sources' own nodes and text
+    * are not counted. Some 350 000 nodes fill a heap of 64 MB.
     */
   def withSizeLimit(nodes: Int, characters: Int): PsiBuilder =
     new PsiBuilder(settings.copy(nodeLimit = nodes, characterLimit = characters))
