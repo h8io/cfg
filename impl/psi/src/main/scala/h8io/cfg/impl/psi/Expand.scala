@@ -89,10 +89,12 @@ private[psi] final class Expand private (
   /** The fields of a fragment in statement position `depth` levels deep, which must be a map and fit there. */
   private def fields(call: AST.Call, fragment: Fragment.Some, depth: Int): Vector[AST.Statement] =
     fragment match {
-      case Fragment.Parsed(document, _, errors, sources) =>
+      case parsed @ Fragment.Parsed(document, _, errors, sources) =>
         this.errors ++= errors
         included ++= sources
-        if (fits(call, depth + levels(document.statements))) document.statements else Vector.empty
+        if (fits(call, depth + levels(document.statements)) && fitting(call)(nodes.use(parsed)).nonEmpty)
+          document.statements
+        else Vector.empty
       case Fragment.Built(map: Node.IMap[?]) => fitting(call)(statements(call, map, depth)).getOrElse(Vector.empty)
       case Fragment.Built(_) =>
         report(DirectiveNotMap(call.location, call.name))
@@ -104,10 +106,11 @@ private[psi] final class Expand private (
     */
   private def placed(call: AST.Call, tag: Option[String], fragment: Fragment.Some, depth: Int): Option[AST.Value] =
     fragment match {
-      case Fragment.Parsed(document, root, errors, sources) =>
+      case parsed @ Fragment.Parsed(document, root, errors, sources) =>
         this.errors ++= errors
         included ++= sources
-        if (fits(call, depth + 1 + levels(document.statements))) Some(AST.Block(document.statements, tag, root))
+        if (fits(call, depth + 1 + levels(document.statements)) && fitting(call)(nodes.use(parsed)).nonEmpty)
+          Some(AST.Block(document.statements, tag, root))
         else None
       case Fragment.Built(node) => fitting(call)(built(call, node, tag, depth))
     }
@@ -145,7 +148,7 @@ private[psi] final class Expand private (
     }
 
   /** `build`, or none when what it builds goes past the depth limit, which is reported at the call, or past the node
-    * limit, reported at the first call to go past it.
+    * limit, the load's error at the first call to go past it.
     */
   private def fitting[A](call: AST.Call)(build: => A): Option[A] =
     try Some(build)
@@ -153,11 +156,9 @@ private[psi] final class Expand private (
       case TooDeep =>
         report(DepthExceeded(call.location, limit, fatal = false))
         None
+      // the load's error, not the fragment's, so that a handler that drops the fragment does not drop it
       case TooLarge =>
-        if (!nodes.reported) {
-          nodes.reported = true
-          report(FragmentTooLarge(call.location, call.name, nodes.limit))
-        }
+        if (nodes.error.isEmpty) nodes.error = Some(FragmentTooLarge(call.location, call.name, nodes.limit))
         None
     }
 
@@ -285,7 +286,7 @@ private[psi] final class Expand private (
       else {
         val expand = new Expand(directives, disabled, markers, formatters, limit, budget, nodes)
         val document = expand.document(source, stack, base)
-        Fragment.Parsed(document, root, expand.errors.toList, source.name :: expand.included.toList)
+        nodes.made(Fragment.Parsed(document, root, expand.errors.toList, source.name :: expand.included.toList))
       }
     }
   }
@@ -302,20 +303,55 @@ private[psi] object Expand {
   /** A node a handler built that goes past the node limit. */
   private case object TooLarge extends ControlThrowable
 
-  /** The nodes the fragments handlers built bring into the syntax trees of one load, every use of a fragment counted,
-    * at most `limit`, the load's node limit, which grafts share once the sources are expanded (§11).
+  /** The nodes fragments bring into the syntax trees of one load beyond its sources' own, at most `limit`, the load's
+    * node limit, which grafts share once the sources are expanded (§11): every node a handler built from a `Node`,
+    * every use counted, and every node of a source parsed but on its first use in the load that parsed it — a fragment
+    * a handler keeps and gives again, in this load or a later one, copies what was read once.
     */
   final class Nodes(val limit: Int) {
     var used = 0L
 
-    /** Whether going past the limit has been reported. */
-    var reported = false
+    /** The error of the first call to go past the limit: the load's, as the read limit's is, so that a handler that
+      * drops the fragment holding it does not drop it.
+      */
+    var error: Option[PsiError] = None
 
-    def count(): Unit = {
-      if (used >= limit) throw TooLarge
-      used += 1
+    /** The fragments this load parsed and has not used yet, by identity. */
+    private val fresh =
+      java.util.Collections.newSetFromMap(new java.util.IdentityHashMap[Fragment.Parsed, java.lang.Boolean])
+
+    /** `fragment`, parsed in this load, its first use free. */
+    def made(fragment: Fragment.Parsed): Fragment.Parsed = {
+      val _ = fresh.add(fragment)
+      fragment
+    }
+
+    /** Counts a use of `fragment`: none for the first in the load that parsed it, its nodes for any other. */
+    def use(fragment: Fragment.Parsed): Unit = if (!fresh.remove(fragment)) count(size(fragment.document.statements))
+
+    /** Counts `n` nodes more, before they are built; past the limit, [[TooLarge]]. */
+    def count(n: Long = 1): Unit = {
+      if (used + n > limit) throw TooLarge
+      used += n
     }
   }
+
+  /** How many nodes `statements` hold, a dotted key's keys after the first each a map. */
+  private def size(statements: Vector[AST.Statement]): Long =
+    statements.iterator.map {
+      case field: AST.Field => field.keys.size - 1 + size(field.value)
+      case _ => 1L
+    }.sum
+
+  /** How many nodes `value` holds, itself among them. */
+  private def size(value: AST.Value): Long =
+    value match {
+      case AST.Block(statements, _, _) => 1 + size(statements)
+      case AST.Sequence(elements, _, _) => 1 + elements.iterator.map(element => size(element.value)).sum
+      case AST.Injections(items, _, _) => 1 + items.iterator.collect { case AST.Injected.Given(_, v) => size(v) }.sum
+      // a scalar, a `null` and the rest, a marked block among them, being a scalar
+      case _ => 1
+    }
 
   /** How many levels `statements` open below where they stand, a dotted key's keys after the first counted. */
   private def levels(statements: Vector[AST.Statement]): Int =

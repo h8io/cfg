@@ -380,6 +380,50 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
       Some("give less, such as a YAML alias used fewer times, or build the loader with a higher withSizeLimit")
   }
 
+  "A fragment a handler parsed" should "count its nodes on every use but the first in the load that parsed it" in {
+    var kept: Option[Fragment] = None
+    val keeping = directive("keep") { (_, context) =>
+      if (kept.isEmpty) kept = Some(context.parse("k", "x: [1, 2, 3, 4, 5, 6, 7, 8, 9]"))
+      Right(kept.get)
+    }
+    val by = Psi.builder.withDirective(keeping._1, keeping._2).withSizeLimit(20, 1000).build.fold(
+      e => fail(e.toString), x => x)
+    // the first use its source's own nodes, the next two ten each
+    by.parse("s", "a: #keep\nb: #keep\nc: #keep").isRight shouldBe true
+    // kept for a later load, every use counted
+    errors(by, "a: #keep\nb: #keep\nc: #keep") shouldBe List(FragmentTooLarge(at(3, 4), "keep", 20))
+    kept = None
+    errors(by, "#keep\n#keep\n#keep\n#keep") shouldBe List(FragmentTooLarge(at(4, 1), "keep", 20))
+  }
+
+  it should "count every node it holds, a dotted key's maps and what calls gave among them" in {
+    // 3 for a, 4 for c, 3 for d, the block a call gave, 3 for e.f.g: 13
+    val text = "a { b: 1, $?x }\nc: [1, [2]]\nd:\n  #inner\n  $?y\ne.f.g: 1"
+    var kept: Option[Fragment] = None
+    val inner = directive("inner")((_, context) => Right(context.parse("i", "m: 1")))
+    val keeping = directive("keep") { (_, context) =>
+      if (kept.isEmpty) kept = Some(context.parse("k", text))
+      Right(kept.get)
+    }
+    def by(limit: Int): PsiLoader =
+      Psi.builder.withDirectives(inner, keeping).withSizeLimit(limit, 1000).build.fold(e => fail(e.toString), x => x)
+    by(13).parse("s", "p: #keep\nq: #keep").isRight shouldBe true
+    kept = None
+    errors(by(12), "p: #keep\nq: #keep") shouldBe List(FragmentTooLarge(at(2, 4), "keep", 12))
+  }
+
+  "Going past the node limit" should "fail the load, though the fragment it is found in is dropped" in {
+    val big = node("a: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]")
+    val giving = directive("big")((_, _) => Right(Fragment(big)))
+    val dropping = directive("drop") { (_, context) =>
+      val _ = context.parse("d", "v: #big")
+      Right(Fragment.None)
+    }
+    val by =
+      Psi.builder.withDirectives(giving, dropping).withSizeLimit(10, 1000).build.fold(e => fail(e.toString), x => x)
+    errors(by, "#drop\nrequired: #big\nother: 1") shouldBe List(FragmentTooLarge(SourceLocation("d", 1, 4), "big", 10))
+  }
+
   it should "read a URL's bytes through the load's read limit" in {
     var read: List[Either[IOException, Option[Array[Byte]]]] = Nil
     val reading = directive("read", Parameter("file", required = true)) { (arguments, context) =>

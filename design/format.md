@@ -1226,8 +1226,12 @@ mistake is worse than stopping.
   built; the sources' own nodes and text are not, being the input, nor what a loader's marker or a
   loader's formatter builds, being a handler's. The nodes of a fragment a handler built from a
   `Node` are, before the substitutions, each counted as it is built and every use of the fragment
-  counted again, a YAML alias as many times as it is used (session 39): the first call to go past
-  the limit is reported, as `FragmentTooLarge`, and gives nothing; grafts count on from there. The built-in `join` (§9) is
+  counted again, a YAML alias as many times as it is used (session 39), and so are the nodes of a
+  source a handler parsed, but on its first use in the load that parsed it: a fragment kept and
+  given again, in that load or a later one, copies what was read once. The first call to go past
+  the limit gives nothing, and its error, `FragmentTooLarge`, is the load's, as the read limit's
+  is, so that a handler that drops the fragment it was found in does not drop it; grafts count on
+  from there. The built-in `join` (§9) is
   counted as a concatenation, before it is built, and so is a concatenation holding what a
   formatter gave, once the formatter has given it. The first graft or concatenation to go past either
   limit is reported, as `ResolutionTooLarge` or `ConcatenationTooLong`, at its reference or its
@@ -2778,3 +2782,16 @@ Fixed on a second review of sessions 39 and 36's code, nothing of the files' mea
   fields do since the first review: `a:⏎  #include(file: base)⏎  #include(file: other)` with
   `y: $a.x` in `other` was a false cycle. A substitution there still finds its node resolved whole
   first, so `$c` with `c { y: $a.x }` among them stays a cycle, as an injection is (§9).
+
+Fixed on a third review of session 39's code, nothing of the files' meaning changed:
+
+- **A fragment a handler kept and gave again was not counted**: the nodes of a source parsed
+  through the context came in free on every use. They are free on the first use in the load that
+  parsed it, being that source's own, and counted on every other, in that load or a later one.
+- **Going past the node limit is the load's error**: reported with the fragment it was found in,
+  it went with a fragment a handler dropped, and every call after it gave nothing silently, so a
+  required field went missing from a load that succeeded.
+- **A merge key that makes a mapping contain itself, `a: &a {<<: *a}`, held `#yaml` for ever**
+  inside snakeyaml-engine, which merges keys while composing, before `cfg-yaml` checked for
+  cycles. `cfg-yaml` refuses an alias to a mapping or a sequence not yet ended as the parser gives
+  it, before the composer sees it; the check after composing had nothing left to find.

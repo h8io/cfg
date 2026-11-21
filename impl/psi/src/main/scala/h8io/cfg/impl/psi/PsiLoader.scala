@@ -57,7 +57,7 @@ final class PsiLoader private[psi] (settings: Settings) {
     })
     for {
       // the read that went past the budget, its source and every read after it dropped
-      documents <- parsed.copy(errors = PsiLoader.distinct(parsed.errors) ++ budget.error).toEither
+      documents <- parsed.copy(errors = PsiLoader.distinct(parsed.errors) ++ budget.error ++ nodes.error).toEither
       root <- (documents.flatten.toList match {
         case (document, name, included) :: rest =>
           val located = rest.map { case (document, name, _) => (document, SourceLocation(name, 1, 1)) }
