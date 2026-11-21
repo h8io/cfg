@@ -257,6 +257,11 @@ private[psi] final class Expand private (
 
     def parse(name: String, text: String): Fragment = nested(Source(name, text))
 
+    def target(arguments: Node.IMap[Id.Root], extensions: Seq[String]): Either[DirectiveError, Option[Target]] =
+      Include.target(arguments, extensions, url)
+
+    def read(url: URL): Either[IOException, Option[Array[Byte]]] = Source.bytes(url.toString, url, budget)
+
     private def nested(source: Source): Fragment = {
       val root = SourceLocation(source.name, 1, 1)
       if (stack.exists(_.key == source.key)) {

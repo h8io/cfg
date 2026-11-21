@@ -29,6 +29,10 @@ With no URLs it loads the standard application configuration instead: the system
 An `include` of a YAML file works, and so does a YAML source passed directly: `typesafe-config-yaml` reads it into
 Typesafe Config's model, every scalar a string.
 
+`HOCON.isolated(url)` loads one file on its own: its substitutions resolved inside it and the files it includes, with
+no system property, no environment variable and no `reference.conf` reaching it. It is what Psi's `#hocon` imports
+([Directives](psi/directives.md#importing-yaml-and-hocon)).
+
 ## What is lost
 
 - **Text.** Typesafe Config types HOCON and JSON values as it parses them, and a scalar is the value written back:

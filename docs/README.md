@@ -14,6 +14,7 @@ and to a format of its own, is [Why cfg](motivation.md).
 | `cfg-yaml` | [A YAML loader](yaml.md) on `snakeyaml-engine`. Keeps the tags written in the source. |
 | `cfg-hocon` | [A loader on Typesafe Config](hocon.md) for HOCON, JSON, `.properties` and YAML, with HOCON's substitutions. |
 | `cfg-psi` | [A loader for Psi](psi/README.md): merging, substitutions and includes, tags, errors collected rather than thrown, and no dependencies. |
+| `cfg-psi-yaml`, `cfg-psi-hocon` | [Directives](psi/directives.md#importing-yaml-and-hocon) that import a YAML or a HOCON file into Psi. |
 
 Every loader depends on `cfg`, so one of them is all a project needs:
 

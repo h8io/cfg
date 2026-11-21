@@ -79,20 +79,34 @@ private[psi] object Source {
       budget: ReadBudget,
       connectTimeout: Int = ConnectTimeout,
       readTimeout: Int = ReadTimeout): Either[PsiError, Option[Source]] =
+    bytes(name, url, budget, connectTimeout, readTimeout) match {
+      case Right(Some(bytes)) => decode(name, bytes).map(source =>
+          Some(new Source(name, source.text, Some(url), key(url))))
+      case Right(None) => Right(None)
+      case Left(e) => Left(SourceUnreadable(name, e))
+    }
+
+  /** The bytes at `url`, read as [[read]] reads a source, named `name` in the budget's errors: nothing when the budget
+    * is gone, by this read or one before it; what made it unreadable otherwise.
+    */
+  def bytes(
+      name: String,
+      url: URL,
+      budget: ReadBudget,
+      connectTimeout: Int = ConnectTimeout,
+      readTimeout: Int = ReadTimeout): Either[IOException, Option[Array[Byte]]] =
     if (budget.exhausted) Right(None)
     else
-      try
-        decode(name, new Reading(name, budget, connectTimeout, readTimeout).bytes(url))
-          .map(source => Some(new Source(name, source.text, Some(url), key(url))))
+      try Right(Some(new Reading(name, budget, connectTimeout, readTimeout).bytes(url)))
       catch {
         case _: ReadBudget.Exceeded => Right(None)
         // a wait the time left cut short, which ends when it is gone
         case e: SocketTimeoutException =>
           try {
             val _ = budget.timeout(name, readTimeout)
-            Left(SourceUnreadable(name, e))
+            Left(e)
           } catch { case _: ReadBudget.Exceeded => Right(None) }
-        case e: IOException => Left(SourceUnreadable(name, e))
+        case e: IOException => Left(e)
       }
 
   /** A connection to `url`, not yet made, with the timeouts set: a URL connection has none of its own, and a server

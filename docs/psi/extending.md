@@ -10,37 +10,48 @@ in front.
 How a directive is written, and what it may give where it stands, is [Directives](directives.md).
 
 A handler declares its parameters and gets the arguments as a map keyed by them, every value a string. It also gets a
-context: where the call stands, the name and URL of the source holding it, and a way to parse another Psi source. It
-gives back an error of its own or a `Fragment`: a Psi source the context parsed, any `cfg` node, `Fragment(node)`, or
-nothing, `Fragment.None`, which adds no field among fields and leaves the field or element out as a value.
+context: where the call stands, the name and URL of the source holding it, a way to parse another Psi source, the
+target its arguments name written as `#include`'s are (`target`, with `Target.parameters`), and a way to read a URL's
+bytes under the load's limits on reading (`read`). It gives back an error of its own or a `Fragment`: a Psi source the
+context parsed, any `cfg` node, `Fragment(node)`, or nothing, `Fragment.None`, which adds no field among fields and
+leaves the field or element out as a value.
 
-This one reads a YAML file with `cfg-yaml`, relative to the source the call stands in:
+This one reads a text file as one value, its target written as `#include`'s is; `cfg-psi-yaml` and `cfg-psi-hocon`
+are built the same way ([Directives](directives.md#importing-yaml-and-hocon)):
 
 ```scala mdoc:silent:reset-object
 import h8io.cfg.{Id, Node}
 import h8io.cfg.impl.psi.*
-import h8io.cfg.impl.yaml.YAML
 
-import java.net.URI
-import java.nio.file.Paths
+import java.io.FileNotFoundException
+import java.nio.charset.{CharacterCodingException, CodingErrorAction, StandardCharsets}
+import java.nio.ByteBuffer
 
-final case class YamlUnreadable(file: String, reason: String) extends DirectiveError {
-  def message: String = file + " cannot be read as YAML: " + reason
+final case class NotText(file: String) extends DirectiveError {
+  def message: String = file + " is not UTF-8 text"
 }
 
-object Yaml extends Directive {
-  def parameters: Seq[Parameter] = Seq(Parameter("file", required = true))
+object Text extends Directive {
+  def parameters: Seq[Parameter] = Target.parameters
 
   def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
-    arguments("file") match {
-      case Node.IScalar(_, _, file, _) =>
-        // the path is encoded before it is resolved, and one no URL can be made of fails the call too
-        try {
-          val url = context.url.fold(Paths.get(file).toUri)(_.toURI.resolve(new URI(null, null, file, null))).toURL
-          Right(Fragment(YAML(url)))
-        } catch { case e: Exception => Left(YamlUnreadable(file, e.toString)) }
-      // a required argument is always given, and as a scalar
-      case _ => Right(Fragment.None)
+    context.target(arguments, Seq(".txt")).flatMap {
+      case Some(target) =>
+        context.read(target.url) match {
+          case Right(Some(bytes)) =>
+            val decoder = StandardCharsets.UTF_8.newDecoder.onMalformedInput(CodingErrorAction.REPORT)
+            try {
+              val text = decoder.decode(ByteBuffer.wrap(bytes)).toString
+              Right(Fragment(Node.Scalar(Id.Root, None, text, context.location)))
+            } catch { case _: CharacterCodingException => Left(NotText(target.written)) }
+          // the load's limit on reading gone, which the load reports
+          case Right(None) => Right(Fragment.None)
+          // a URL from elsewhere, not known to be there until read
+          case Left(_: FileNotFoundException) if !target.known =>
+            if (target.optional) Right(Fragment.None) else Left(IncludeNotFound(target.written))
+          case Left(cause) => Left(IncludeUnreadable(target.written, cause))
+        }
+      case None => Right(Fragment.None)
     }
 }
 ```
@@ -121,7 +132,7 @@ object Pad extends Formatter {
 ```scala mdoc:silent
 val loader =
   Psi.builder
-    .withDirective("yaml", Yaml)
+    .withDirective("text", Text)
     .withMarker("base64", Base64Marker)
     .withFormatter("pad", Pad)
     .build
@@ -133,20 +144,21 @@ val loader =
 val app = {
   val dir = java.nio.file.Files.createTempDirectory("psi")
   def write(name: String, text: String) = java.nio.file.Files.write(dir.resolve(name), text.getBytes("UTF-8"))
-  write("db config.yaml", "host: localhost\nport: 5432\n")
+  write("motd.txt", "Hello")
   write(
     "app.psi",
-    "database: #yaml(file: \"db config.yaml\")\nport: ${database.port; pad(8, with: 0)}\n" +
+    "motd: #text(file: motd)\nport: 5432\npadded: ${port; pad(8, with: 0)}\n" +
       "greeting: \"\"\"base64\n  aGVsbG8sIHdvcmxk\n  \"\"\"\n")
   dir.resolve("app.psi").toUri.toURL
 }
 ```
 
-With `db config.yaml` holding `host: localhost` and `port: 5432`, and `app.psi` next to it:
+With `motd.txt` holding `Hello`, and `app.psi` next to it:
 
 ```
-database: #yaml(file: "db config.yaml")
-port: ${database.port; pad(8, with: 0)}
+motd: #text(file: motd)
+port: 5432
+padded: ${port; pad(8, with: 0)}
 greeting: """base64
   aGVsbG8sIHdvcmxk
   """
@@ -175,8 +187,8 @@ A builder reports every error of its configuration at once:
 
 ```scala mdoc
 Psi.builder
-  .withDirective("yaml", Yaml)
-  .withDirective("yaml", Yaml)
+  .withDirective("text", Text)
+  .withDirective("text", Text)
   .withMarker("base64", Base64Marker)
   .withFormatter("join", Pad)
   .build

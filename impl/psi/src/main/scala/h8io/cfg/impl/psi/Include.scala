@@ -40,10 +40,47 @@ final case class IncludeUnreadable(target: String, cause: IOException) extends I
 private[psi] object Include extends Directive {
   def name: String = "include"
 
-  def parameters: Seq[Parameter] =
-    Seq("file", "resource", "url", "optional").map(Parameter(_, required = false))
+  def parameters: Seq[Parameter] = Target.parameters
 
-  def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] = {
+  def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
+    for {
+      written <- this.written(arguments)
+      candidates <- urls(written._1, written._2, Extensions, context.url)
+      fragment <- read(written._2, candidates, written._3, context)
+    } yield fragment
+
+  /** Psi's extensions, in the order a file or a resource with none is looked for with them (§6). */
+  private def Extensions: Seq[String] = Seq(".Ψ", ".ψ", ".psi")
+
+  /** The target `arguments` name for a handler (`DirectiveContext.target`): the first candidate there, or not known not
+    * to be; none when no candidate is and it is optional.
+    */
+  def target(
+      arguments: Node.IMap[Id.Root],
+      extensions: Seq[String],
+      base: Option[URL]): Either[IncludeError, Option[Target]] =
+    for {
+      written <- this.written(arguments)
+      candidates <- urls(written._1, written._2, extensions, base)
+      found <- first(written._2, candidates)
+      result <- found match {
+        case Some((url, known)) => Right(Some(Target(url, written._2, written._3, known)))
+        case None if written._3 => Right(None)
+        case None => Left(IncludeNotFound(written._2))
+      }
+    } yield result
+
+  /** The first of `candidates` there, or not known not to be, and whether it is known to be. */
+  private def first(target: String, candidates: List[URL]): Either[IncludeError, Option[(URL, Boolean)]] =
+    candidates match {
+      case url :: rest =>
+        present(target, url).flatMap(there =>
+          if (there.contains(false)) first(target, rest) else Right(Some(url -> there.contains(true))))
+      case Nil => Right(None)
+    }
+
+  /** The kind of target `arguments` give, the target as written, and whether it is optional. */
+  private def written(arguments: Node.IMap[Id.Root]): Either[IncludeError, (String, String, Boolean)] = {
     def argument(name: String): Option[String] =
       arguments(name) match {
         case Node.IScalar(_, _, value, _) => Some(value)
@@ -60,23 +97,25 @@ private[psi] object Include extends Directive {
         case target :: Nil => Right(target)
         case _ => Left(IncludeTargets(targets.map(_._1)))
       }
-      candidates <- urls(target._1, target._2, context)
-      fragment <- read(target._2, candidates, optional, context)
-    } yield fragment
+    } yield (target._1, target._2, optional)
   }
 
-  /** Where to look for the target, in order. */
-  private def urls(kind: String, target: String, context: DirectiveContext): Either[IncludeError, List[URL]] =
+  /** Where to look for the target, in order, a file or a resource with no extension with each of `extensions`. */
+  private def urls(
+      kind: String,
+      target: String,
+      extensions: Seq[String],
+      base: Option[URL]): Either[IncludeError, List[URL]] =
     try
       kind match {
         // the last segment of a path as the file system the program runs on reads it
         case "file" =>
-          Right(extended(target, Option(Paths.get(target).getFileName).exists(_.toString.contains('.')))
-            .map(file(_, context.url)))
+          Right(extended(target, Option(Paths.get(target).getFileName).exists(_.toString.contains('.')), extensions)
+            .map(file(_, base)))
         case "resource" =>
           val loader = Option(Thread.currentThread.getContextClassLoader).getOrElse(getClass.getClassLoader)
           // a name on the class path separates its segments with `/` on every system
-          Right(extended(target, target.substring(target.lastIndexOf('/') + 1).contains('.'))
+          Right(extended(target, target.substring(target.lastIndexOf('/') + 1).contains('.'), extensions)
             .flatMap(name => Option(loader.getResource(name))))
         case _ => Right(URI.create(target).toURL :: Nil)
       }
@@ -86,10 +125,10 @@ private[psi] object Include extends Directive {
         Left(IncludeInvalidTarget(target))
     }
 
-  /** A path or a name with no extension, as each of Psi's; one with an extension, as it is. */
-  private def extended(target: String, extension: Boolean): List[String] =
+  /** A path or a name with no extension, with each of `extensions`; one with an extension, as it is. */
+  private def extended(target: String, extension: Boolean, extensions: Seq[String]): List[String] =
     if (extension) target :: Nil
-    else List(".Ψ", ".ψ", ".psi").map(target + _)
+    else extensions.toList.map(target + _)
 
   /** A path: absolute, a file; relative, against the including source's URL, or the working directory with none. */
   private def file(path: String, base: Option[URL]): URL =

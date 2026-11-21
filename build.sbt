@@ -117,10 +117,19 @@ val psi = (project in file("impl/psi"))
   .settings(name := "cfg-psi")
   .dependsOn(cfg)
 
+// Psi's imports of YAML and HOCON (format.md §6), apart so that Psi and the loaders depend on nothing more
+val psiYaml = (project in file("impl/psi-yaml"))
+  .settings(name := "cfg-psi-yaml")
+  .dependsOn(psi, yaml)
+
+val psiHocon = (project in file("impl/psi-hocon"))
+  .settings(name := "cfg-psi-hocon")
+  .dependsOn(psi, hocon)
+
 val root = (project in file("."))
   .enablePlugins(ScoverageSummaryPlugin)
   .settings(name := "cfg-all", publish / skip := true)
-  .aggregate(cfg, hocon, psi, yaml)
+  .aggregate(cfg, hocon, psi, psiHocon, psiYaml, yaml)
 
 val pages = (project in file("pages"))
   .settings(
@@ -147,5 +156,5 @@ val pages = (project in file("pages"))
     mdocVariables :=
       Map("VERSION" -> (if (isSnapshot.value) previousStableVersion.value else None).getOrElse(version.value))
   )
-  .dependsOn(cfg, hocon, psi, yaml)
+  .dependsOn(cfg, hocon, psi, psiHocon, psiYaml, yaml)
   .enablePlugins(ScalaUnidocPlugin, MdocPlugin)
