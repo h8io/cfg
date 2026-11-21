@@ -60,6 +60,8 @@ private[psi] final class Merge {
       case (earlier: Tree.Layer, AST.Substitution(path, optional, tag, location)) =>
         Tree.Layers(earlier, Tree.Substitution(path, optional, tag, location))
       case (earlier: Tree.Layer, injections: AST.Injections) => Tree.Layers(earlier, this.injections(injections))
+      case (earlier: Tree.Layer, AST.Formatted(part, tag, location)) =>
+        Tree.Layers(earlier, Tree.Formatted(part, tag, location))
       // kept as written, so that a `:=` in it replaces what the earlier finds, once it is found
       case (Merge.Unknown(earlier), AST.Block(statements, tag, location)) =>
         Tree.Layers(earlier, Tree.Map.empty(tag, location).copy(steps = Merge.steps(statements)))

@@ -12,7 +12,7 @@ import scala.collection.{immutable, mutable}
   * error is reported where it stands; [[failed]] says whether any was.
   */
 private[psi] abstract class CallReader(
-    protected val line: String,
+    protected val line: CharSequence,
     protected val offsets: IndexedSeq[Int],
     protected val report: (SourceLocation => PsiError, Int) => Unit,
     protected val locate: Int => SourceLocation) {
@@ -44,8 +44,9 @@ private[psi] abstract class CallReader(
   protected def skipSpaces(): Unit = while (has(i) && isSpace(line.charAt(i))) i += 1
 
   protected def identifier(): Unit =
-    if (has(i) && isNameStart(line.codePointAt(i)))
-      while (has(i) && isNamePart(line.codePointAt(i))) i += Character.charCount(line.codePointAt(i))
+    if (has(i) && isNameStart(Character.codePointAt(line, i)))
+      while (has(i) && isNamePart(Character.codePointAt(line, i))) i +=
+        Character.charCount(Character.codePointAt(line, i))
 
   /** `(name: literal, …)` from its `(`, separated as a directive's arguments are (§6): a trailing `,` is allowed, and a
     * `,` with no argument before it is an empty one.
@@ -90,7 +91,7 @@ private[psi] abstract class CallReader(
       if (at(i, '`')) backticked()
       else {
         identifier()
-        if (i > start) Some(line.substring(start, i)) else None
+        if (i > start) Some(line.subSequence(start, i).toString) else None
       }
     skipSpaces()
     written.flatMap(name => if (at(i, ':') || at(i, '=')) Some(name) else None) match {
@@ -126,7 +127,7 @@ private[psi] abstract class CallReader(
         val (read, end) = readEscape(line, i, has(i + 1))
         read match {
           case Some(escaped) => value ++= escaped
-          case None => error(InvalidEscape(_, line.substring(i, end)), i)
+          case None => error(InvalidEscape(_, line.subSequence(i, end).toString), i)
         }
         i = end
       } else {
@@ -150,7 +151,7 @@ private[psi] abstract class CallReader(
     else {
       val start = i
       identifier()
-      if (i > start) Some(NameLiteral(line.substring(start, i))) else invalid
+      if (i > start) Some(NameLiteral(line.subSequence(start, i).toString)) else invalid
     }
 
   /** A string with the escapes of `"…"`; `\${` is an error, an argument being literal. */
@@ -163,11 +164,11 @@ private[psi] abstract class CallReader(
         val (read, end) = readEscape(line, i, has(i + 1))
         read match {
           case Some(escaped) => value ++= escaped
-          case None => error(InvalidEscape(_, line.substring(i, end)), i)
+          case None => error(InvalidEscape(_, line.subSequence(i, end).toString), i)
         }
         i = end
       } else {
-        if (line.startsWith("${", i)) error(SubstitutionInArgument.apply, i)
+        if (at(i, '$') && at(i + 1, '{')) error(SubstitutionInArgument.apply, i)
         value += line.charAt(i)
         i += 1
       }
@@ -207,7 +208,7 @@ private[psi] abstract class CallReader(
     else if (i - digits > 1 && line.charAt(digits) == '0') {
       i = digits + 1
       invalid
-    } else Some(IntegerLiteral(line.substring(start, i)))
+    } else Some(IntegerLiteral(line.subSequence(start, i).toString))
   }
 
   /** The arguments of a handler's call, as it gets them: by parameter, in the order declared. */

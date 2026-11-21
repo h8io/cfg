@@ -2738,3 +2738,16 @@ Fixed on a review of session 32's code, the format unchanged, nothing put to the
   `.yaml` then `.yml`, and `.conf`; a file's errors one failure of the directive, the reader's
   message in it; `cfg-yaml` and `cfg-hocon` each given a function of their own for it, a node of
   any kind from bytes, and a file resolved on its own.
+
+Fixed on a review of sessions 36 and 38's code, the format unchanged, nothing put to the user:
+
+- An optional formatted substitution that found nothing dropped the map written before it at its key
+  (`a { x: 1 }` then `a: ${?m; join(",")}`): it replaced at once rather than waiting as §9 says,
+  as a merge with a substitution does (session 36). It is a layer now.
+- An index into a sequence did not count a formatted substitution among its elements, so that one
+  finding nothing shifted every element after it: `$s[1]` gave the first.
+- A field merged over a substitution could not refer to another of its map, `a: $base` then
+  `a { y: $a.x }` a false cycle: the layers' children were resolved inside the mark of their key.
+  The layers are merged once, and their children resolved after, as a map's with injections are.
+- Each formatter copied the rest of its line, so that a line of 8 000 took seconds: the line's end
+  is found once, and read through a view of the source.

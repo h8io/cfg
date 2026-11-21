@@ -194,6 +194,17 @@ class ResolveTest extends AnyFlatSpec with Matchers {
       List(UnresolvedSubstitution(at(3, 19), "missing"))
   }
 
+  "Fields merged over a substitution" should "refer to each other and to what it found, as a map's fields do" in {
+    val root = loaded("base { x: 1 }\na: $base\na { y: $a.x, z: ${a.y} }")
+    root("a").toString shouldBe "x: 1\ny: 1\nz: 1"
+    errors("base { x: 1 }\na: $base\na { y: $a.y }") shouldBe List(SubstitutionCycle(at(3, 8), "a.y"))
+    errors("a: $missing\na { y: 1 }") shouldBe List(UnresolvedSubstitution(at(1, 4), "missing"))
+    loaded("s: 1\na { y: 1 }\na: $s\nb: $a")("b") match {
+      case Node.IScalar(_, _, "1", _) => succeed
+      case other => fail(other.toString)
+    }
+  }
+
   "Layers within layers, which no source merges into" should "merge as the layers they hold, in turn" in {
     val site = at(1, 1)
     def map(key: String, value: String): Tree.Map =

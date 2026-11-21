@@ -83,9 +83,13 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       case injections: Tree.Injections =>
         once(id, injections.items.collectFirst { case Right(r) => new Following(r.location, r.path) })(
           gathered(id, injections))
+      // merged once, its children resolved apart, after it, so that one may refer to another
       case layers: Tree.Layers =>
-        once(id, layers.layers.collectFirst { case Tree.Substitution(path, _, _, at) => new Following(at, path) })(
-          layered(id, layers))
+        stacked(id, layers) match {
+          case Right(Some(map: Tree.Map)) => step(finished(id, Right(map)))
+          case Left(failure) => finished(id, Left(failure))
+          case other => other
+        }
       case Tree.Substitution(path, optional, tag, at) =>
         once(id, Some(new Following(at, path)))(
           reference(path, optional, at).flatMap(_.fold[Resolution](Right(None))(grafted(id, _, at, path, tag))))
@@ -360,6 +364,16 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     * in turn as written, those a substitution finds with their tag. A layer that finds nothing puts nothing, and what
     * stands before the first that is no map is not resolved, as what a value replaces is not.
     */
+  /** What `layers` at `id` merge to, once: a map with its children not resolved yet, or anything else resolved. */
+  private def stacked(id: Id, layers: Tree.Layers): Resolution =
+    once(
+      id,
+      layers.layers.collectFirst {
+        case Tree.Substitution(path, _, _, at) => new Following(at, path)
+        case Tree.Formatted(Token.Formatted(Token.Reference(path, _, at), _), _, _) => new Following(at, path)
+      }
+    )(layered(id, layers))
+
   private def layered(id: Id, layers: Tree.Layers): Resolution = {
     // the first that is no map from the last back, if any, to resolve when nothing comes after it, and the maps after it
     @tailrec
@@ -386,12 +400,19 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
             case Right(Some(Right(sequence))) => Right((() => step(this.sequence(id, sequence).map(Some(_))), maps))
             case Left(failure) => Left(failure)
           }
+        // a formatted substitution gives a scalar, or nothing when an optional one finds nothing
+        case (formatted: Tree.Formatted) :: earlier =>
+          this.formatted(formatted) match {
+            case Right(None) => back(earlier, maps)
+            case Right(found) => Right((() => Right(found), maps))
+            case Left(failure) => Left(failure)
+          }
         // layers merged into a map in their turn, as they would have been at this key
         case Tree.Layers(inner) :: earlier => back(inner.reverse.toList ++ earlier, maps)
       }
     back(layers.layers.reverse.toList, Nil).flatMap {
       case (alone, Nil) => alone()
-      case (_, first :: rest) => step(finished(id, complete(id, rest.foldLeft(first)(joined))))
+      case (_, first :: rest) => complete(id, rest.foldLeft(first)(joined)).map(Some(_))
     }
   }
 
@@ -463,9 +484,10 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       case Nil => resolve(id, value)
       case next :: rest =>
         val here = value match {
-          case _: Tree.Substitution | _: Tree.Injections | _: Tree.Layers | _: Tree.Concatenation | _: Tree.Formatted |
-              _: Tree.Marked =>
+          case _: Tree.Substitution | _: Tree.Injections | _: Tree.Concatenation | _: Tree.Formatted | _: Tree.Marked =>
             resolve(id, value)
+          // what the layers merge to, its children looked into one at a time
+          case layers: Tree.Layers => stacked(id, layers)
           // what an injection brings in among fields is known only once it is resolved
           case map: Tree.Map if map.steps.nonEmpty => completed(id, map).map(Some(_))
           case _ => Right(Some(value))
@@ -505,8 +527,8 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
                     else element(i + 1, left - elements.size)
                   case Left(failure) => Left(failure)
                 }
-              // one that finds nothing puts no element
-              case value @ (Tree.Substitution(_, true, _, _) | _: Tree.Injections) =>
+              // one that finds nothing puts no element, a formatted one as any other
+              case value @ (Tree.Substitution(_, true, _, _) | _: Tree.Injections | _: Tree.Formatted) =>
                 resolve(Id.Index(i, id), value) match {
                   case Right(None) => element(i + 1, left)
                   case Right(Some(_)) if left > 0 => element(i + 1, left - 1)
