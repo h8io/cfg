@@ -54,6 +54,18 @@ class HoconTest extends AnyFlatSpec with Matchers {
     }
   }
 
+  it should "look for a file with no extension as .conf, .json and .properties, the first found read" in {
+    loaded(
+      "a: #hocon(file: x)\nb: #hocon(file: y)\nc: #hocon(file: z)",
+      "x.conf" -> "v: conf",
+      "x.json" -> "{\"v\": \"json\"}",
+      "y.json" -> "{\"v\": \"json\"}",
+      "y.properties" -> "v=properties",
+      "z.properties" -> "v.w=properties"
+    ).toString shouldBe
+      "a:\n  v: conf\nb:\n  v: json\nc:\n  v:\n    w: properties\n"
+  }
+
   it should "resolve a file with no system property, environment variable or reference.conf reaching it" in {
     val home = sys.props.contains("user.home") && sys.env.contains("PATH")
     home shouldBe true

@@ -17,14 +17,17 @@ final case class HoconInvalid(target: String, reason: String) extends DirectiveE
   *
   * `#hocon(file: "app.conf")` gives the file's whole tree where the call stands, resolved on its own: no system
   * property, no environment variable and no `reference.conf` reach it. The target is written as `#include`'s, a file or
-  * a resource with no extension looked for as `.conf`. Typesafe Config reads the file and those it includes itself,
-  * past the load's read limit, and recurses with no limit: for trusted input only.
+  * a resource with no extension looked for as `.conf`, `.json` and `.properties`, in that order. Typesafe Config reads
+  * the file and those it includes itself, past the load's read limit, and recurses with no limit: for trusted input
+  * only.
   */
 object Hocon extends Directive {
   def parameters: Seq[Parameter] = Target.parameters
 
-  /** The extensions a file or a resource with none is looked for with. */
-  def Extensions: Seq[String] = Seq(".conf")
+  /** The extensions a file or a resource with none is looked for with, in order, the first found read: each a syntax
+    * HOCON takes, as Typesafe Config's own, which merges every one it finds.
+    */
+  val Extensions: Seq[String] = Seq(".conf", ".json", ".properties")
 
   def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
     context.target(arguments, Extensions).flatMap {

@@ -98,7 +98,8 @@ val loader = Psi.builder.withDirective("yaml", h8io.cfg.impl.psi.yaml.Yaml).buil
 ```
 
 - The target is written as `#include`'s: `file`, `resource` or `url`, and `optional`. A file or a resource with no
-  extension is looked for as `.yaml` and then `.yml` by `#yaml`, as `.conf` by `#hocon`.
+  extension is looked for as `.yaml` and then `.yml` by `#yaml`, as `.conf`, `.json` and `.properties` by `#hocon`,
+  the first found read.
 - What it gives is the file's whole tree, every value a string. A YAML file may hold any node at its root, a sequence
   or a single value as well as a mapping, and keeps the tags written in it.
 - A HOCON file is resolved on its own: its substitutions inside it, with no system property, no environment variable
