@@ -41,7 +41,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
   private def constant(name: String, fragment: => Fragment): (String, Directive) =
     directive(name)((_, _) => Right(fragment))
 
-  private def nothing: (String, Directive) = directive("none")((_, _) => Right(Fragment.None))
+  private val nothing: (String, Directive) = directive("none")((_, _) => Right(Fragment.None))
 
   "A builder" should "report every error of its configuration at once" in {
     val x =

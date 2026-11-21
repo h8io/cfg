@@ -15,9 +15,9 @@ class MarkerTest extends AnyFlatSpec with Matchers {
       def apply(arguments: Node.IMap[Id.Root], value: String): Either[MarkerError, String] = body(arguments, value)
     }
 
-  private def upper: (String, Marker) = marker("upper")((_, value) => Right(value.toUpperCase))
+  private val upper: (String, Marker) = marker("upper")((_, value) => Right(value.toUpperCase))
 
-  private def reverse: (String, Marker) = marker("~~")((_, value) => Right(value.reverse))
+  private val reverse: (String, Marker) = marker("~~")((_, value) => Right(value.reverse))
 
   private def loader(markers: (String, Marker)*): PsiLoader =
     Psi.builder.withMarkers(markers*).withSystemProperties(Map.empty).build.fold(e => fail(e.toString), identity)

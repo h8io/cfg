@@ -18,7 +18,7 @@ class LaunchTest extends AnyFlatSpec with Matchers {
     "c.d" -> "3",
     "c.d.e" -> "4")
 
-  private def loader: PsiLoader =
+  private val loader: PsiLoader =
     Psi.builder
       .withSystemProperties(properties)
       .withEnvironment(Map("HOME" -> "/home/x"))

@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 
 class HoconTest extends AnyFlatSpec with Matchers {
-  private def loader: PsiLoader =
+  private val loader: PsiLoader =
     Psi.builder.withDirective("hocon", Hocon).withSystemProperties(Map.empty).build.fold(e => fail(e.toString), x => x)
 
   private def directory(files: (String, String)*): Path = {

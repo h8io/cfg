@@ -45,7 +45,7 @@ final case class PropertyConflict(name: String) extends LaunchError {
   * default.
   */
 private[psi] abstract class Launch(val name: String) extends Directive {
-  def parameters: Seq[Parameter] =
+  val parameters: Seq[Parameter] =
     Seq(Parameter("name", required = true), Parameter("optional", required = false), Parameter("default", false))
 
   def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] = {

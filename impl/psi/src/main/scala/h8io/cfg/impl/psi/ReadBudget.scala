@@ -50,7 +50,7 @@ private[psi] object ReadBudget {
   def DefaultBytes: Int = 10000000
 
   /** How long reading the sources of a load may take unless the builder says otherwise (§11). */
-  def DefaultTime: Duration = Duration.ofSeconds(60)
+  val DefaultTime: Duration = Duration.ofSeconds(60)
 
   /** A read stopped by the budget, which holds its error. */
   final class Exceeded(val error: PsiError) extends IOException(error.message)

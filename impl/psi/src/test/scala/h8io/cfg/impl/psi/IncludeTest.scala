@@ -14,7 +14,7 @@ import java.util.zip.{ZipEntry, ZipOutputStream}
 
 class IncludeTest extends AnyFlatSpec with Matchers {
 
-  private def loader: PsiLoader =
+  private val loader: PsiLoader =
     Psi.builder.withSystemProperties(Map.empty).build.fold(e => fail(e.toString), identity)
 
   private def write(dir: Path, name: String, text: String): Path = {
@@ -191,7 +191,7 @@ class IncludeTest extends AnyFlatSpec with Matchers {
       Left(List(DirectiveFailed(SourceLocation("s", 1, 1), "include", IncludeNotFound(entry("b.psi")))))
   }
 
-  private def jarBytes: Array[Byte] = {
+  private val jarBytes: Array[Byte] = {
     val bytes = new java.io.ByteArrayOutputStream
     val out = new ZipOutputStream(bytes)
     try {

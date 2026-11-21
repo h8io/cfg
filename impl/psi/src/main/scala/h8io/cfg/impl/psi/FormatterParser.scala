@@ -19,7 +19,7 @@ private[psi] final class FormatterParser(
     formatters: Map[String, Formatter])
     extends CallReader(text, positions, reporter, locator) {
 
-  protected def invalidCall: SourceLocation => PsiError = InvalidFormatter.apply
+  protected val invalidCall: SourceLocation => PsiError = InvalidFormatter.apply
 
   /** The formatter bound to its arguments, or none once an error has been reported; and where reading stopped in
     * `line`: at the `}` when there is a formatter.

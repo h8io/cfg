@@ -17,7 +17,7 @@ class FormatterTest extends AnyFlatSpec with Matchers {
     }
 
   /** Gives what it formats, a container as its `toString` shows it, its id in front. */
-  private def show: Formatter =
+  private val show: Formatter =
     formatter() { _ =>
       Right { node =>
         val shown = node match {
@@ -29,7 +29,7 @@ class FormatterTest extends AnyFlatSpec with Matchers {
       }
     }
 
-  private def upper: Formatter =
+  private val upper: Formatter =
     formatter() { _ =>
       Right {
         case Node.IScalar(_, _, value, _) => Right(value.toUpperCase)
@@ -40,7 +40,7 @@ class FormatterTest extends AnyFlatSpec with Matchers {
   private def loader(formatters: (String, Formatter)*): PsiLoader =
     Psi.builder.withFormatters(formatters*).withSystemProperties(Map.empty).build.fold(e => fail(e.toString), identity)
 
-  private def plain: PsiLoader = loader()
+  private val plain: PsiLoader = loader()
 
   private def loaded(text: String, loader: PsiLoader = plain): Node.IMap[Id.Root] =
     loader.parse("s", text).fold(errors => fail(errors.toString), identity)

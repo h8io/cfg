@@ -8,7 +8,7 @@ object Example {
   /** The loader the examples use: `Psi` with no system properties, so that a page does not show the machine it was
     * built on.
     */
-  def defaultLoader: PsiLoader = Psi.builder.withSystemProperties(Map.empty).build.fold(e => sys.error(e.toString), identity)
+  val defaultLoader: PsiLoader = Psi.builder.withSystemProperties(Map.empty).build.fold(e => sys.error(e.toString), identity)
 
   /** Prints `source` and what it loads as, a tree written back as Psi or the report of its errors, as Markdown. Three
     * double quotes, which a Scala string cannot hold, are written QQQ.

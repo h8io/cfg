@@ -20,7 +20,7 @@ private[psi] final class MarkerParser(
     extends CallReader(text, positions, reporter, locator) {
   import MarkerParser.*
 
-  protected def invalidCall: SourceLocation => PsiError = InvalidMarker.apply
+  protected val invalidCall: SourceLocation => PsiError = InvalidMarker.apply
 
   /** The stages to apply, in order, Java's rule first when no marker sets the indent, and the loader's markers to run
     * over the value after them (`format.md` §5); none of the latter when any marker is wrong.
@@ -117,7 +117,7 @@ private[psi] final class MarkerParser(
   }
 
   /** The markers every loader knows until handlers can be registered (plan step 10), each with its parameters. */
-  private def builtIns: Map[String, BuiltIn] =
+  private val builtIns: Map[String, BuiltIn] =
     Map(
       "<" -> BuiltIn(Vector.empty, (_, _) => Some(StripIndent)),
       ">" -> BuiltIn(Vector.empty, (_, _) => Some(KeepIndent)),
