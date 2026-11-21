@@ -393,7 +393,8 @@ are — and then strips it. `<`, `>` and `width` set the indent, and a block tak
 them; with none, Java's rule comes first, so `"""+` folds what that rule left.
 
 **The set of markers is open**, as the set of directives is (§6): the loader is built with the
-marker handlers it knows (§14, session 19). **A loader's own markers are a pipeline over the
+marker handlers it knows (§14, session 19), each under the name it is registered by (§6, session
+38). **A loader's own markers are a pipeline over the
 block's finished value**: the first gets the string the block stands for — its layout applied, its
 escapes read, its substitutions resolved — and each next one what the one before it gave; what the
 last gives is the value. They run with the substitutions (§8, phase 4), so a block refers to a value
@@ -604,8 +605,14 @@ name, before or after disabling it, is an error when the loader is built, so a h
 a directive back; disabling a name twice counts once. This is how a loader for input it does not
 trust leaves out `#include`. Both restrictions can be lifted later without breaking a v1 file.
 
-**The loader is built by a builder** (session 19): `Psi.builder.withDirectives(…)
-.disableDirective(…).withSystemProperties(…).build`, the markers joining in plan step 10b. `build`
+**The loader is built by a builder** (session 19): `Psi.builder.withDirective(name, handler)
+.disableDirective(…).withSystemProperties(…).build`, the markers joining in plan step 10b and the
+formatters in session 38 (§9). **The name a handler is called by is given where it is registered**
+(session 38), `withDirective("yaml", Yaml)`, `withMarker(name, handler)`,
+`withFormatter(name, handler)`, not held by the handler: the name is the syntax of the files, and the
+files are the loader's, so the author of a handler does not dictate it, and one handler may be
+registered under two names. A handler's own message therefore does not name it; the report puts
+the name it was called by in front (§11). The built-in names stay fixed. `build`
 gives every error of the configuration at once — a name registered twice, a disabled name
 registered, a handler declaring a parameter twice — or the loader, with `apply(urls*)` and
 `parse(name, text)` as `Psi` has; `Psi` itself is the loader with nothing added. The overrides of
@@ -823,8 +830,9 @@ cannot be expressed any other way.
 2. Expand directives depth-first. `#include` parses the referenced source recursively and merges it
    positionally. Cycle detection lives here.
 3. Merge the input sources, last wins.
-4. Resolve substitutions over the merged tree, merge what each injection finds into the block it
-   stands in, and run the loader's own markers over the blocks that have them (§5, §9).
+4. Resolve substitutions over the merged tree, format what a formatter is given, merge what each
+   injection finds into the block it stands in, and run the loader's own markers over the blocks
+   that have them (§5, §9). A formatter's arguments are taken in phase 1 (§9).
 5. Wrap the result as `Node.IMap[Id.Root]`.
 
 Nothing overrides the merged tree from outside (session 25): a value set at launch comes in where
@@ -941,6 +949,48 @@ it gives it a place for one node, and it grafts; with none, it injects into the 
   before either is resolved.
 - It copies what it puts, and counts against the size limit as a graft does, and against the depth
   limit where its contents stand (§11).
+
+**Formatters** (session 38) turn what a substitution finds into a string:
+`${path; name(arguments)}`, as ST4's `<hosts; separator=",">`. With `hosts: [a, b]`,
+`url: "jdbc:${hosts; join(",")}/db"` is `jdbc:a,b/db`. A formatter is a function of its arguments
+giving a function from a node to a string, and the set of them is open, as directives and markers
+are (§5, §6).
+
+- **Written in braces only**: `${path; name}` or `${path; name(…)}`, `${?path; …}` optional. After
+  the path come `;`, whitespace if any, and a call written as a marker is (§5): a name by the key
+  rule, bare or in backticks, then, if it takes any, its arguments in parentheses touching it, as a
+  directive's are (§6), literals only, `name: literal` or a literal alone. No whitespace before the
+  `;` nor before the `}`, as none is allowed in a path; one line, as `${…}` always is. `$path`, with
+  no braces, takes no formatter, its `;` being text.
+- **One formatter in a substitution**, the user's call: a second `;` is an error. A chain, each
+  next one given a scalar of what the one before gave, can be added later without breaking a file.
+- **In quotes the call is read by its own rules**, the user's call, as Scala reads `s"${f("x")}"`:
+  a `"` or a `}` inside an argument's literal closes neither the string around it nor the
+  substitution. `"hosts: ${h; join(", ")}"` is one string, `${a; wrap("{", "}")}` one substitution.
+  In `"""…"""` likewise; `'…'` and `'''…'''` substitute nothing (§5). An argument in `"…"` has its
+  escapes, `${` an error, as a directive's (§6).
+- **What it gives is a scalar**, the string, carrying only the tag written before it, as a
+  concatenation's does: `a: @t ${hosts; join(",")}` is tagged `t`, `a: ${hosts; join(",")}` has none.
+  After a key or a `- ` it is that scalar; in a concatenation, its text; in `[…]`, one element.
+  **It never injects**: alone among fields, alone on its line among `- ` elements, or in a block of
+  injections alone, a formatter is an error, a string being neither fields nor elements. What is
+  merged at its key merges with it once it is resolved, as with any substitution (§7, session 36): a
+  map there replaces it.
+- **What it formats is anything the path finds**, scalar, `null`, map or sequence, resolved, as a
+  graft would take it; the formatter decides what it can format, and an error of its own reports
+  the rest. An optional substitution that finds nothing calls no formatter: the field is left out,
+  or the concatenation reads it as the empty string, as without one.
+- **A formatter is called in two steps**: with its arguments, when the source is read (phase 1,
+  §8), so that a call the loader does not know, an argument to no parameter, given twice, or a
+  required one missing, and the handler's refusal of its arguments, are reported with the errors of
+  the syntax and the directives (§11); then the function it gave with the node, when the
+  substitution is resolved (phase 4). A failure of either is the handler's error, shown under the
+  formatter (§11) at its name.
+- **`join` is the one built-in**, the user's choice to start with: `join(separator)`, the
+  separator required, puts the elements of a sequence one after another with the separator between
+  them, `""` for an empty sequence. An element that is no scalar, `null` included, and anything but
+  a sequence, are its errors. The name is reserved, as the four built-in markers are (§5): every
+  loader has it, and none can register, replace or disable it.
 
 ## 10. Locations
 
@@ -1134,8 +1184,10 @@ mistake is worse than stopping.
   grafts, six times over, make 10⁷ nodes, and a scalar concatenated with itself, 25 times over,
   makes 3·10⁸ characters. The depth limit bounds neither, the tree growing wide. Counted are the
   nodes grafts copy and the characters of the scalars concatenations build, each before it is
-  built; the sources' own nodes and text are not, being the input, nor what a directive or a
-  loader's marker builds, being a handler's. The first graft or concatenation to go past either
+  built; the sources' own nodes and text are not, being the input, nor what a directive, a
+  loader's marker or a loader's formatter builds, being a handler's. The built-in `join` (§9) is
+  counted as a concatenation, before it is built, and so is a concatenation holding what a
+  formatter gave, once the formatter has given it. The first graft or concatenation to go past either
   limit is reported, as `ResolutionTooLarge` or `ConcatenationTooLong`, at its reference or its
   concatenation; nothing is built after it, and the load fails.
 - **Reading the sources of a load is limited, to 10 000 000 bytes and 60 seconds unless the
@@ -1182,8 +1234,8 @@ mistake is worse than stopping.
   changing anything else.
 - **An error that ends its source says so**, as `the rest of this source is not read`; otherwise a
   reader takes the errors listed as all there are.
-- **A handler's error is shown under its directive or marker**, `#include: file:/…/x.psi is not
-  found`: the name, then the handler's message.
+- **A handler's error is shown under its directive, marker or formatter**, `#include: file:/…/x.psi
+  is not found`: the name it was called by, then the handler's message.
 - **Messages are not a contract.** Tests assert their exact texts, but a program reads an error by
   its type and fields; a text may change in any release.
 
@@ -1225,11 +1277,12 @@ mistake is worse than stopping.
      `'''…'''`, which substitutes nothing (§5). A marker on the opening quotes
      could turn substitution off or change its syntax; markers do not combine in v1 (§5), and this
      one would have to combine with the indent markers.
-   - **A template applied to a collection with a separator**, `<hosts; separator=",">`. This is the
-     job parked as value expressions (item 1, `${b} + ${c}`), so both may end up as one
-     mechanism.
-   - **Options inside `${…}`**, the user's idea: `${array; null="-1", separator=", "}`. Not in v1;
-     the syntax stays free, `;` being outside `Id.SafeKeyPattern`, so `${a; …}` is an error today.
+   - ~~**A template applied to a collection with a separator**~~, `<hosts; separator=",">` — as a
+     string, settled in session 38 by the formatter `join` (§9). Joining values into a node, a
+     sequence out of two, stays with value expressions (item 1), parked.
+   - ~~**Options inside `${…}`**~~ — settled in session 38 as formatters (§9),
+     `${hosts; join(",")}`: a call of a handler registered with the loader, not a fixed set of
+     options.
 
 5. ~~**Cycles, for every directive.**~~ — closed in session 19, settled in §6.
 
@@ -2611,3 +2664,27 @@ Fixed on a review of session 32's code, the format unchanged, nothing put to the
   is left for its design.
 - Before 1.0 compatibility is not kept; I noted that going back to a set united on merge later
   would change what a file with conflicting tags means.
+
+### Session 38 — 2026-11-21
+
+- **Formatters** (§9, §13 item 4), the user's design, replacing the options inside `${…}` noted in
+  session 7: `${path; name(arguments)}`, a handler registered with the loader as a directive or a
+  marker is, a function of its arguments giving a function from a node to a string. The user's
+  calls on what I put: one formatter in a substitution, a chain left for later; `join` the one
+  built-in for now; in quotes the call read by its own rules, as Scala reads `s"${f("x")}"`, over
+  allowing only `'…'` arguments there, which would not have kept a `}` in an argument from closing
+  the substitution.
+- Mine, put to the user with the design: a string is the boundary, a node given back being value
+  expressions (item 1, parked), so a formatter never injects and its result takes only the tag
+  written before it, as a concatenation's; the handler may fail at either step, its arguments
+  taken in phase 1 with the errors of the syntax and the directives; `INull` reaches the handler,
+  an optional substitution finding nothing calling none; `join` reserved as the built-in markers
+  are, neither replaced nor disabled; what a loader's formatter gives not counted against the size
+  limit, as a marker's is not, `join` counted as a concatenation.
+- **The name of a handler is given where it is registered** (§6), the user's decision:
+  `withDirective(name, handler)`, `withMarker` and `withFormatter` alike, the name no longer a
+  member of `Directive` or `Marker`. The user's reason: the consumer, not the author, says what a
+  handler is called in the consumer's files. The built-in names stay fixed, the user's call, the
+  built-in handlers not opened for registering under another name. It goes back to session 10's
+  shape, `withMarkers(markers: (String, MarkerProcessor)*)`: the code of plan step 10 made the name
+  a member, and I found no decision logged for it.
