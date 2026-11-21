@@ -12,7 +12,7 @@ import h8io.cfg.{Id, Node}
   * once, and nothing else of the line; any error leaves the block to be read as with no marker.
   */
 private[psi] final class MarkerParser(
-    text: String,
+    text: CharSequence,
     positions: IndexedSeq[Int],
     reporter: (SourceLocation => PsiError, Int) => Unit,
     locator: Int => SourceLocation,
@@ -75,7 +75,7 @@ private[psi] final class MarkerParser(
     val start = i
     if (has(i) && isSymbol(line.charAt(i))) while (has(i) && isSymbol(line.charAt(i))) i += 1
     else identifier()
-    if (i > start) Some(line.substring(start, i)) else None
+    if (i > start) Some(line.subSequence(start, i).toString) else None
   }
 
   /** The stages the markers pick; every unknown marker, bad argument and second indent is reported. */

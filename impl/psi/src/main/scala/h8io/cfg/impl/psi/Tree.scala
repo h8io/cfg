@@ -55,8 +55,8 @@ private[psi] object Tree {
 
   /** What `:` merged in turn at one key, where a substitution or a block of injections alone stands among them, so that
     * whether the merge is of maps is known only once they are resolved (`format.md` §7): maps merge, anything else
-    * replaces what is before it. Each layer is a map, a substitution, a block of injections alone, or layers merged in
-    * their turn into a map.
+    * replaces what is before it. Each layer is a map, a substitution, formatted or not, a block of injections alone, or
+    * layers merged in their turn into a map.
     */
   final case class Layers(layers: Vector[Layer]) extends Layer {
 
@@ -79,8 +79,10 @@ private[psi] object Tree {
   /** A scalar with `\${…}` inside it. */
   final case class Concatenation(parts: Vector[Token.Part], tag: Option[String], location: SourceLocation) extends Value
 
-  /** `\${path; name(…)}` unquoted and alone (§9). */
-  final case class Formatted(part: Token.Formatted, tag: Option[String], location: SourceLocation) extends Value
+  /** `\${path; name(…)}` unquoted and alone (§9): a layer, since an optional one may give nothing, and what it merges
+    * over then stands (§7).
+    */
+  final case class Formatted(part: Token.Formatted, tag: Option[String], location: SourceLocation) extends Layer
 
   /** A block with the loader's markers to run over its value, a scalar or a concatenation, once resolved (§5). */
   final case class Marked(value: Value, markers: Vector[MarkerParser.MarkerCall]) extends Value {

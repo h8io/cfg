@@ -187,6 +187,20 @@ class FormatterTest extends AnyFlatSpec with Matchers {
     value(root("y")) shouldBe "a"
   }
 
+  it should "count as the element it gives in a sequence, none when an optional one finds nothing" in {
+    val root = loaded("h: [a]\ns: [${?missing; join(',')}, first, ${h; join(',')}, last]\nx: $s[0]\ny: $s[2]")
+    value(root("x")) shouldBe "first"
+    value(root("y")) shouldBe "last"
+  }
+
+  it should "leave what it is merged over when an optional one finds nothing, and replace it otherwise" in {
+    val root = loaded("h: [b]\na { x: 1 }\na: ${?missing; join(',')}\nb { x: 1 }\nb: ${h; join(',')}\nc: 1\nc: $?gone")
+    root("a").toString shouldBe "x: 1"
+    value(root("b")) shouldBe "b"
+    errors("a { x: 1 }\na: ${x; join(',')}\nx: 1") shouldBe
+      List(FormatterFailed(at(2, 9), "join", JoinNotSequence(at(3, 4))))
+  }
+
   it should "be a scalar to look into, and a cycle through itself" in {
     errors("h: [a]\nx: ${h; join(\",\")}\ny: ${x.p}") shouldBe List(UnresolvedSubstitution(at(3, 4), "x.p"))
     errors("x: ${x; join(\",\")}") shouldBe List(SubstitutionCycle(at(1, 4), "x"))

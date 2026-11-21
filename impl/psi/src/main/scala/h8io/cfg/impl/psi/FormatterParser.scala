@@ -12,7 +12,7 @@ import h8io.cfg.impl.psi.MarkerParser.Call
   * called with them.
   */
 private[psi] final class FormatterParser(
-    text: String,
+    text: CharSequence,
     positions: IndexedSeq[Int],
     reporter: (SourceLocation => PsiError, Int) => Unit,
     locator: Int => SourceLocation,
@@ -31,7 +31,7 @@ private[psi] final class FormatterParser(
       if (at(i, '(')) arguments().map(Call(name, start, _)) else Some(Call(name, start, Vector.empty)))
     val end = i
     read.foreach(_ => closed())
-    (read.filter(_ => !failed).flatMap(bound(_, line.substring(start, end))), i)
+    (read.filter(_ => !failed).flatMap(bound(_, line.subSequence(start, end).toString)), i)
   }
 
   /** A name by the key rule, bare or in backticks. */
@@ -40,7 +40,7 @@ private[psi] final class FormatterParser(
     else {
       val start = i
       identifier()
-      if (i > start) Some(line.substring(start, i)) else invalid
+      if (i > start) Some(line.subSequence(start, i).toString) else invalid
     }
 
   /** The `}` after the call; whitespace, a second formatter or anything else before it reported. */

@@ -31,6 +31,15 @@ class HardeningTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChe
     Psi.parse("s", "a: \"" + long + "\"").map(_.size) shouldBe Right(1)
   }
 
+  "A line of many formatters" should "load in time linear in its length" in {
+    // each formatter copied the rest of its line, which took minutes on this one
+    val n = 200000
+    Psi.parse("s", "h: [a]\nx: \"" + "${h; join(',')}" * n + "\"").map(_("x")) match {
+      case Right(h8io.cfg.Node.IScalar(_, _, value, _)) => value shouldBe "a" * n
+      case other => fail(other.toString)
+    }
+  }
+
   "A long line with a character beyond Latin-1" should "load as fast as one of Latin-1" in {
     // a column counted from the start of its line for every token took minutes on this line
     val n = 500000

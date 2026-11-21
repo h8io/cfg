@@ -4,6 +4,7 @@ import h8io.cfg.Id
 import h8io.cfg.impl.psi.Lexer.*
 import h8io.cfg.impl.psi.Token.*
 
+import java.nio.CharBuffer
 import scala.annotation.tailrec
 import scala.collection.mutable
 
@@ -669,6 +670,23 @@ private[psi] final class Lexer(
     }
   }
 
+  /** Where the line from `from` ends for a formatter: at a line break, a forbidden character, or the end of the source.
+    * Kept for the formatters after it on the line, which end there too, so that a line of many is scanned once.
+    */
+  private def lineStop(from: Int): Int = {
+    if (from < stopFrom || from > stopAt) {
+      var stop = from
+      while (has(stop) && !isNewline(stop) && !isForbidden(stop)) stop += 1
+      stopFrom = from
+      stopAt = stop
+    }
+    stopAt
+  }
+
+  /** The line [[lineStop]] found last: from where it was looked for, and where it ends. */
+  private var stopFrom = 0
+  private var stopAt = -1
+
   /** The rest of a broken substitution, skipped: up to the next `}` on its line, or with none up to where the scalar
     * around it ends.
     */
@@ -684,12 +702,14 @@ private[psi] final class Lexer(
     */
   private def formatted(reference: Reference, quoted: Boolean): Option[Part] = {
     val from = offset + 1
-    var stop = from
-    while (has(stop) && !isNewline(stop) && !isForbidden(stop)) stop += 1
+    val stop = lineStop(from)
     val (formatting, end) =
       new FormatterParser(
-        text.substring(from, stop), from to stop, (error, at) => report(error, at), source.location, formatters)
-        .formatter()
+        CharBuffer.wrap(text, from, stop),
+        from to stop,
+        (error, at) => report(error, at),
+        source.location,
+        formatters).formatter()
     offset = from + end
     formatting match {
       case Some(formatting) =>
@@ -859,7 +879,7 @@ private[psi] object Lexer {
   /** The escape whose backslash stands at `i` of `s` (`format.md` §3): what it gives, `None` for one outside the set,
     * and where it ends. `next` says whether a character the escape can take follows the backslash.
     */
-  def readEscape(s: String, i: Int, next: Boolean): (Option[String], Int) =
+  def readEscape(s: CharSequence, i: Int, next: Boolean): (Option[String], Int) =
     if (!next) (None, i + 1)
     else
       s.charAt(i + 1) match {
@@ -869,8 +889,8 @@ private[psi] object Lexer {
         case 'n' => (Some("\n"), i + 2)
         case 'r' => (Some("\r"), i + 2)
         case 't' => (Some("\t"), i + 2)
-        case 'u' if i + 5 < s.length && s.substring(i + 2, i + 6).forall(isHexDigit) =>
-          (Some(java.lang.Integer.parseInt(s.substring(i + 2, i + 6), 16).toChar.toString), i + 6)
+        case 'u' if i + 5 < s.length && s.subSequence(i + 2, i + 6).toString.forall(isHexDigit) =>
+          (Some(java.lang.Integer.parseInt(s.subSequence(i + 2, i + 6).toString, 16).toChar.toString), i + 6)
         case _ => (None, i + 2)
       }
 
