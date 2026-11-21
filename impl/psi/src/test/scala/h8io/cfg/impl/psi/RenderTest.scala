@@ -1,7 +1,7 @@
 package h8io.cfg.impl.psi
 
 import h8io.cfg.{Id, Node}
-import h8io.cfg.impl.psi.Token.{Reference, Text}
+import h8io.cfg.impl.psi.Token.{Formatted, Join, Reference, Text}
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import org.scalatest.flatspec.AnyFlatSpec
@@ -37,11 +37,13 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
         Tree.Concatenation(
           parts.map {
             case r: Reference => reference(r)
+            case f: Formatted => formatted(f)
             case text: Text => text
           },
           tags,
           nowhere
         )
+      case Tree.Formatted(part, tags, _) => Tree.Formatted(formatted(part), tags, nowhere)
       case Tree.Layers(layers) => Tree.Layers(layers.map(layer => located(layer).asInstanceOf[Tree.Layer]))
       case written: Tree.Map =>
         // a block merged over what may turn out no map is kept as written: its statements are what it holds
@@ -55,6 +57,13 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     }
 
   private def reference(reference: Reference): Reference = reference.copy(location = nowhere)
+
+  // read with no loader's formatter, these trees hold the built-in one alone
+  private def formatted(formatted: Formatted): Formatted =
+    formatted.formatting match {
+      case join: Join => Formatted(reference(formatted.reference), join.copy(location = nowhere))
+      case other => fail(other.toString)
+    }
 
   private def roundTrip(text: String): Unit = {
     val read = tree(text)
@@ -118,6 +127,12 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     roundTrip("a: 1\nb { c: x, d { } }\ne: null\nm: @z { k: @t v }\nc: [1, [2], {d: 3}, {}, @t {e: 4}]")
     roundTrip("a: [\"x:\", @t \"z:\", \"-\", [[{b: 1, c: [@t {d: 2}]}]], @u [], $x]")
     roundTrip("`a b`: @`t:x` \"q\\\"b\\\\d$x\\${y}\"\nf: x${g}y\nh: \"${i}\"\ns: \"\"")
+    roundTrip("a: @t ${?h; join(\", \")}\nb: \"<${h; join(\"}\\\"\")}>\"\nc: [${h; join(x)}]")
+  }
+
+  it should "write a formatted substitution with its call as written" in {
+    Render.document(tree("a: @t ${?h; join(\", \")}\nb: x${h; join(';')}")) shouldBe
+      "a: @t ${?h; join(\", \")}\nb: \"x${h; join(';')}\"\n"
   }
 
   private val strings: Gen[String] =

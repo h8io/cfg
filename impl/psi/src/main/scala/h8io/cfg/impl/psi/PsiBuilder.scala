@@ -6,17 +6,25 @@ import scala.collection.mutable
 /** Builds a [[PsiLoader]] (`format.md` §5, §6): every method gives a new builder. */
 final class PsiBuilder private (settings: Settings) {
 
-  /** Adds `directives` to those registered, the built-in `#include`, `#prop` and `#env` among them. */
-  def withDirectives(directives: Directive*): PsiBuilder =
-    new PsiBuilder(settings.copy(directives = settings.directives ++ directives))
+  /** Adds `directive`, called by `#name`, to those registered, the built-in `#include`, `#prop` and `#env` among them.
+    */
+  def withDirective(name: String, directive: Directive): PsiBuilder =
+    new PsiBuilder(settings.copy(directives = settings.directives :+ (name -> directive)))
 
   /** Turns the directive `name` off for good, whether a handler for it is registered or not: a call of it is a
     * [[DisabledDirective]].
     */
   def disableDirective(name: String): PsiBuilder = new PsiBuilder(settings.copy(disabled = settings.disabled :+ name))
 
-  /** Adds `markers` to those registered, the built-in `<`, `>`, `width` and `+` among them. */
-  def withMarkers(markers: Marker*): PsiBuilder = new PsiBuilder(settings.copy(markers = settings.markers ++ markers))
+  /** Adds `marker`, written `name`, to those registered, the built-in `<`, `>`, `width` and `+` among them. */
+  def withMarker(name: String, marker: Marker): PsiBuilder =
+    new PsiBuilder(settings.copy(markers = settings.markers :+ (name -> marker)))
+
+  /** Adds `formatter`, called by `name` in `\${path; name(…)}`, to those registered, the built-in `join` among them
+    * (`format.md` §9).
+    */
+  def withFormatter(name: String, formatter: Formatter): PsiBuilder =
+    new PsiBuilder(settings.copy(formatters = settings.formatters :+ (name -> formatter)))
 
   /** The system properties `#prop` reads, rather than `sys.props` read at every load (§6). */
   def withSystemProperties(properties: Map[String, String]): PsiBuilder =
@@ -47,7 +55,9 @@ final class PsiBuilder private (settings: Settings) {
   def withReadLimit(bytes: Int, time: Duration): PsiBuilder =
     new PsiBuilder(settings.copy(readBytes = bytes, readTime = time))
 
-  /** The loader, or every error of its configuration: the directives' first, then the markers', then the limits'. */
+  /** The loader, or every error of its configuration: the directives' first, then the markers', the formatters', and
+    * the limits'.
+    */
   def build: Either[PsiBuildErrors, PsiLoader] = {
     val errors = Vector.newBuilder[PsiBuildError]
     def report(error: PsiBuildError): Unit = {
@@ -60,16 +70,21 @@ final class PsiBuilder private (settings: Settings) {
     }
     import settings.*
     val directiveNames = mutable.Set(PsiLoader.BuiltInDirectives*)
-    directives.foreach { directive =>
-      if (!directiveNames.add(directive.name)) report(DuplicateDirective(directive.name))
-      if (disabled.contains(directive.name)) report(DisabledDirectiveRegistered(directive.name))
-      parameters(directive.parameters, DuplicateParameter(directive.name, _))
+    directives.foreach { case (name, directive) =>
+      if (!directiveNames.add(name)) report(DuplicateDirective(name))
+      if (disabled.contains(name)) report(DisabledDirectiveRegistered(name))
+      parameters(directive.parameters, DuplicateParameter(name, _))
     }
     val markerNames = mutable.Set(PsiBuilder.BuiltInMarkers*)
-    markers.foreach { marker =>
-      if (!PsiBuilder.isMarkerName(marker.name)) report(InvalidMarkerName(marker.name))
-      if (!markerNames.add(marker.name)) report(DuplicateMarker(marker.name))
-      parameters(marker.parameters, DuplicateMarkerParameter(marker.name, _))
+    markers.foreach { case (name, marker) =>
+      if (!PsiBuilder.isMarkerName(name)) report(InvalidMarkerName(name))
+      if (!markerNames.add(name)) report(DuplicateMarker(name))
+      parameters(marker.parameters, DuplicateMarkerParameter(name, _))
+    }
+    val formatterNames = mutable.Set(PsiLoader.BuiltInFormatters*)
+    formatters.foreach { case (name, formatter) =>
+      if (!formatterNames.add(name)) report(DuplicateFormatter(name))
+      parameters(formatter.parameters, DuplicateFormatterParameter(name, _))
     }
     if (depthLimit < 1) report(InvalidDepthLimit(depthLimit))
     if (nodeLimit < 0 || characterLimit < 0) report(InvalidSizeLimit(nodeLimit, characterLimit))
@@ -114,6 +129,12 @@ final case class DuplicateMarker(name: String) extends PsiBuildError
 
 /** A marker declaring a parameter twice. */
 final case class DuplicateMarkerParameter(marker: String, parameter: String) extends PsiBuildError
+
+/** A formatter registered under a name already taken, the built-in `join`'s included. */
+final case class DuplicateFormatter(name: String) extends PsiBuildError
+
+/** A formatter declaring a parameter twice. */
+final case class DuplicateFormatterParameter(formatter: String, parameter: String) extends PsiBuildError
 
 /** A depth limit below 1. */
 final case class InvalidDepthLimit(limit: Int) extends PsiBuildError

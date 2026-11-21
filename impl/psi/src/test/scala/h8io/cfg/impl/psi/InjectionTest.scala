@@ -1,6 +1,7 @@
 package h8io.cfg.impl.psi
 
 import h8io.cfg.{Id, Node}
+import h8io.cfg.impl.psi.Registering.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -218,16 +219,14 @@ class InjectionTest extends AnyFlatSpec with Matchers {
       case map: Node.IMap[?] => map
       case other => fail(other.toString)
     }
-    def giving(called: String, node: Option[Node.ISome[Id]]): Directive =
-      new Directive {
-        def name: String = called
+    def giving(called: String, node: Option[Node.ISome[Id]]): (String, Directive) =
+      called -> new Directive {
         def parameters: Seq[Parameter] = Nil
         def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
           Right(node.fold[Fragment](Fragment.None)(Fragment(_)))
       }
-    def parsing(called: String, text: String): Directive =
-      new Directive {
-        def name: String = called
+    def parsing(called: String, text: String): (String, Directive) =
+      called -> new Directive {
         def parameters: Seq[Parameter] = Nil
         def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
           Right(context.parse("p", text))

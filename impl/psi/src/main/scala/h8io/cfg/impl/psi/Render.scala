@@ -1,7 +1,7 @@
 package h8io.cfg.impl.psi
 
 import h8io.cfg.Id
-import h8io.cfg.impl.psi.Token.{KeyMode, Reference, Text, ValueMode}
+import h8io.cfg.impl.psi.Token.{Formatted, KeyMode, Reference, Text, ValueMode}
 
 /** Writes a merged tree as Psi source, which parses and merges back to the same tree, its locations aside.
   *
@@ -193,6 +193,7 @@ private[psi] object Render {
       case layers: Tree.Layers =>
         throw new IllegalStateException("Layers at " + layers.location.description + " with no key to write again")
       case Tree.Concatenation(parts, _, _) => quoted(out, parts)
+      case Tree.Formatted(part, _, _) => formatted(out, part)
       // the loader's markers run as the tree is resolved, and only a resolved tree is shown
       case marked: Tree.Marked =>
         throw new IllegalStateException("Unresolved markers at " + marked.location.description)
@@ -205,6 +206,12 @@ private[psi] object Render {
 
   private def reference(out: StringBuilder, path: Id.Branch, optional: Boolean): Unit = {
     val _ = out ++= (if (optional) "${?" else "${") ++= Message.path(path) += '}'
+  }
+
+  /** A formatted substitution, its call as written: read by its own rules, it stands in quotes as it does outside. */
+  private def formatted(out: StringBuilder, part: Formatted): Unit = {
+    val Formatted(Reference(path, optional, _), formatting) = part
+    val _ = out ++= (if (optional) "${?" else "${") ++= Message.path(path) ++= "; " ++= formatting.call += '}'
   }
 
   /** Whether `text` reads back alone, unquoted, as itself: the lexer's own answer, `null` being no string. Half a
@@ -223,6 +230,7 @@ private[psi] object Render {
     parts.foreach {
       case Text(text) => escape(out, text)
       case Reference(path, optional, _) => reference(out, path, optional)
+      case part: Formatted => formatted(out, part)
     }
     out += '"'
     ()

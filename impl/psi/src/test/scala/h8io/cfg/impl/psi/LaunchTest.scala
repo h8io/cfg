@@ -90,12 +90,11 @@ class LaunchTest extends AnyFlatSpec with Matchers {
 
   "The built-in names" should "be taken by no handler, and turn off as any directive does" in {
     val handler = new Directive {
-      def name: String = "env"
       def parameters: Seq[Parameter] = Nil
       def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
         Right(Fragment.None)
     }
-    Psi.builder.withDirectives(handler).build.left.map(_.errors) shouldBe Left(::(DuplicateDirective("env"), Nil))
+    Psi.builder.withDirective("env", handler).build.left.map(_.errors) shouldBe Left(::(DuplicateDirective("env"), Nil))
     Psi.builder.disableDirective("env").build.fold(e => fail(e.toString), identity).parse("s", "a: #env(HOME)") shouldBe
       Left(PsiErrors(::(DisabledDirective(at(1, 4), "env"), Nil)))
   }

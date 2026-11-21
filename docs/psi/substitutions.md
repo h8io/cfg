@@ -81,3 +81,32 @@ flat: [$hosts, $db.host]
 groups: [[$hosts], [backup]]
 """)
 ```
+
+## Formatters
+
+`${path; name(arguments)}` turns the node at `path` into a string with a formatter: `${hosts; join(",")}` puts the
+hosts one after another, a `,` between them. A loader may be [built](api.md#building-a-loader) with formatters of its
+own ([Extending](extending.md#formatters)); `join` is the one every loader has.
+
+- `join(separator)` puts the elements of a sequence one after another with the separator between them, nothing for
+  an empty one. Anything but a sequence, and an element that is no value, `null` included, are errors.
+- What a formatter gives is a string, with only the tag written before it. After a key or a `- ` it is the value, in
+  a string it is part of it, and in `[…]` it is one element. It is never an injection: among fields, alone on its line
+  among `- ` elements, or among injections alone, it is an error.
+- `${?path; …}` with nothing at `path` calls no formatter: the field or element is left out, and a part of a string is
+  empty.
+- The braces are needed: after `$path` a `;` is text. A substitution takes one formatter, and no whitespace before the
+  `;` or the `}`.
+- The arguments are written as a directive's, literals only. In quotes they are read by their own rules, so a `"` or
+  a `}` inside one closes nothing: `"hosts: ${hosts; join(", ")}"` is one string.
+
+```scala mdoc:passthrough
+Example.psi("""
+hosts: [db1, db2, db3]
+url: "jdbc:postgresql://${hosts; join(",")}/orders"
+list: @csv ${hosts; join(", ")}
+banner: QQQ
+  Serving ${hosts; join(" and ")}
+  QQQ
+""")
+```

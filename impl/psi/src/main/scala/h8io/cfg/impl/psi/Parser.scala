@@ -409,7 +409,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
 
   private def substitutes(token: Token): Boolean =
     token.kind match {
-      case Scalar(parts, _, _) => parts.exists(_.isInstanceOf[Reference])
+      case Scalar(parts, _, _) => parts.exists(Token.substitutes)
       case _ => false
     }
 
@@ -420,6 +420,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
       // among the fields of a block a substitution alone is an injection (§9)
       case Scalar(Vector(Reference(path, optional, _)), false, _) =>
         AST.InjectionStatement(path, optional, first.location, doc)
+      case Scalar(Vector(_: Formatted), false, _) => fail(first, FormattedInjection(first.location))
       case Scalar(_, false, _) => fail(first, MisplacedInjection(first.location))
       case Tag(_) => fail(first, TagBeforeKey(first.location))
       case Scalar(parts, _, _) => fail(first, QuotedKey(first.location, written(parts)))
@@ -504,9 +505,10 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     */
   private def scalar(token: Token, parts: Vector[Part], quoted: Boolean, tag: Option[String]): AST.Value = {
     unquoted = !quoted
-    substituted = parts.exists(_.isInstanceOf[Reference])
+    substituted = parts.exists(Token.substitutes)
     parts match {
       case Vector(Reference(path, optional, _)) if !quoted => AST.Substitution(path, optional, tag, token.location)
+      case Vector(formatted: Formatted) if !quoted => AST.Formatted(formatted, tag, token.location)
       case _ if substituted => AST.Concatenation(parts, tag, token.location)
       case _ =>
         val value = text(parts)
@@ -641,6 +643,15 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
         val all = values.result()
         val items = all.flatMap { case (value, _, _) => injection(value) }
         all match {
+          // a formatted substitution among them injects nothing (§9)
+          case _ +: _ +: _
+              if all.exists(_._1.isInstanceOf[AST.Formatted]) &&
+                all.forall { case (value, _, _) => value.isInstanceOf[AST.Formatted] || injection(value).nonEmpty } =>
+            all.foreach {
+              case (_: AST.Formatted, _, at) => record(FormattedInjection(at.location))
+              case _ => ()
+            }
+            AST.Block(Vector.empty, tag, at)
           case _ +: _ +: _ if items.size == all.size =>
             AST.Injections(
               items.map(_.fold[AST.Injected](AST.Injected.Calling(_), AST.Injected.Referring(_))), tag, at)
@@ -664,6 +675,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     if (item.isEmpty)
       value match {
         case _: AST.Substitution | _: AST.DirectiveValue => record(TaggedInjection(at.location))
+        case _: AST.Formatted => record(FormattedInjection(at.location))
         case _ => record(otherwise)
       }
     item
@@ -710,6 +722,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
       case v: AST.Substitution => v.copy(tag = v.tag.orElse(tag))
       case v: AST.Injections => v.copy(tag = v.tag.orElse(tag))
       case v: AST.Concatenation => v.copy(tag = v.tag.orElse(tag))
+      case v: AST.Formatted => v.copy(tag = v.tag.orElse(tag))
       case AST.Marked(inner, markers) => AST.Marked(lone(inner, tag), markers)
     }
 
@@ -827,7 +840,10 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
       case Name(_, true) => fail(token, BacktickedValue(token.location))
       case Integer(value) => value
       case Scalar(parts, _, _) =>
-        parts.collectFirst { case reference: Reference => reference } match {
+        parts.collectFirst {
+          case reference: Reference => reference
+          case Formatted(reference, _) => reference
+        } match {
           case Some(reference) => fail(token, SubstitutionInArgument(reference.location))
           case None => text(parts)
         }
@@ -846,8 +862,9 @@ private[psi] object Parser {
       source: Source,
       markers: Map[String, Marker] = Map.empty,
       base: Int = 0,
-      limit: Int = PsiLoader.DefaultDepthLimit): Result[AST.Document] =
-    new Parser(new Lexer(source, markers), base, limit).document()
+      limit: Int = PsiLoader.DefaultDepthLimit,
+      formatters: Map[String, Formatter] = Map.empty): Result[AST.Document] =
+    new Parser(new Lexer(source, markers, formatters), base, limit).document()
 
   /** The lines of a block, which start at `width`, unknown in a `{…}` until a line starts in it; `indented` for a block
     * opened by indentation, which a line further left ends (`format.md` §4).

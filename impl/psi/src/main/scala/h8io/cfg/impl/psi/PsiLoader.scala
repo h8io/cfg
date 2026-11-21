@@ -4,24 +4,26 @@ import h8io.cfg.{Id, Node}
 
 import java.net.URL
 
-/** A Psi loader with the directives and markers it was built with (`format.md` §5, §6); [[Psi]] is the one with nothing
-  * added.
+/** A Psi loader with the directives, markers and formatters it was built with (`format.md` §5, §6, §9); [[Psi]] is the
+  * one with nothing added.
   */
 final class PsiLoader private[psi] (settings: Settings) {
   import settings.{characterLimit, depthLimit, nodeLimit, readBytes, readTime}
 
-  private val directives: Map[String, Directive] = settings.directives.map(d => d.name -> d).toMap
+  private val directives: Map[String, Directive] = settings.directives.toMap
 
   private val disabled: Set[String] = settings.disabled.toSet
 
-  private val markers: Map[String, Marker] = settings.markers.map(m => m.name -> m).toMap
+  private val markers: Map[String, Marker] = settings.markers.toMap
+
+  private val formatters: Map[String, Formatter] = settings.formatters.toMap
 
   /** The directives with the built-in ones among them, `#prop` reading the system properties as they are now. */
-  private def handlers: Map[String, Directive] =
-    directives ++ Seq(
-      Include,
-      new Launch.Prop(settings.properties.getOrElse(sys.props.toMap)),
-      new Launch.Env(settings.environment.getOrElse(sys.env))).map(d => d.name -> d)
+  private def handlers: Map[String, Directive] = {
+    val prop = new Launch.Prop(settings.properties.getOrElse(sys.props.toMap))
+    val env = new Launch.Env(settings.environment.getOrElse(sys.env))
+    directives ++ Seq[(String, Directive)](Include.name -> Include, prop.name -> prop, env.name -> env)
+  }
 
   /** Loads and merges the sources at `urls`, in order, each named in locations by its URL as given (§10). */
   def apply(urls: URL*): Either[PsiErrors, Node.IMap[Id.Root]] = {
@@ -46,7 +48,7 @@ final class PsiLoader private[psi] (settings: Settings) {
     val handlers = this.handlers
     val parsed = Result.sequence(sources.map {
       case Right(source) =>
-        Expand(source, handlers, disabled, markers, depthLimit, budget).map { case (document, included) =>
+        Expand(source, handlers, disabled, markers, formatters, depthLimit, budget).map { case (document, included) =>
           Some((document, source.name, included))
         }
       case Left(error) => Result.failed(None, error)
@@ -77,6 +79,9 @@ private[psi] object PsiLoader {
 
   /** The names of the built-in directives, which no handler may take (§6). */
   def BuiltInDirectives: Seq[String] = Seq("include", "prop", "env")
+
+  /** The names of the built-in formatters, which no handler may take (§9). */
+  def BuiltInFormatters: Seq[String] = Seq("join")
 
   /** How many nodes resolving the substitutions may copy into the tree by grafts unless the builder says otherwise
     * (§11).

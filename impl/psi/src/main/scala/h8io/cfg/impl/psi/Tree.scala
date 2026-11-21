@@ -79,6 +79,9 @@ private[psi] object Tree {
   /** A scalar with `\${…}` inside it. */
   final case class Concatenation(parts: Vector[Token.Part], tag: Option[String], location: SourceLocation) extends Value
 
+  /** `\${path; name(…)}` unquoted and alone (§9). */
+  final case class Formatted(part: Token.Formatted, tag: Option[String], location: SourceLocation) extends Value
+
   /** A block with the loader's markers to run over its value, a scalar or a concatenation, once resolved (§5). */
   final case class Marked(value: Value, markers: Vector[MarkerParser.MarkerCall]) extends Value {
     def tag: Option[String] = value.tag

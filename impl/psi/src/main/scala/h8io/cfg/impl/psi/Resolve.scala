@@ -91,6 +91,9 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
           reference(path, optional, at).flatMap(_.fold[Resolution](Right(None))(grafted(id, _, at, path, tag))))
       case concatenation: Tree.Concatenation =>
         once(id, first(concatenation))(this.concatenation(concatenation).map(Some(_)))
+      case formatted: Tree.Formatted =>
+        val reference = formatted.part.reference
+        once(id, Some(new Following(reference.location, reference.path)))(this.formatted(formatted))
       case Tree.Marked(value, markers) =>
         // resolved inside `once`, so that a cycle through the block is caught and the block resolved only once
         once(id, Some(value).collect { case concatenation: Tree.Concatenation => concatenation }.flatMap(first)) {
@@ -107,7 +110,7 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
   /** `scalar` with the loader's markers run over its value in turn (§5); with none of them when one fails. */
   private def marked(scalar: Tree.Scalar, markers: Vector[MarkerParser.MarkerCall]): Tree.Scalar =
     markers.foldLeft[Either[PsiError, String]](Right(scalar.value)) { (text, call) =>
-      text.flatMap(text => call.marker(call.arguments, text).left.map(MarkerFailed(call.location, call.marker.name, _)))
+      text.flatMap(text => call.marker(call.arguments, text).left.map(MarkerFailed(call.location, call.name, _)))
     } match {
       case Right(text) => scalar.copy(value = text)
       case Left(error) =>
@@ -460,7 +463,8 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       case Nil => resolve(id, value)
       case next :: rest =>
         val here = value match {
-          case _: Tree.Substitution | _: Tree.Injections | _: Tree.Layers | _: Tree.Concatenation | _: Tree.Marked =>
+          case _: Tree.Substitution | _: Tree.Injections | _: Tree.Layers | _: Tree.Concatenation | _: Tree.Formatted |
+              _: Tree.Marked =>
             resolve(id, value)
           // what an injection brings in among fields is known only once it is resolved
           case map: Tree.Map if map.steps.nonEmpty => completed(id, map).map(Some(_))
@@ -519,27 +523,83 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
   /** A scalar of text and `\${…}`, each referring to a scalar; an optional one with nothing to refer to is empty. */
   private def concatenation(concatenation: Tree.Concatenation): Either[Failure, Tree.Scalar] = {
     val parts = concatenation.parts.map {
-      case Token.Text(text) => Right(text -> None)
+      case Token.Text(text) => Right(Vector(text) -> None)
       case part: Token.Reference =>
         val (path, optional, at) = (part.path, part.optional, part.location)
         reference(path, optional, at).flatMap {
           case Some(Tree.Scalar(text, _, origin)) =>
-            Right(text -> Some(ReferenceLocation(at, Message.path(path), origin)))
+            Right(Vector(text) -> Some(ReferenceLocation(at, Message.path(path), origin)))
           case Some(other) => failed(NonScalarInConcatenation(at, Message.path(path), other.location))
-          case None => Right("" -> None)
+          case None => Right(Vector.empty -> None)
+        }
+      case Token.Formatted(Token.Reference(path, optional, at), formatting) =>
+        reference(path, optional, at).flatMap {
+          case Some(found) =>
+            format(formatting, found, path).map(_ -> Some(ReferenceLocation(at, Message.path(path), found.location)))
+          case None => Right(Vector.empty -> None)
         }
     }
     failure(parts).toLeft(parts.collect { case Right(part) => part }).flatMap { parts =>
       val (texts, references) = parts.unzip
-      grow(0, texts.foldLeft(0L)(_ + _.length), ConcatenationTooLong(concatenation.location, characterLimit)).map { _ =>
-        val location = references.flatten.toList match {
-          case Nil => concatenation.location
-          case first :: rest => ConcatenationLocation(concatenation.location, ::(first, rest))
-        }
-        Tree.Scalar(texts.mkString, concatenation.tag, location)
-      }
+      built(texts.flatten, counted = true, concatenation.tag, concatenation.location, references.flatten.toList)
     }
   }
+
+  /** A formatted substitution alone (§9): the text its formatter gives, a scalar with the tag written before it, and
+    * nothing when an optional one finds nothing. What a loader's formatter gives is not counted, being a handler's, and
+    * what `join` builds is (§11).
+    */
+  private def formatted(formatted: Tree.Formatted): Resolution = {
+    val Tree.Formatted(Token.Formatted(Token.Reference(path, optional, at), formatting), tag, location) = formatted
+    reference(path, optional, at).flatMap {
+      case Some(found) =>
+        format(formatting, found, path).flatMap { texts =>
+          val counted = formatting.isInstanceOf[Token.Join]
+          built(texts, counted, tag, location, ReferenceLocation(at, Message.path(path), found.location) :: Nil)
+            .map(Some(_))
+        }
+      case None => Right(None)
+    }
+  }
+
+  /** A scalar of `texts`, joined once their characters are `counted` against the limit when they are, located at
+    * `location` with the references that gave them.
+    */
+  private def built(
+      texts: Vector[String],
+      counted: Boolean,
+      tag: Option[String],
+      location: SourceLocation,
+      references: List[ReferenceLocation]): Either[Failure, Tree.Scalar] =
+    grow(0, if (counted) texts.foldLeft(0L)(_ + _.length) else 0L, ConcatenationTooLong(location, characterLimit)).map {
+      _ =>
+        val at = references match {
+          case Nil => location
+          case first :: rest => ConcatenationLocation(location, ::(first, rest))
+        }
+        Tree.Scalar(texts.mkString, tag, at)
+    }
+
+  /** The text `formatting` gives for `found`, the node at `path`, in pieces not joined yet, so that what they add is
+    * counted before it is built (§11); an error of the formatter is reported at its name.
+    */
+  private def format(formatting: Token.Formatting, found: Tree.Value, path: Id.Branch)
+      : Either[Failure, Vector[String]] =
+    formatting match {
+      case Token.Join(separator, _, at) =>
+        found match {
+          case Tree.Sequence(elements, _, _) =>
+            elements.zipWithIndex.collectFirst { case (element, i) if !element.isInstanceOf[Tree.Scalar] => i } match {
+              case Some(i) =>
+                failed(FormatterFailed(at, formatting.name, JoinElementNotScalar(i, elements(i).location)))
+              case None =>
+                Right(elements.collect { case Tree.Scalar(text, _, _) => Vector(separator, text) }.flatten.drop(1))
+            }
+          case other => failed(FormatterFailed(at, formatting.name, JoinNotSequence(other.location)))
+        }
+      case Token.Handled(name, _, at, format) =>
+        format(wrap(path, found)).fold(error => failed(FormatterFailed(at, name, error)), text => Right(Vector(text)))
+    }
 
   /** Counts `nodes` and `characters` more added to the tree, before they are built; past either limit the load fails,
     * with `error` the first time and silently after, nothing more being built.
@@ -582,7 +642,10 @@ private[psi] object Resolve {
   /** The first reference of `concatenation`, where it is reported going past the limit with no substitution followed.
     */
   private def first(concatenation: Tree.Concatenation): Option[Following] =
-    concatenation.parts.collectFirst { case Token.Reference(path, _, at) => new Following(at, path) }
+    concatenation.parts.collectFirst {
+      case Token.Reference(path, _, at) => new Following(at, path)
+      case Token.Formatted(Token.Reference(path, _, at), _) => new Following(at, path)
+    }
 
   def apply(
       root: Tree.Map,
@@ -639,8 +702,8 @@ private[psi] object Resolve {
           val entries = map.entries.map { case (key, child) => key -> moved(child, Id.Key(key, id), None) }
           map.copy(entries = entries, tag = tag.orElse(map.tag), location = location)
         // a node is resolved whole before it is grafted
-        case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Marked | _: Tree.Injection | _: Tree.Injections |
-            _: Tree.Layers =>
+        case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Formatted | _: Tree.Marked | _: Tree.Injection |
+            _: Tree.Injections | _: Tree.Layers =>
           throw new IllegalStateException("An unresolved substitution at " + value.location.description + " grafted")
       }
     }

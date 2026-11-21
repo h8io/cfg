@@ -12,7 +12,10 @@ import scala.collection.mutable
   * Errors are collected rather than thrown. A fatal one — an unterminated quote or comment — leaves nothing to
   * resynchronise on, so the lexer reports it and answers [[Token.End]] from then on (§11).
   */
-private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Map.empty) {
+private[psi] final class Lexer(
+    source: Source,
+    markers: Map[String, Marker] = Map.empty,
+    formatters: Map[String, Formatter] = Map.empty) {
   private val text = source.text
   private var offset = 0
   private var atLineStart = true
@@ -641,28 +644,60 @@ private[psi] final class Lexer(source: Source, markers: Map[String, Marker] = Ma
     Scalar(parts.result(), quoted = true, calls)
   }
 
-  /** `${path}` or `${?path}` from its `$`, its path written as `Id.path` renders one (`format.md` §9). A path that
-    * cannot be read is reported — at the space or tab, if that is what broke it, at the `${` otherwise — and skipped up
-    * to the next `}` on its line, or with none up to where the scalar around it ends.
+  /** `${path}` or `${?path}` from its `$`, its path written as `Id.path` renders one, and a formatter after a `;` if
+    * any (`format.md` §9). A path that cannot be read is reported — at the space or tab, if that is what broke it, at
+    * the `${` otherwise — and skipped up to the next `}` on its line, or with none up to where the scalar around it
+    * ends; so is a formatter that cannot be read, from where it stops fitting.
     */
   private def reference(quoted: Boolean): Option[Part] = {
     val start = offset
     offset += 2
     val optional = at(offset, '?')
     if (optional) offset += 1
-    path(Id.Root).filter(_ => at(offset, '}')) match {
-      case Some(path) =>
+    path(Id.Root) match {
+      case Some(path) if at(offset, '}') =>
         offset += 1
         Some(Reference(path, optional, source.location(start)))
-      case None if !ended =>
+      case Some(path) if at(offset, ';') => formatted(Reference(path, optional, source.location(start)), quoted)
+      case _ if !ended =>
         if (has(offset) && isSpace(text.charAt(offset)))
           report(WhitespaceInSubstitution.apply, offset)
         else report(InvalidSubstitution.apply, start)
-        val close = closingBrace(quoted)
-        if (close >= 0) offset = close + 1
-        else while (has(offset) && !endsAfterReference(offset, quoted)) offset += 1
+        skipReference(quoted)
         None
-      case None => None
+      case _ => None
+    }
+  }
+
+  /** The rest of a broken substitution, skipped: up to the next `}` on its line, or with none up to where the scalar
+    * around it ends.
+    */
+  private def skipReference(quoted: Boolean): Unit = {
+    val close = closingBrace(quoted)
+    if (close >= 0) offset = close + 1
+    else while (has(offset) && !endsAfterReference(offset, quoted)) offset += 1
+  }
+
+  /** `reference` with the formatter after its `;`, read by its own rules up to the `}` (§9): in quotes, a `"` or a `}`
+    * inside an argument closes nothing. One that cannot be read, or that its arguments do not bind, is reported, and
+    * the substitution is skipped.
+    */
+  private def formatted(reference: Reference, quoted: Boolean): Option[Part] = {
+    val from = offset + 1
+    var stop = from
+    while (has(stop) && !isNewline(stop) && !isForbidden(stop)) stop += 1
+    val (formatting, end) =
+      new FormatterParser(
+        text.substring(from, stop), from to stop, (error, at) => report(error, at), source.location, formatters)
+        .formatter()
+    offset = from + end
+    formatting match {
+      case Some(formatting) =>
+        offset += 1
+        Some(Formatted(reference, formatting))
+      case None =>
+        skipReference(quoted)
+        None
     }
   }
 

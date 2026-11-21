@@ -1,0 +1,26 @@
+cluster {
+  hosts: [db1, db2, db3]
+  port: 5432
+}
+
+// a formatter turns what a substitution finds into a string: `join` puts the elements of a sequence with a separator
+url: "jdbc:postgresql://${cluster.hosts; join(",")}:${cluster.port}/orders"
+
+// alone after a key it is the value, with only the tag written before it
+list: @csv ${cluster.hosts; join(", ")}
+
+// in quotes the call is read by its own rules: a quote or a brace in an argument closes nothing
+quoted: "{${cluster.hosts; join("}, {")}}"
+
+// in brackets and after a `- ` it is one element
+pairs:
+  - ${cluster.hosts; join("+")}
+  - [${cluster.hosts; join("|")}, last]
+
+// optional, with nothing found: no formatter is called, and the field is left out
+replicas: ${?cluster.replicas; join(",")}
+
+banner:
+  """
+  Serving ${cluster.hosts; join(" and ")}
+  """

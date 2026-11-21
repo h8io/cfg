@@ -2,16 +2,12 @@ package h8io.cfg.impl.psi
 
 import h8io.cfg.{Id, Node}
 
-/** A marker of a triple-quoted block, registered with a loader through [[PsiBuilder.withMarkers]] (`format.md` §5): a
-  * function from the block's value to a new one, given its arguments. The loader's markers on a block run left to
-  * right, after the built-in ones, over the value with its escapes read and its substitutions resolved.
+/** A marker of a triple-quoted block, registered with a loader under a name through [[PsiBuilder.withMarker]]
+  * (`format.md` §5): a function from the block's value to a new one, given its arguments. The loader's markers on a
+  * block run left to right, after the built-in ones, over the value with its escapes read and its substitutions
+  * resolved. The name is the loader's to give, as a directive's is.
   */
 trait Marker {
-
-  /** The name the marker is written by: a run of the symbols `! # $ % & * + - . : ; < = > ? @ ^ | ~`, or a name by the
-    * key rule.
-    */
-  def name: String
 
   /** The parameters, in the order positional arguments go to them. */
   def parameters: Seq[Parameter]

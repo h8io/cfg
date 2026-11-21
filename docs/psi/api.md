@@ -61,12 +61,13 @@ Psi.parse("app.psi", "a = 1").left.foreach(errors => println(errors.message))
 | `withDepthLimit(n)` | limits depth to `n` rather than 256: lower for a thread with a smaller stack than the JVM's default |
 | `withReadLimit(bytes, time)` | limits reading the sources of a load, every read counted, rather than to 10 000 000 bytes and 60 seconds |
 | `withSizeLimit(nodes, characters)` | limits what resolving substitutions adds, the nodes grafts copy and the characters concatenations build, rather than to 1 000 000 and 10 000 000 |
-| `withDirectives(directives*)` | adds directives of its own ([Extending](extending.md#directives)) |
-| `withMarkers(markers*)` | adds markers of its own ([Extending](extending.md#markers)) |
+| `withDirective(name, directive)` | adds a directive of its own, called `#name` ([Extending](extending.md#directives)) |
+| `withMarker(name, marker)` | adds a marker of its own, written `name` ([Extending](extending.md#markers)) |
+| `withFormatter(name, formatter)` | adds a formatter of its own, called `${path; name(…)}` ([Extending](extending.md#formatters)) |
 
 `build` gives the `PsiLoader`, with `apply(urls*)` and `parse(name, text)` as `Psi` has, or every error of its
-configuration at once: a name registered twice, the built-in directives `include`, `prop` and `env` and the built-in
-markers `<`, `>`, `width` and `+` included,
+configuration at once: a name registered twice, the built-in directives `include`, `prop` and `env`, the built-in
+markers `<`, `>`, `width` and `+` and the built-in formatter `join` included,
 a disabled name registered, a parameter declared twice, a marker named as no marker can be written, a depth limit
 below 1, a size or read limit below 0.
 

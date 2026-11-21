@@ -1,0 +1,14 @@
+cluster:
+  hosts:
+    - db1
+    - db2
+    - db3
+  port: 5432
+url: "jdbc:postgresql://db1,db2,db3:5432/orders"
+list: @csv "db1, db2, db3"
+quoted: "{db1}, {db2}, {db3}"
+pairs:
+  - db1+db2+db3
+  - - db1|db2|db3
+    - last
+banner: "Serving db1 and db2 and db3"

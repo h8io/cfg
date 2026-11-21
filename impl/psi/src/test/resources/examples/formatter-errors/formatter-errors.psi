@@ -1,0 +1,14 @@
+hosts: [db1, db2]
+
+// one formatter in a substitution, with no whitespace before the `}`
+twice: ${hosts; join(","); join(";")}
+spaced: ${hosts; join(",") }
+
+// a formatter the loader does not know, and `join` with its argument missing
+unknown: ${hosts; csv}
+missing: ${hosts; join}
+
+// a formatter gives a string, which injects nothing
+block {
+  ${hosts; join(",")}
+}
