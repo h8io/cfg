@@ -23,7 +23,7 @@ object Yaml extends Directive {
   def parameters: Seq[Parameter] = Target.parameters
 
   /** The extensions a file or a resource with none is looked for with, in order. */
-  def Extensions: Seq[String] = Seq(".yaml", ".yml")
+  val Extensions: Seq[String] = Seq(".yaml", ".yml")
 
   def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
     context.target(arguments, Extensions).flatMap {

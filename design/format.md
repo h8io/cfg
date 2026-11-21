@@ -745,7 +745,8 @@ but `cfg`, and a program that reads YAML or HOCON alone takes no Psi with it.
   a file relative to the source the call stands in, and `optional: true` for a target that is not
   there, with the same errors. The context gives every handler that resolution (below), so that no
   handler writes it again. A `file` or a `resource` with no extension is looked for as `.yaml` and
-  then `.yml` by `#yaml`, as `.conf` by `#hocon`.
+  then `.yml` by `#yaml`, as `.conf`, `.json` and `.properties` by `#hocon`, the syntaxes HOCON
+  takes; the first found is read, where Typesafe Config's own search merges every one it finds.
 - **What it gives is the file's whole tree**, a fragment made from a `Node`: no Psi substitution
   in it, its own resolved inside it; its locations behind the call's (§10), `app.psi:1:4 (#yaml from
   db.yaml:3:8)`; every value a string. Where it stands it does what any call does (above): its map's
@@ -2751,3 +2752,7 @@ Fixed on a review of sessions 36 and 38's code, the format unchanged, nothing pu
   The layers are merged once, and their children resolved after, as a map's with injections are.
 - Each formatter copied the rest of its line, so that a line of 8 000 took seconds: the line's end
   is found once, and read through a view of the source.
+
+- After the review, the user's call: `#hocon` looks for a file or a resource with no extension as
+  `.json` and `.properties` too, after `.conf`, both being syntaxes HOCON takes. It reads the first
+  found, as `#include` does; Typesafe Config's own search by name merges every one it finds.
