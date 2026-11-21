@@ -5,16 +5,15 @@ import h8io.cfg.{Id, Node}
 import java.io.IOException
 import java.net.URL
 
-/** A directive's handler, registered with a loader through [[PsiBuilder.withDirectives]] (`format.md` §6).
+/** A directive's handler, registered with a loader under a name through [[PsiBuilder.withDirective]] (`format.md` §6).
+  * The name is the loader's to give, not the handler's: its own messages do not name it, the report putting the name it
+  * was called by in front.
   *
   * A call `#name(…)` is expanded while its source is read, before any merging: its arguments, literals only, are laid
   * out over the [[parameters]] — positional ones in order, then named ones — and the handler is called only when every
   * argument goes to a parameter, none twice, and every required one is given; the framework reports anything else.
   */
 trait Directive {
-
-  /** The name the directive is called by, `#name`. */
-  def name: String
 
   /** The parameters, in the order positional arguments go to them. */
   def parameters: Seq[Parameter]

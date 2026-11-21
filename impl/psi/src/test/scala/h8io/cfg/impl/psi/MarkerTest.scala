@@ -1,6 +1,7 @@
 package h8io.cfg.impl.psi
 
 import h8io.cfg.{Id, Node}
+import h8io.cfg.impl.psi.Registering.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -8,18 +9,17 @@ class MarkerTest extends AnyFlatSpec with Matchers {
   private def at(line: Int, column: Int): SourceLocation = SourceLocation("s", line, column)
 
   private def marker(markerName: String, params: Parameter*)(
-      body: (Node.IMap[Id.Root], String) => Either[MarkerError, String]): Marker =
-    new Marker {
-      def name: String = markerName
+      body: (Node.IMap[Id.Root], String) => Either[MarkerError, String]): (String, Marker) =
+    markerName -> new Marker {
       def parameters: Seq[Parameter] = params
       def apply(arguments: Node.IMap[Id.Root], value: String): Either[MarkerError, String] = body(arguments, value)
     }
 
-  private def upper: Marker = marker("upper")((_, value) => Right(value.toUpperCase))
+  private def upper: (String, Marker) = marker("upper")((_, value) => Right(value.toUpperCase))
 
-  private def reverse: Marker = marker("~~")((_, value) => Right(value.reverse))
+  private def reverse: (String, Marker) = marker("~~")((_, value) => Right(value.reverse))
 
-  private def loader(markers: Marker*): PsiLoader =
+  private def loader(markers: (String, Marker)*): PsiLoader =
     Psi.builder.withMarkers(markers*).withSystemProperties(Map.empty).build.fold(e => fail(e.toString), identity)
 
   private def loaded(loader: PsiLoader, text: String): Node.IMap[Id.Root] =

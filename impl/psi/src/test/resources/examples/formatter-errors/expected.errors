@@ -1,0 +1,10 @@
+5 errors in 1 source
+formatter-errors.psi
+  4:26: a second formatter in one substitution
+        hint: give a substitution one formatter
+  5:27: whitespace inside '${…}'
+        hint: remove it
+  8:19: unknown formatter 'csv'
+  9:19: argument 'separator' is required and not given
+  13:3: a formatted substitution stands where an injection does, and a string is no fields or elements
+        hint: write a key and ':' or a '- ' before it, or remove the formatter

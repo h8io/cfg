@@ -119,6 +119,11 @@ private[psi] object AST {
     */
   final case class Concatenation(parts: Vector[Token.Part], tag: Option[String], location: SourceLocation) extends Value
 
+  /** `\${path; name(…)}` unquoted and alone: the text the formatter gives for the node found, a scalar (§9); nothing
+    * when an optional one finds nothing.
+    */
+  final case class Formatted(part: Token.Formatted, tag: Option[String], location: SourceLocation) extends Value
+
   /** A block, a scalar or a concatenation, with the loader's markers to run over its value once its substitutions are
     * resolved (§5).
     */

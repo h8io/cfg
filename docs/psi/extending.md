@@ -1,7 +1,9 @@
 # Psi: extending
 
-A loader [built](api.md#building-a-loader) with `withDirectives` and `withMarkers` reads directives and markers of a
-program's own.
+A loader [built](api.md#building-a-loader) with `withDirective`, `withMarker` and `withFormatter` reads directives,
+markers and formatters of a program's own. Each is registered under the name the files call it by, which is the
+loader's to give, not the handler's: a handler's messages do not name it, the report putting the name it was called by
+in front.
 
 ## Directives
 
@@ -27,8 +29,6 @@ final case class YamlUnreadable(file: String, reason: String) extends DirectiveE
 }
 
 object Yaml extends Directive {
-  def name: String = "yaml"
-
   def parameters: Seq[Parameter] = Seq(Parameter("file", required = true))
 
   def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
@@ -70,8 +70,6 @@ final class NotBase64(cause: IllegalArgumentException) extends MarkerError {
 }
 
 object Base64Marker extends Marker {
-  def name: String = "base64"
-
   def parameters: Seq[Parameter] = Nil
 
   def apply(arguments: Node.IMap[Id.Root], value: String): Either[MarkerError, String] =
@@ -80,10 +78,54 @@ object Base64Marker extends Marker {
 }
 ```
 
+## Formatters
+
+A formatter turns what a substitution finds into a string, `${path; name(arguments)}`
+([Substitutions](substitutions.md#formatters)). It is called in two steps: with its arguments when the source is
+read, so that what it refuses is reported with the errors of the syntax, and then with the node, resolved, at the
+position it is defined at. Each step gives an error of its own or what comes next: a function, then the string.
+
+```scala mdoc:silent
+final case class InvalidWidth(width: String) extends FormatterError {
+  def message: String = "the width " + width + " is not a positive integer"
+}
+
+case object NotAValue extends FormatterError {
+  def message: String = "only a value is padded"
+}
+
+object Pad extends Formatter {
+  def parameters: Seq[Parameter] = Seq(Parameter("width", required = true), Parameter("with", required = false))
+
+  def apply(arguments: Node.IMap[Id.Root]): Either[FormatterError, Node.Some => Either[FormatterError, String]] =
+    (arguments("width"), arguments("with")) match {
+      case (Node.IScalar(_, _, width, _), padding) =>
+        val pad = padding match {
+          case Node.IScalar(_, _, value, _) => value
+          case _ => " "
+        }
+        width.toIntOption.filter(_ > 0).toRight(InvalidWidth(width)).map { n =>
+          {
+            case Node.IScalar(_, _, value, _) => Right(pad * (n - value.length) + value)
+            case _ => Left(NotAValue)
+          }
+        }
+      // a required argument is always given, and as a scalar
+      case _ => Left(InvalidWidth(""))
+    }
+}
+```
+
 ## Together
 
 ```scala mdoc:silent
-val loader = Psi.builder.withDirectives(Yaml).withMarkers(Base64Marker).build.fold(e => sys.error(e.toString), identity)
+val loader =
+  Psi.builder
+    .withDirective("yaml", Yaml)
+    .withMarker("base64", Base64Marker)
+    .withFormatter("pad", Pad)
+    .build
+    .fold(e => sys.error(e.toString), identity)
 ```
 
 ```scala mdoc:invisible
@@ -92,7 +134,10 @@ val app = {
   val dir = java.nio.file.Files.createTempDirectory("psi")
   def write(name: String, text: String) = java.nio.file.Files.write(dir.resolve(name), text.getBytes("UTF-8"))
   write("db config.yaml", "host: localhost\nport: 5432\n")
-  write("app.psi", "database: #yaml(file: \"db config.yaml\")\ngreeting: \"\"\"base64\n  aGVsbG8sIHdvcmxk\n  \"\"\"\n")
+  write(
+    "app.psi",
+    "database: #yaml(file: \"db config.yaml\")\nport: ${database.port; pad(8, with: 0)}\n" +
+      "greeting: \"\"\"base64\n  aGVsbG8sIHdvcmxk\n  \"\"\"\n")
   dir.resolve("app.psi").toUri.toURL
 }
 ```
@@ -101,6 +146,7 @@ With `db config.yaml` holding `host: localhost` and `port: 5432`, and `app.psi` 
 
 ```
 database: #yaml(file: "db config.yaml")
+port: ${database.port; pad(8, with: 0)}
 greeting: """base64
   aGVsbG8sIHdvcmxk
   """
@@ -117,8 +163,21 @@ A marker that fails is reported at its block, with its handler's message and hin
 println(loader.parse("app.psi", "key: QQQbase64\n  not base64!\n  QQQ".replace("QQQ", "\"\"\"")).fold(_.message, _.toString))
 ```
 
+So is a formatter, at its name, whichever step it fails at. Arguments it refuses are reported with the errors of the
+syntax, before any substitution is resolved, so the second error waits for the first to be fixed:
+
+```scala mdoc
+println(loader.parse("app.psi", "a: ${b; pad(-1)}\nb: x\nc: ${d; pad(3)}\nd: [x]").fold(_.message, _.toString))
+println(loader.parse("app.psi", "b: x\nc: ${d; pad(3)}\nd: [x]").fold(_.message, _.toString))
+```
+
 A builder reports every error of its configuration at once:
 
 ```scala mdoc
-Psi.builder.withDirectives(Yaml, Yaml).withMarkers(Base64Marker, Base64Marker).build
+Psi.builder
+  .withDirective("yaml", Yaml)
+  .withDirective("yaml", Yaml)
+  .withMarker("base64", Base64Marker)
+  .withFormatter("join", Pad)
+  .build
 ```

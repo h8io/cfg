@@ -76,6 +76,7 @@ private[psi] final class Merge {
       case AST.Substitution(path, optional, tag, location) => Tree.Substitution(path, optional, tag, location)
       case injections: AST.Injections => this.injections(injections)
       case AST.Concatenation(parts, tag, location) => Tree.Concatenation(parts, tag, location)
+      case AST.Formatted(part, tag, location) => Tree.Formatted(part, tag, location)
       case AST.Marked(value, markers) => Tree.Marked(tree(value), markers)
       case AST.DirectiveValue(call, _) => unexpanded(call)
     }

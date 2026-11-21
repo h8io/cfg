@@ -1,6 +1,7 @@
 package h8io.cfg.impl.psi
 
 import h8io.cfg.{Id, Node}
+import h8io.cfg.impl.psi.Registering.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -15,15 +16,14 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
   private def directive(
       directiveName: String,
       params: Parameter*)(
-      body: (Node.IMap[Id.Root], DirectiveContext) => Either[DirectiveError, Fragment]): Directive =
-    new Directive {
-      def name: String = directiveName
+      body: (Node.IMap[Id.Root], DirectiveContext) => Either[DirectiveError, Fragment]): (String, Directive) =
+    directiveName -> new Directive {
       def parameters: Seq[Parameter] = params
       def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
         body(arguments, context)
     }
 
-  private def loader(directives: Directive*): PsiLoader =
+  private def loader(directives: (String, Directive)*): PsiLoader =
     Psi.builder.withDirectives(directives*).withSystemProperties(Map.empty).build.fold(e => fail(e.toString), identity)
 
   private def loaded(loader: PsiLoader, text: String): Node.IMap[Id.Root] =
@@ -38,10 +38,10 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
   private def node(text: String): Node.IMap[Id.Root] =
     Psi.parse("y", text).fold(errors => fail(errors.toString), identity)
 
-  private def constant(name: String, fragment: => Fragment): Directive =
+  private def constant(name: String, fragment: => Fragment): (String, Directive) =
     directive(name)((_, _) => Right(fragment))
 
-  private def nothing: Directive = directive("none")((_, _) => Right(Fragment.None))
+  private def nothing: (String, Directive) = directive("none")((_, _) => Right(Fragment.None))
 
   "A builder" should "report every error of its configuration at once" in {
     val x =

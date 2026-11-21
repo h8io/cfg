@@ -1,6 +1,6 @@
 package h8io.cfg.impl.psi
 
-import h8io.cfg.Id
+import h8io.cfg.{Id, Node}
 
 /** A token of a source.
   *
@@ -66,6 +66,40 @@ private[psi] object Token {
   /** `${path}` or `$path`, `${?path}` or `$?path` when `optional`, found at `location`. */
   final case class Reference(path: Id.Branch, optional: Boolean, location: SourceLocation) extends Part
 
+  /** `\${path; name(…)}`: a reference, and the formatter called on what it finds, bound to its arguments (`format.md`
+    * §9).
+    */
+  final case class Formatted(reference: Reference, formatting: Formatting) extends Part
+
+  /** A formatter bound to its arguments: its `name`, the `call` as written after the `;` and the whitespace after it,
+    * and the `location` of its name.
+    */
+  sealed trait Formatting {
+    def name: String
+    def call: String
+    def location: SourceLocation
+  }
+
+  /** The built-in `join(separator)` (§9). */
+  final case class Join(separator: String, call: String, location: SourceLocation) extends Formatting {
+    def name: String = "join"
+  }
+
+  /** A loader's formatter, `format` the function its handler gave for its arguments. */
+  final case class Handled(
+      name: String,
+      call: String,
+      location: SourceLocation,
+      format: Node.Some => Either[FormatterError, String])
+      extends Formatting
+
+  /** Whether `part` is a substitution, formatted or not. */
+  def substitutes(part: Part): Boolean =
+    part match {
+      case _: Reference | _: Formatted => true
+      case Text(_) => false
+    }
+
   /** What the parser asks the lexer for: the same characters mean different things on either side of `:`, and in a
     * directive's arguments.
     */
@@ -115,5 +149,7 @@ private[psi] object Token {
     parts.iterator.map {
       case Text(value) => value
       case Reference(path, optional, _) => "${" + (if (optional) "?" else "") + Message.path(path) + "}"
+      case Formatted(Reference(path, optional, _), formatting) =>
+        "${" + (if (optional) "?" else "") + Message.path(path) + "; " + formatting.call + "}"
     }.mkString
 }

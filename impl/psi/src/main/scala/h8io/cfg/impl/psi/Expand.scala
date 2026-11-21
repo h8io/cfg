@@ -20,6 +20,7 @@ private[psi] final class Expand private (
     directives: Map[String, Directive],
     disabled: Set[String],
     markers: Map[String, Marker],
+    formatters: Map[String, Formatter],
     limit: Int,
     budget: ReadBudget) {
   import Expand.*
@@ -38,7 +39,7 @@ private[psi] final class Expand private (
     * first.
     */
   private def document(source: Source, stack: List[Source], base: Int): AST.Document = {
-    val parsed = Parser.parse(source, markers, base, limit)
+    val parsed = Parser.parse(source, markers, base, limit, formatters)
     errors ++= parsed.errors
     AST.Document(statements(parsed.value.statements, source :: stack, base))
   }
@@ -265,7 +266,7 @@ private[psi] final class Expand private (
       } else if (stack.length >= MaxDepth)
         Fragment.Parsed(AST.Document(Vector.empty), root, DirectiveTooDeep(call.location, MaxDepth) :: Nil, Nil)
       else {
-        val expand = new Expand(directives, disabled, markers, limit, budget)
+        val expand = new Expand(directives, disabled, markers, formatters, limit, budget)
         val document = expand.document(source, stack, base)
         Fragment.Parsed(document, root, expand.errors.toList, source.name :: expand.included.toList)
       }
@@ -306,9 +307,10 @@ private[psi] object Expand {
       directives: Map[String, Directive],
       disabled: Set[String],
       markers: Map[String, Marker],
+      formatters: Map[String, Formatter],
       limit: Int,
       budget: ReadBudget): Result[(AST.Document, List[String])] = {
-    val expand = new Expand(directives, disabled, markers, limit, budget)
+    val expand = new Expand(directives, disabled, markers, formatters, limit, budget)
     val document = expand.document(source, Nil, 0)
     Result((document, expand.included.toList), expand.errors.toList)
   }

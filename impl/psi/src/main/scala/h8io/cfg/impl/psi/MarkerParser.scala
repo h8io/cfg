@@ -4,8 +4,6 @@ import h8io.cfg.impl.psi.Lexer.*
 
 import h8io.cfg.{Id, Node}
 
-import scala.collection.{immutable, mutable}
-
 /** Reads the markers of a triple-quoted block (`format.md` §5) — what stands between the opening delimiter and the end
   * of its line — into the layout stages they pick.
   *
@@ -14,15 +12,15 @@ import scala.collection.{immutable, mutable}
   * once, and nothing else of the line; any error leaves the block to be read as with no marker.
   */
 private[psi] final class MarkerParser(
-    line: String,
-    offsets: IndexedSeq[Int],
-    report: (SourceLocation => PsiError, Int) => Unit,
-    locate: Int => SourceLocation,
-    markers: Map[String, Marker]) {
+    text: String,
+    positions: IndexedSeq[Int],
+    reporter: (SourceLocation => PsiError, Int) => Unit,
+    locator: Int => SourceLocation,
+    markers: Map[String, Marker])
+    extends CallReader(text, positions, reporter, locator) {
   import MarkerParser.*
 
-  private var i = 0
-  private var failed = false
+  protected def invalidCall: SourceLocation => PsiError = InvalidMarker.apply
 
   /** The stages to apply, in order, Java's rule first when no marker sets the indent, and the loader's markers to run
     * over the value after them (`format.md` §5); none of the latter when any marker is wrong.
@@ -35,23 +33,6 @@ private[psi] final class MarkerParser(
       case _ => (Vector(CommonIndent), Vector.empty)
     }
   }
-
-  private def error(error: SourceLocation => PsiError, at: Int): Unit = {
-    failed = true
-    report(error, offsets(at))
-  }
-
-  private def syntaxError(): Unit = error(InvalidMarker.apply, i)
-
-  private def invalid[A]: Option[A] = {
-    syntaxError()
-    None
-  }
-
-  @inline private def has(at: Int): Boolean = at < line.length
-  @inline private def at(at: Int, c: Char): Boolean = has(at) && line.charAt(at) == c
-
-  private def skipSpaces(): Unit = while (has(i) && isSpace(line.charAt(i))) i += 1
 
   /** Markers separated by whitespace; whitespace before the first or after the last is an error of its own. */
   private def chain(): Option[Vector[Call]] = {
@@ -97,173 +78,6 @@ private[psi] final class MarkerParser(
     if (i > start) Some(line.substring(start, i)) else None
   }
 
-  private def identifier(): Unit =
-    if (has(i) && isNameStart(line.codePointAt(i)))
-      while (has(i) && isNamePart(line.codePointAt(i))) i += Character.charCount(line.codePointAt(i))
-
-  /** `(name: literal, …)` from its `(`, separated as a directive's arguments are (§6): a trailing `,` is allowed, and a
-    * `,` with no argument before it is an empty one.
-    */
-  private def arguments(): Option[Vector[Argument]] = {
-    i += 1
-    skipSpaces()
-    val read = Vector.newBuilder[Argument]
-    var result: Option[Vector[Argument]] = None
-    var more = true
-    while (more)
-      if (at(i, ')')) {
-        i += 1
-        result = Some(read.result())
-        more = false
-      } else if (at(i, ',')) {
-        error(EmptyElement.apply, i)
-        more = false
-      } else
-        argument() match {
-          case Some(argument) =>
-            read += argument
-            skipSpaces()
-            if (at(i, ',')) {
-              i += 1
-              skipSpaces()
-            } else if (!at(i, ')')) {
-              syntaxError()
-              more = false
-            }
-          case None => more = false
-        }
-    result
-  }
-
-  /** `name: literal`, or a literal alone, positional; `name = literal` is reported and read as the former. A name is
-    * bare or in backticks, as every name is (§6); a value in backticks is an error.
-    */
-  private def argument(): Option[Argument] = {
-    val start = i
-    val written =
-      if (at(i, '`')) backticked()
-      else {
-        identifier()
-        if (i > start) Some(line.substring(start, i)) else None
-      }
-    skipSpaces()
-    written.flatMap(name => if (at(i, ':') || at(i, '=')) Some(name) else None) match {
-      case Some(name) => named(name, start)
-      case None if at(start, '`') =>
-        if (written.nonEmpty) error(BacktickedValue.apply, start)
-        None
-      case None =>
-        i = start
-        literal().map(Argument(None, start, _, start))
-    }
-  }
-
-  /** The rest of `name: literal` from its `:`, or the `=` written in its place. */
-  private def named(name: String, start: Int): Option[Argument] = {
-    if (at(i, '=')) error(EqualsInArgument.apply, i)
-    else if (has(i + 1) && !isSpace(line.charAt(i + 1))) error(ColonWithoutSpace.apply, i)
-    i += 1
-    skipSpaces()
-    val valueStart = i
-    literal().map(Argument(Some(name), start, _, valueStart))
-  }
-
-  /** A name in backticks with the escapes of `"…"`, from its opening backtick; with no closing one, a syntax error
-    * there.
-    */
-  private def backticked(): Option[String] = {
-    val start = i
-    i += 1
-    val value = new StringBuilder
-    while (has(i) && !at(i, '`'))
-      if (at(i, '\\')) {
-        val (read, end) = readEscape(line, i, has(i + 1))
-        read match {
-          case Some(escaped) => value ++= escaped
-          case None => error(InvalidEscape(_, line.substring(i, end)), i)
-        }
-        i = end
-      } else {
-        value += line.charAt(i)
-        i += 1
-      }
-    if (has(i)) {
-      i += 1
-      Some(value.result())
-    } else {
-      i = start
-      invalid
-    }
-  }
-
-  /** A string in `"…"` or `'…'`, an integer or a name, as a directive's arguments are (§6). */
-  private def literal(): Option[Literal] =
-    if (at(i, '"')) quoted()
-    else if (at(i, '\'')) raw()
-    else if (at(i, '-') || has(i) && isDigit(line.charAt(i))) integer()
-    else {
-      val start = i
-      identifier()
-      if (i > start) Some(NameLiteral(line.substring(start, i))) else invalid
-    }
-
-  /** A string with the escapes of `"…"`; `\${` is an error, an argument being literal. */
-  private def quoted(): Option[Literal] = {
-    val start = i
-    i += 1
-    val value = new StringBuilder
-    while (has(i) && !at(i, '"'))
-      if (at(i, '\\')) {
-        val (read, end) = readEscape(line, i, has(i + 1))
-        read match {
-          case Some(escaped) => value ++= escaped
-          case None => error(InvalidEscape(_, line.substring(i, end)), i)
-        }
-        i = end
-      } else {
-        if (line.startsWith("${", i)) error(SubstitutionInArgument.apply, i)
-        value += line.charAt(i)
-        i += 1
-      }
-    closing(start, value)
-  }
-
-  /** A string with the escapes of `'…'`: `\'` and `\\`. */
-  private def raw(): Option[Literal] = {
-    val start = i
-    i += 1
-    val value = new StringBuilder
-    while (has(i) && !at(i, '\'')) {
-      if (at(i, '\\') && (at(i + 1, '\'') || at(i + 1, '\\'))) i += 1
-      value += line.charAt(i)
-      i += 1
-    }
-    closing(start, value)
-  }
-
-  /** The string read, at its closing quote; with none, a syntax error at its opening one. */
-  private def closing(start: Int, value: StringBuilder): Option[Literal] =
-    if (has(i)) {
-      i += 1
-      Some(StringLiteral(value.result()))
-    } else {
-      i = start
-      invalid
-    }
-
-  /** An optional `-` and decimal digits, with no leading zeros. */
-  private def integer(): Option[Literal] = {
-    val start = i
-    if (at(i, '-')) i += 1
-    val digits = i
-    while (has(i) && isDigit(line.charAt(i))) i += 1
-    if (i == digits) invalid
-    else if (i - digits > 1 && line.charAt(digits) == '0') {
-      i = digits + 1
-      invalid
-    } else Some(IntegerLiteral(line.substring(start, i)))
-  }
-
   /** The stages the markers pick; every unknown marker, bad argument and second indent is reported. */
   private def check(calls: Vector[Call]): (Vector[Stage], Vector[MarkerCall]) = {
     var indented = false
@@ -289,26 +103,17 @@ private[psi] final class MarkerParser(
             case Some(marker) =>
               loaderSeen = true
               loaders +=
-                MarkerCall(marker, arguments(call, bind(call, marker.parameters.toVector)), locate(offsets(call.at)))
+                MarkerCall(
+                  call.name,
+                  marker,
+                  handed(call, bind(call, marker.parameters.toVector)),
+                  locate(offsets(call.at)))
               ()
             case None => error(UnknownMarker(_, call.name), call.at)
           }
       }
     }
     (stages.result(), loaders.result())
-  }
-
-  /** The arguments of a loader's marker, as its handler gets them: by parameter, in the order declared. */
-  private def arguments(call: Call, bound: Map[String, Argument]): Node.IMap[Id.Root] = {
-    val entries = bound.toVector.map { case (name, argument) =>
-      val text = argument.value match {
-        case StringLiteral(value) => value
-        case IntegerLiteral(text) => text
-        case NameLiteral(value) => value
-      }
-      name -> (Tree.Scalar(text, None, locate(offsets(argument.valueAt))): Tree.Value)
-    }
-    MapImpl(Id.Root, Tree.Map(entries.map(_._1), immutable.Map(entries*), None, locate(offsets(call.at))))
   }
 
   /** The markers every loader knows until handlers can be registered (plan step 10), each with its parameters. */
@@ -335,29 +140,6 @@ private[psi] final class MarkerParser(
     }
   }
 
-  /** The arguments of `call` by the parameter they go to — positional ones in order, then named ones, as in Scala —
-    * every one that goes to none, or to one already given, reported.
-    */
-  private def bind(call: Call, declared: Vector[Parameter]): Map[String, Argument] = {
-    val parameters = declared.map(_.name)
-    val bound = mutable.LinkedHashMap.empty[String, Argument]
-    var named = false
-    call.arguments.zipWithIndex.foreach {
-      case (argument @ Argument(None, at, _, _), index) =>
-        if (named) error(PositionalAfterNamed.apply, at)
-        else if (index >= parameters.length) error(ExtraArgument.apply, at)
-        else bound(parameters(index)) = argument
-      case (argument @ Argument(Some(name), at, _, _), _) =>
-        named = true
-        if (!parameters.contains(name)) error(UnknownArgument(_, name), at)
-        else if (bound.contains(name)) error(DuplicateArgument(_, name), at)
-        else bound(name) = argument
-    }
-    declared.foreach { parameter =>
-      if (parameter.required && !bound.contains(parameter.name)) error(MissingArgument(_, parameter.name), call.at)
-    }
-    immutable.ListMap(parameters.flatMap(name => bound.get(name).map(name -> _))*)
-  }
 }
 
 private object MarkerParser {
@@ -374,8 +156,9 @@ private object MarkerParser {
   /** An argument, named or positional. */
   final case class Argument(name: Option[String], at: Int, value: Literal, valueAt: Int)
 
-  /** A loader's marker called on a block, with its arguments, at `location`, run over the block's value (§5). */
-  final case class MarkerCall(marker: Marker, arguments: Node.IMap[Id.Root], location: SourceLocation)
+  /** A loader's marker called on a block by `name`, with its arguments, at `location`, run over the block's value (§5).
+    */
+  final case class MarkerCall(name: String, marker: Marker, arguments: Node.IMap[Id.Root], location: SourceLocation)
 
   /** A built-in marker: its parameters, in order, and the stage it picks from its arguments by parameter. */
   final case class BuiltIn(parameters: Vector[String], stage: (Call, Map[String, Argument]) => Option[Stage])

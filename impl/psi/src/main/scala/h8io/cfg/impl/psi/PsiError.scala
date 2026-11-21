@@ -733,6 +733,46 @@ final case class BuiltInMarkerAfterLoaders(location: SourceLocation, name: Strin
   override def hint: Option[String] = Some("put the built-in markers first")
 }
 
+/** The formatter after a substitution's `;` cannot be read: a name by the key rule with arguments in parentheses or
+  * none, then the `}` (`format.md` §9). The error points at the first character that does not fit, and the substitution
+  * is skipped.
+  */
+final case class InvalidFormatter(location: SourceLocation) extends PsiError {
+  def message: String = "the formatter of a substitution cannot be read from here"
+
+  override def hint: Option[String] =
+    Some("a formatter is a name with its arguments in parentheses or none, right before the '}'")
+}
+
+/** A second `;` after a substitution's formatter: a substitution takes one (§9). */
+final case class SecondFormatter(location: SourceLocation) extends PsiError {
+  def message: String = "a second formatter in one substitution"
+
+  override def hint: Option[String] = Some("give a substitution one formatter")
+}
+
+/** A formatter the loader has no handler for, and that is not the built-in `join`; `name` is its name. */
+final case class UnknownFormatter(location: SourceLocation, name: String) extends PsiError {
+  def message: String = "unknown formatter " + Message.quote(name)
+}
+
+/** A formatter that refused its arguments or failed on what its substitution found, with its error (§9), at its name.
+  */
+final case class FormatterFailed(location: SourceLocation, name: String, error: FormatterError) extends PsiError {
+  def message: String = "formatter " + Message.quote(name) + ": " + error.message
+
+  override def hint: Option[String] = error.hint
+}
+
+/** A formatted substitution where an injection stands: alone among fields, alone on its line among `- ` elements, or in
+  * a block of injections alone. What a formatter gives is a string, which is neither fields nor elements (§9).
+  */
+final case class FormattedInjection(location: SourceLocation) extends PsiError {
+  def message: String = "a formatted substitution stands where an injection does, and a string is no fields or elements"
+
+  override def hint: Option[String] = Some("write a key and ':' or a '- ' before it, or remove the formatter")
+}
+
 /** A call of a directive the loader has no handler for (`format.md` §6). */
 final case class UnknownDirective(location: SourceLocation, name: String) extends PsiError {
   def message: String = "unknown directive " + Message.directive(name)

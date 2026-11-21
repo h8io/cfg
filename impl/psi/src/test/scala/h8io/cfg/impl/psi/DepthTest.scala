@@ -1,6 +1,7 @@
 package h8io.cfg.impl.psi
 
 import h8io.cfg.{Id, Node}
+import h8io.cfg.impl.psi.Registering.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -10,15 +11,14 @@ class DepthTest extends AnyFlatSpec with Matchers {
   private def beyond(line: Int, column: Int, source: String = "s"): DepthExceeded =
     DepthExceeded(at(line, column, source), 3, fatal = true)
 
-  private def directive(directiveName: String)(body: DirectiveContext => Fragment): Directive =
-    new Directive {
-      def name: String = directiveName
+  private def directive(directiveName: String)(body: DirectiveContext => Fragment): (String, Directive) =
+    directiveName -> new Directive {
       def parameters: Seq[Parameter] = Nil
       def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
         Right(body(context))
     }
 
-  private def loader(limit: Int, directives: Directive*): PsiLoader =
+  private def loader(limit: Int, directives: (String, Directive)*): PsiLoader =
     Psi.builder
       .withDirectives(directives*)
       .withSystemProperties(Map.empty)
@@ -26,10 +26,11 @@ class DepthTest extends AnyFlatSpec with Matchers {
       .build
       .fold(e => fail(e.toString), identity)
 
-  private def errors(text: String, directives: Directive*): List[PsiError] =
+  private def errors(text: String, directives: (String, Directive)*): List[PsiError] =
     loader(3, directives*).parse("s", text).fold(_.errors, root => fail(root.toString))
 
-  private def loads(text: String, directives: Directive*): Boolean = loader(3, directives*).parse("s", text).isRight
+  private def loads(text: String, directives: (String, Directive)*): Boolean =
+    loader(3, directives*).parse("s", text).isRight
 
   private def parsed(text: String): Result[AST.Document] = Parser.parse(Source("s", text), Map.empty, 0, 3)
 
