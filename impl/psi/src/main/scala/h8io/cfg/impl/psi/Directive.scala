@@ -86,5 +86,5 @@ object Target {
 
   /** The parameters a target is written with, as `#include`'s: `file`, `resource`, `url` and `optional`, none required.
     */
-  def parameters: Seq[Parameter] = Seq("file", "resource", "url", "optional").map(Parameter(_, required = false))
+  val parameters: Seq[Parameter] = Seq("file", "resource", "url", "optional").map(Parameter(_, required = false))
 }

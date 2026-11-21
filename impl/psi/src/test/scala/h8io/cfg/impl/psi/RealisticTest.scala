@@ -7,7 +7,7 @@ import org.scalatest.matchers.should.Matchers
 import java.net.URL
 
 class RealisticTest extends AnyFlatSpec with Matchers {
-  private def loader: PsiLoader =
+  private val loader: PsiLoader =
     Psi.builder.withSystemProperties(Map.empty).build.fold(e => fail(e.toString), identity)
 
   private def resource(name: String): URL = Option(getClass.getResource("/" + name)).getOrElse(fail(name))

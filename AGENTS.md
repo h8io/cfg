@@ -180,6 +180,7 @@ sbt 2 differs from sbt 1 in ways that matter here:
 - Write Scala 3 syntax. The scalafmt dialect is `scala213source3` and scalac runs with `-Xsource:3`, so use
   `import a.b.*` for wildcards and `import a.b.{C as D}` for renames — never `._` or `{C => D}`. Max line length 120.
 - Scalac options include `-Xfatal-warnings`; all warnings are errors.
-- Use `def` not `val` for implicit/constant definitions.
+- A constant is a `def` when calling it creates no object — an `Int`, a `Long`, a `String` literal — and a `val`
+  when it would create one on every call: a collection, a `Duration`, a loader, a function.
 - Explicit `None` for HOCON tags (never omit or infer).
 - Tests use ScalaTest + ScalaMock + ScalaCheck.

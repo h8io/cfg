@@ -50,7 +50,7 @@ private[psi] object Include extends Directive {
     } yield fragment
 
   /** Psi's extensions, in the order a file or a resource with none is looked for with them (§6). */
-  private def Extensions: Seq[String] = Seq(".Ψ", ".ψ", ".psi")
+  private val Extensions: Seq[String] = Seq(".Ψ", ".ψ", ".psi")
 
   /** The target `arguments` name for a handler (`DirectiveContext.target`): the first candidate there, or not known not
     * to be; none when no candidate is and it is optional.

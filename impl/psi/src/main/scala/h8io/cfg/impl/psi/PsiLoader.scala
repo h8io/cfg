@@ -78,10 +78,10 @@ private[psi] object PsiLoader {
   def DefaultDepthLimit: Int = 256
 
   /** The names of the built-in directives, which no handler may take (§6). */
-  def BuiltInDirectives: Seq[String] = Seq("include", "prop", "env")
+  val BuiltInDirectives: Seq[String] = Seq("include", "prop", "env")
 
   /** The names of the built-in formatters, which no handler may take (§9). */
-  def BuiltInFormatters: Seq[String] = Seq("join")
+  val BuiltInFormatters: Seq[String] = Seq("join")
 
   /** How many nodes resolving the substitutions may copy into the tree by grafts unless the builder says otherwise
     * (§11).
