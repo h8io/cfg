@@ -157,6 +157,13 @@ class YamlTest extends AnyFlatSpec with Matchers {
     }
   }
 
+  it should "fail on a merge key that makes a mapping contain itself, before snakeyaml-engine follows it" in {
+    errors("a: #yaml(file: \"m.yaml\")", "m.yaml" -> "a: &a {<<: *a}") match {
+      case DirectiveFailed(_, "yaml", YamlInvalid(_, reason)) :: Nil => reason should include("contain itself")
+      case other => fail(other.toString)
+    }
+  }
+
   "YamlInvalid" should "say what the parser said" in {
     YamlInvalid("a.yaml", "broken").message shouldBe "a.yaml cannot be read as YAML: broken"
   }

@@ -42,23 +42,18 @@ package object yaml {
   private[yaml] def tooDeep(location: Location): YamlEngineException =
     new YamlEngineException(s"A configuration nests deeper than $DepthLimit levels at ${location.description}")
 
-  /** Rejects a node that an alias makes contain itself, which a config tree cannot hold and `merge` would recurse into
-    * forever, and a tree deeper than [[DepthLimit]] once its aliases are followed: an anchor nested deep and used deep
-    * makes the tree deeper than its source, which the parser has bounded. An anchor reused anywhere outside its own
-    * subtree is fine, and each node is visited once however often it is reused, its height kept for every later use.
-    * Keys need no check: snakeyaml-engine refuses keys that are not scalars by default, recursive ones included, which
-    * is also what makes `keyOf`'s cast safe.
+  /** Rejects a tree deeper than [[DepthLimit]] once its aliases are followed: an anchor nested deep and used deep makes
+    * the tree deeper than its source, which the parser has bounded. Each node is visited once however often it is
+    * reused, its height kept for every later use. A node that an alias makes contain itself never gets here, the parser
+    * having refused it ([[Bounded]]). Keys need no check: snakeyaml-engine refuses keys that are not scalars by
+    * default, recursive ones included, which is also what makes `keyOf`'s cast safe.
     */
   private[yaml] def validated(root: YamlNode): YamlNode = {
     val heights = new IdentityHashMap[YamlNode, Integer]
-    val inProgress = Collections.newSetFromMap(new IdentityHashMap[YamlNode, java.lang.Boolean]).asScala
     // the levels `node` opens, `above` levels standing above it in `parent`; never deeper than the limit, a node used
     // again past it reported in the parent, where the alias stands, rather than where its anchor does
     def visit(node: YamlNode, above: Int, parent: YamlNode): Int =
       Option(heights.get(node)).fold {
-        if (!inProgress.add(node))
-          throw new YamlEngineException(
-            s"An alias makes the ${node.getNodeType.toString} at ${LocationImpl(node).description} contain itself")
         // a mapping or a sequence opens a level, past the limit failing before its children are visited
         def nested(children: Iterator[YamlNode]): Int =
           if (above + 1 > DepthLimit) throw tooDeep(LocationImpl(node))
@@ -68,7 +63,6 @@ package object yaml {
           case sequence: SequenceNode => nested(sequence.getValue.asScala.iterator)
           case _ => 0
         }
-        inProgress -= node
         heights.put(node, height)
         height
       } { height =>

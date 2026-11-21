@@ -35,6 +35,27 @@ class ParseTest extends AnyFlatSpec with Matchers {
     YAML.parse("x.yaml", utf16).toString shouldBe "a: b\n"
   }
 
+  it should "refuse an alias to a mapping or a sequence not yet ended, a merge key's too, which would never end" in {
+    the[YamlEngineException] thrownBy parse("a: &a {<<: *a}") should have message
+      "An alias makes the MAPPING at x.yaml: 1:4 contain itself"
+    // an anchor defined again names the node defined last
+    def sizes(text: String): List[Int] =
+      parse(text) match {
+        case root: Node.IMap[?] =>
+          root("a") match {
+            case seq: Node.ISeq[?] =>
+              seq.iterator.map {
+                case inner: Node.ISeq[?] => inner.size
+                case _ => 0
+              }.toList
+            case other => fail(other.toString)
+          }
+        case other => fail(other.toString)
+      }
+    sizes("a: &a [&a x, *a]") shouldBe List(0, 0)
+    sizes("a: &a [&a [1], *a]") shouldBe List(1, 1)
+  }
+
   it should "refuse what the loader refuses" in {
     the[YamlEngineException] thrownBy parse("a: &x [*x]") should have message
       "An alias makes the SEQUENCE at x.yaml: 1:4 contain itself"
