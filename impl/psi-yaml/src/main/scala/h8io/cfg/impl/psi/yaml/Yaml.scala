@@ -5,11 +5,9 @@ import h8io.cfg.impl.yaml.YAML
 import h8io.cfg.{Id, Node}
 import org.snakeyaml.engine.v2.exceptions.YamlEngineException
 
-import java.io.FileNotFoundException
-
-/** A YAML file that cannot be parsed as one, `target` as written, with what the parser said of it. */
-final case class YamlInvalid(target: String, reason: String) extends DirectiveError {
-  def message: String = target + " cannot be read as YAML: " + reason
+/** A YAML file at `source` that cannot be parsed as one, with what the parser said of it. */
+final case class YamlInvalid(source: String, reason: String) extends DirectiveError {
+  def message: String = source + " cannot be read as YAML: " + reason
 }
 
 /** Psi's import of a YAML file (`format.md` §6), registered under a name of the loader's choosing, `yaml` by custom:
@@ -26,19 +24,11 @@ object Yaml extends Directive {
   val Extensions: Seq[String] = Seq(".yaml", ".yml")
 
   def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
-    context.target(arguments, Extensions).flatMap {
-      case Some(target) =>
-        context.read(target.url) match {
-          case Right(Some(bytes)) =>
-            try Right(Fragment(YAML.parse(target.url.toString, bytes)))
-            catch { case e: YamlEngineException => Left(YamlInvalid(target.written, e.getMessage)) }
-          // the load's read limit gone, which the load reports
-          case Right(None) => Right(Fragment.None)
-          // a URL read from elsewhere, known not to be there only once read
-          case Left(_: FileNotFoundException) if !target.known =>
-            if (target.optional) Right(Fragment.None) else Left(IncludeNotFound(target.written))
-          case Left(cause) => Left(IncludeUnreadable(target.written, cause))
-        }
-      case None => Right(Fragment.None)
+    context.find(arguments, Extensions)(url => context.read(url).map(_.map(url -> _))).flatMap {
+      case Some(Some((url, bytes))) =>
+        try Right(Fragment(YAML.parse(url.toString, bytes)))
+        catch { case e: YamlEngineException => Left(YamlInvalid(url.toString, e.getMessage)) }
+      // the load's read limit gone, which the load reports, or an optional file not there
+      case _ => Right(Fragment.None)
     }
 }

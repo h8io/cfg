@@ -564,8 +564,20 @@ final case class ResolutionTooDeep(location: SourceLocation, path: String, limit
     Some("shorten the chain of substitutions, or build the loader with a higher withDepthLimit")
 }
 
+/** A call, at `location`, whose handler built a fragment taking the nodes such fragments bring past `limit`, the load's
+  * node limit (`format.md` §11): each counted before it is built, a YAML alias as many times as it is used. Reported at
+  * the first call to go past it; what comes after gives nothing.
+  */
+final case class FragmentTooLarge(location: SourceLocation, name: String, limit: Int) extends PsiError {
+  def message: String = Message.directive(name) + " gives more than " + limit.toString + " nodes, fragments together"
+
+  override def hint: Option[String] =
+    Some("give less, such as a YAML alias used fewer times, or build the loader with a higher withSizeLimit")
+}
+
 /** A graft, of `\${path}` at `location`, that would take the nodes grafts copy into the tree past `limit` (`format.md`
-  * §11): the first thing resolution would build past either of its size limits.
+  * §11): the first thing resolution would build past either of its size limits, the nodes of the fragments handlers
+  * built counted first.
   */
 final case class ResolutionTooLarge(location: SourceLocation, path: String, limit: Int) extends PsiError {
   def message: String =

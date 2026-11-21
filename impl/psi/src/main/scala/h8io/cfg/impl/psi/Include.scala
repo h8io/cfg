@@ -5,6 +5,7 @@ import h8io.cfg.{Id, Node}
 import java.io.{FileNotFoundException, IOException}
 import java.net.{JarURLConnection, MalformedURLException, URI, URISyntaxException, URL}
 import java.nio.file.{Files, Paths}
+import scala.annotation.tailrec
 
 /** Why `#include` failed (`format.md` §6), carried by the [[DirectiveFailed]] at the call. */
 sealed trait IncludeError extends DirectiveError
@@ -43,41 +44,22 @@ private[psi] object Include extends Directive {
   def parameters: Seq[Parameter] = Target.parameters
 
   def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
-    for {
-      written <- this.written(arguments)
-      candidates <- urls(written._1, written._2, Extensions, context.url)
-      fragment <- read(written._2, candidates, written._3, context)
-    } yield fragment
+    find(arguments, Extensions, context.url)(context.parse).map(_.getOrElse(Fragment.None))
 
   /** Psi's extensions, in the order a file or a resource with none is looked for with them (§6). */
   private val Extensions: Seq[String] = Seq(".Ψ", ".ψ", ".psi")
 
-  /** The target `arguments` name for a handler (`DirectiveContext.target`): the first candidate there, or not known not
-    * to be; none when no candidate is and it is optional.
+  /** The target `arguments` name, opened by `open` (`DirectiveContext.find`): the first candidate it opens, a file or a
+    * resource with no extension looked for with each of `extensions`, a relative file against `base`; none when no
+    * candidate is there and the target is optional.
     */
-  def target(
-      arguments: Node.IMap[Id.Root],
-      extensions: Seq[String],
-      base: Option[URL]): Either[IncludeError, Option[Target]] =
+  def find[A](arguments: Node.IMap[Id.Root], extensions: Seq[String], base: Option[URL])(
+      open: URL => Either[IOException, A]): Either[IncludeError, Option[A]] =
     for {
       written <- this.written(arguments)
       candidates <- urls(written._1, written._2, extensions, base)
-      found <- first(written._2, candidates)
-      result <- found match {
-        case Some((url, known)) => Right(Some(Target(url, written._2, written._3, known)))
-        case None if written._3 => Right(None)
-        case None => Left(IncludeNotFound(written._2))
-      }
-    } yield result
-
-  /** The first of `candidates` there, or not known not to be, and whether it is known to be. */
-  private def first(target: String, candidates: List[URL]): Either[IncludeError, Option[(URL, Boolean)]] =
-    candidates match {
-      case url :: rest =>
-        present(target, url).flatMap(there =>
-          if (there.contains(false)) first(target, rest) else Right(Some(url -> there.contains(true))))
-      case Nil => Right(None)
-    }
+      found <- opened(written._2, candidates, written._3)(open)
+    } yield found
 
   /** The kind of target `arguments` give, the target as written, and whether it is optional. */
   private def written(arguments: Node.IMap[Id.Root]): Either[IncludeError, (String, String, Boolean)] = {
@@ -151,24 +133,22 @@ private[psi] object Include extends Directive {
     * is asked before it is read: a file that cannot be read, its permissions denying it, throws what a missing one
     * does.
     */
-  private def read(
-      target: String,
-      candidates: List[URL],
-      optional: Boolean,
-      context: DirectiveContext): Either[IncludeError, Fragment] =
+  @tailrec private def opened[A](target: String, candidates: List[URL], optional: Boolean)(
+      open: URL => Either[IOException, A]): Either[IncludeError, Option[A]] =
     candidates match {
       case url :: rest =>
-        present(target, url).flatMap { there =>
-          if (there.contains(false)) read(target, rest, optional, context)
-          else
-            context.parse(url) match {
-              case Right(fragment) => Right(fragment)
+        present(target, url) match {
+          case Right(Some(false)) => opened(target, rest, optional)(open)
+          case Right(there) =>
+            open(url) match {
+              case Right(found) => Right(Some(found))
               // a target known to be there only once read is not there when reading it finds nothing: a page not found
-              case Left(_: FileNotFoundException) if there.isEmpty => read(target, rest, optional, context)
+              case Left(_: FileNotFoundException) if there.isEmpty => opened(target, rest, optional)(open)
               case Left(cause) => Left(IncludeUnreadable(target, cause))
             }
+          case Left(error) => Left(error)
         }
-      case Nil => if (optional) Right(Fragment.None) else Left(IncludeNotFound(target))
+      case Nil => if (optional) Right(None) else Left(IncludeNotFound(target))
     }
 
   /** Whether `url` is there, as the file system says for a file and for an entry of a jar that is a file; none for any

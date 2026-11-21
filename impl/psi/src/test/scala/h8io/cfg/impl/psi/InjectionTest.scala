@@ -238,7 +238,9 @@ class InjectionTest extends AnyFlatSpec with Matchers {
         giving("map", Some(map)),
         giving("none", None),
         parsing("parsed", "x: 1"),
-        parsing("blocks", "c:\n  #map\n  $?nope")
+        parsing("blocks", "c:\n  #map\n  $?nope"),
+        parsing("base", "x: 1"),
+        parsing("other", "y: $a.x")
       )
       .build
       .fold(e => fail(e.toString), identity)
@@ -271,6 +273,8 @@ class InjectionTest extends AnyFlatSpec with Matchers {
     shown("b:\n  #none\n  #seq\n  #seq") shouldBe "- p\n- @u q\n- p\n- @u q"
     shown("a: [r]\nb:\n  #seq\n  $a") shouldBe "- p\n- @u q\n- r"
     shown("a { y: 2 }\nb:\n  #parsed\n  $a\n  #map") shouldBe "x: 1\ny: 2\nm: 1"
+    // what the calls gave are the block's own fields, which refer to each other once merged
+    loaded("a:\n  #base\n  #other")("a").toString shouldBe "x: 1\ny: 1"
     shown("a { y: 2 }\nb:\n  #none\n  $a\n  $a") shouldBe "y: 2"
     // a call that gives nothing puts nothing, alone on its line among `- ` elements or among injections alone
     shown("b:\n  - p\n  #none") shouldBe "- p"

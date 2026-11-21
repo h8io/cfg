@@ -10,9 +10,10 @@ in front.
 How a directive is written, and what it may give where it stands, is [Directives](directives.md).
 
 A handler declares its parameters and gets the arguments as a map keyed by them, every value a string. It also gets a
-context: where the call stands, the name and URL of the source holding it, a way to parse another Psi source, the
-target its arguments name written as `#include`'s are (`target`, with `Target.parameters`), and a way to read a URL's
-bytes under the load's limits on reading (`read`). It gives back an error of its own or a `Fragment`: a Psi source the
+context: where the call stands, the name and URL of the source holding it, a way to parse another Psi source, a search
+for the target its arguments name as `#include`'s do, each candidate opened by a function of the handler's (`find`,
+with `Target.parameters`), and a way to read a URL's bytes under the load's limits on reading (`read`). The nodes of a
+fragment it builds count against the load's node limit, every use of it again. It gives back an error of its own or a `Fragment`: a Psi source the
 context parsed, any `cfg` node, `Fragment(node)`, or nothing, `Fragment.None`, which adds no field among fields and
 leaves the field or element out as a value.
 
@@ -23,35 +24,25 @@ are built the same way ([Directives](directives.md#importing-yaml-and-hocon)):
 import h8io.cfg.{Id, Node}
 import h8io.cfg.impl.psi.*
 
-import java.io.FileNotFoundException
 import java.nio.charset.{CharacterCodingException, CodingErrorAction, StandardCharsets}
 import java.nio.ByteBuffer
 
-final case class NotText(file: String) extends DirectiveError {
-  def message: String = file + " is not UTF-8 text"
+final case class NotText(source: String) extends DirectiveError {
+  def message: String = source + " is not UTF-8 text"
 }
 
 object Text extends Directive {
   def parameters: Seq[Parameter] = Target.parameters
 
   def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
-    context.target(arguments, Seq(".txt")).flatMap {
-      case Some(target) =>
-        context.read(target.url) match {
-          case Right(Some(bytes)) =>
-            val decoder = StandardCharsets.UTF_8.newDecoder.onMalformedInput(CodingErrorAction.REPORT)
-            try {
-              val text = decoder.decode(ByteBuffer.wrap(bytes)).toString
-              Right(Fragment(Node.Scalar(Id.Root, None, text, context.location)))
-            } catch { case _: CharacterCodingException => Left(NotText(target.written)) }
-          // the load's limit on reading gone, which the load reports
-          case Right(None) => Right(Fragment.None)
-          // a URL from elsewhere, not known to be there until read
-          case Left(_: FileNotFoundException) if !target.known =>
-            if (target.optional) Right(Fragment.None) else Left(IncludeNotFound(target.written))
-          case Left(cause) => Left(IncludeUnreadable(target.written, cause))
-        }
-      case None => Right(Fragment.None)
+    // each candidate opened in turn, a URL from elsewhere not there when reading it fails as not found
+    context.find(arguments, Seq(".txt"))(url => context.read(url).map(_.map(url -> _))).flatMap {
+      case Some(Some((url, bytes))) =>
+        val decoder = StandardCharsets.UTF_8.newDecoder.onMalformedInput(CodingErrorAction.REPORT)
+        try Right(Fragment(Node.Scalar(Id.Root, None, decoder.decode(ByteBuffer.wrap(bytes)).toString, context.location)))
+        catch { case _: CharacterCodingException => Left(NotText(url.toString)) }
+      // an optional target not there, or the load's limit on reading gone, which the load reports
+      case _ => Right(Fragment.None)
     }
 }
 ```

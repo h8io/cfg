@@ -5,11 +5,12 @@ import h8io.cfg.impl.hocon.HOCON
 import h8io.cfg.impl.psi.*
 import h8io.cfg.{Id, Node}
 
-import java.io.FileNotFoundException
+import java.io.{FileNotFoundException, IOException}
+import java.net.URL
 
-/** A HOCON file that cannot be read, parsed or resolved, `target` as written, with what Typesafe Config said of it. */
-final case class HoconInvalid(target: String, reason: String) extends DirectiveError {
-  def message: String = target + " cannot be read as HOCON: " + reason
+/** A HOCON file at `source` that cannot be read, parsed or resolved, with what Typesafe Config said of it. */
+final case class HoconInvalid(source: String, reason: String) extends DirectiveError {
+  def message: String = source + " cannot be read as HOCON: " + reason
 }
 
 /** Psi's import of a HOCON file (`format.md` §6), registered under a name of the loader's choosing, `hocon` by custom:
@@ -30,19 +31,21 @@ object Hocon extends Directive {
   val Extensions: Seq[String] = Seq(".conf", ".json", ".properties")
 
   def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
-    context.target(arguments, Extensions).flatMap {
-      case Some(target) =>
-        try Right(Fragment(HOCON.isolated(target.url)))
-        catch {
-          // the target itself, a URL read from elsewhere, known not to be there only once read; not a file it includes
-          case e: ConfigException.IO if missing(e, target) =>
-            if (target.optional) Right(Fragment.None) else Left(IncludeNotFound(target.written))
-          case e: ConfigException => Left(HoconInvalid(target.written, e.getMessage))
-        }
+    context.find(arguments, Extensions)(load).flatMap {
+      case Some(loaded) => loaded.map(Fragment(_))
       case None => Right(Fragment.None)
     }
 
-  private def missing(e: ConfigException.IO, target: Target): Boolean =
-    !target.known && e.getCause.isInstanceOf[FileNotFoundException] &&
-      Option(e.origin).flatMap(o => Option(o.url)).contains(target.url)
+  /** The file at `url`, or its error; not there, as the context takes it, when Typesafe Config finds the file itself
+    * missing, not one it includes.
+    */
+  private def load(url: URL): Either[IOException, Either[DirectiveError, Node.IMap[Id.Root]]] =
+    try Right(Right(HOCON.isolated(url)))
+    catch {
+      case e: ConfigException.IO if missing(e, url) => Left(new FileNotFoundException(url.toString))
+      case e: ConfigException => Right(Left(HoconInvalid(url.toString, e.getMessage)))
+    }
+
+  private def missing(e: ConfigException.IO, url: URL): Boolean =
+    e.getCause.isInstanceOf[FileNotFoundException] && Option(e.origin).flatMap(o => Option(o.url)).contains(url)
 }

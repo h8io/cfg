@@ -24,7 +24,7 @@ import scala.collection.mutable
   * `characterLimit` characters in the scalars concatenations build, each counted before it is built. Past either, the
   * load fails: the first to go past is reported, and nothing is built after it.
   */
-private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, characterLimit: Int) {
+private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, characterLimit: Int, built: Long) {
   import Resolve.*
 
   private val errors = mutable.ListBuffer.empty[PsiError]
@@ -48,8 +48,10 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
   /** The positions `once` has begun resolving since a group of abandoned fields began, when one is being resolved. */
   private var marked: Option[mutable.ListBuffer[Id]] = None
 
-  /** The nodes grafts have copied, and the characters of the scalars concatenations have built. */
-  private var nodes = 0L
+  /** The nodes grafts have copied, those of the fragments handlers built among them, counted before resolution (§11);
+    * and the characters of the scalars concatenations have built.
+    */
+  private var nodes = built
   private var characters = 0L
 
   /** Whether either has gone past its limit, after which nothing more is built. */
@@ -80,16 +82,9 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       case sequence: Tree.Sequence => step(this.sequence(id, sequence).map(Some(_)))
       case injection: Tree.Injection =>
         once(id, Some(new Following(injection.location, injection.path)))(injected(id, injection))
-      case injections: Tree.Injections =>
-        once(id, injections.items.collectFirst { case Right(r) => new Following(r.location, r.path) })(
-          gathered(id, injections))
       // merged once, its children resolved apart, after it, so that one may refer to another
-      case layers: Tree.Layers =>
-        stacked(id, layers) match {
-          case Right(Some(map: Tree.Map)) => step(finished(id, Right(map)))
-          case Left(failure) => finished(id, Left(failure))
-          case other => other
-        }
+      case injections: Tree.Injections => after(id, gathered(id, injections))
+      case layers: Tree.Layers => after(id, stacked(id, layers))
       case Tree.Substitution(path, optional, tag, at) =>
         once(id, Some(new Following(at, path)))(
           reference(path, optional, at).flatMap(_.fold[Resolution](Right(None))(grafted(id, _, at, path, tag))))
@@ -250,12 +245,27 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
         // a sequence grafted is a sequence
         .map(_ => graft(found, at, path, None).asInstanceOf[Tree.Sequence].elements)
 
-  /** What a block of injections alone at `id` gives (§4, §9), as [[read]] reads it, resolved. */
+  /** What a block of injections alone at `id` gives (§4, §9), as [[read]] reads it, once: a map or a sequence with its
+    * children not resolved yet.
+    */
   private def gathered(id: Id, injections: Tree.Injections): Resolution =
-    read(injections).flatMap {
-      case None => Right(None)
-      case Some(Left(map)) => step(finished(id, complete(id, map)))
-      case Some(Right(sequence)) => step(this.sequence(id, sequence).map(Some(_)))
+    once(id, injections.items.collectFirst { case Right(r) => new Following(r.location, r.path) })(
+      read(injections).flatMap {
+        case None => Right(None)
+        case Some(Left(map)) => complete(id, map).map(Some(_))
+        case Some(Right(sequence)) => Right(Some(sequence))
+      })
+
+  /** What `merged` gave at `id`, a block of injections alone or layers, with its children resolved: apart from the
+    * merge, after it, so that a child may refer to another, as a map's with injections do. A failed map's abandoned
+    * fields are resolved for their own errors.
+    */
+  private def after(id: Id, merged: Resolution): Resolution =
+    merged match {
+      case Right(Some(map: Tree.Map)) => step(finished(id, Right(map)))
+      case Right(Some(sequence: Tree.Sequence)) => step(this.sequence(id, sequence).map(Some(_)))
+      case Left(failure) => finished(id, Left(failure))
+      case other => other
     }
 
   /** A block of injections alone read as a map or a sequence, still to be resolved (§4, §9): what the first that finds
@@ -364,7 +374,9 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     * in turn as written, those a substitution finds with their tag. A layer that finds nothing puts nothing, and what
     * stands before the first that is no map is not resolved, as what a value replaces is not.
     */
-  /** What `layers` at `id` merge to, once: a map with its children not resolved yet, or anything else resolved. */
+  /** What `layers` at `id` merge to, once: a map or a sequence with its children not resolved yet, or anything else
+    * resolved.
+    */
   private def stacked(id: Id, layers: Tree.Layers): Resolution =
     once(
       id,
@@ -397,7 +409,7 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
           read(injections) match {
             case Right(None) => back(earlier, maps)
             case Right(Some(Left(map))) => back(earlier, map :: maps)
-            case Right(Some(Right(sequence))) => Right((() => step(this.sequence(id, sequence).map(Some(_))), maps))
+            case Right(Some(Right(sequence))) => Right((() => Right(Some(sequence)), maps))
             case Left(failure) => Left(failure)
           }
         // a formatted substitution gives a scalar, or nothing when an optional one finds nothing
@@ -484,9 +496,10 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       case Nil => resolve(id, value)
       case next :: rest =>
         val here = value match {
-          case _: Tree.Substitution | _: Tree.Injections | _: Tree.Concatenation | _: Tree.Formatted | _: Tree.Marked =>
+          case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Formatted | _: Tree.Marked =>
             resolve(id, value)
-          // what the layers merge to, its children looked into one at a time
+          // what they merge to, its children looked into one at a time
+          case injections: Tree.Injections => gathered(id, injections)
           case layers: Tree.Layers => stacked(id, layers)
           // what an injection brings in among fields is known only once it is resolved
           case map: Tree.Map if map.steps.nonEmpty => completed(id, map).map(Some(_))
@@ -673,8 +686,9 @@ private[psi] object Resolve {
       root: Tree.Map,
       limit: Int = PsiLoader.DefaultDepthLimit,
       nodeLimit: Int = PsiLoader.DefaultNodeLimit,
-      characterLimit: Int = PsiLoader.DefaultCharacterLimit): Result[Tree.Map] =
-    new Resolve(root, limit, nodeLimit, characterLimit).tree
+      characterLimit: Int = PsiLoader.DefaultCharacterLimit,
+      built: Long = 0): Result[Tree.Map] =
+    new Resolve(root, limit, nodeLimit, characterLimit, built).tree
 
   /** How many nodes `value` holds, itself among them. */
   private def size(value: Tree.Value): Long =
