@@ -1438,6 +1438,30 @@ mistake is worse than stopping.
 11. ~~**Merging over a substitution or a block of injections alone**~~ — settled in session 36: a
     merge with either waits until it is resolved, and merges as `:` does (§7).
 
+12. **Stack headroom.** Raised by the user in session 40: the depth limit keeps no input from
+    overflowing a stack of 1 MB, but only from a stack nearly empty when the load starts. Measured
+    in session 43 on a map of maps 256 levels deep, the costliest form to parse, the most it takes
+    is not on a JVM just started but a few loads later, the parser compiled by C1 with profiling,
+    whose frames are larger than the interpreter's: 880 KB before session 43, about 620 KB after it
+    (512 KB cold, 256 KB fully compiled). Session 43 took the first of these ways; the rest stay open:
+    - **Fewer and smaller frames** on the path a nested value recurses through (done in session 43):
+      `statement`, `indented` off it, the state of `items` and of a block opened by indentation in
+      fields rather than locals.
+    - **A lower default limit**, 192 or 128: one line, the headroom doubled, a source deeper than it
+      needing `withDepthLimit`.
+    - **An explicit stack** in place of recursion in the parser: depth costs no stack at all, at the
+      price of rewriting the recursive descent, its recovery from errors and indentation included;
+      `Expand`, `Merge`, `Resolve` and `Render` recurse too, if less per level.
+    - **`scala.util.control.TailCalls`**, the user's suggestion, as that explicit stack without one
+      of our own: depth goes to the heap. The catch: a `try`/`finally` or `catch` around a recursive
+      call no longer wraps it, the deferred call running after the `finally` — the parser's `dots`,
+      `levels`, `open` and `layouts` are restored that way, and `Broken` and `Halt` caught — so those
+      go into continuations; and an allocation every step.
+    - **A thread of its own** for the load, its stack sized by the limit, opt-in on the builder: the
+      only way the promise holds whatever the caller has used, but a handler then runs in another
+      thread, `ThreadLocal`s other than inheritable ones not seen, and an interrupt of the caller
+      not reaching it.
+
 ## 14. Decision log
 
 Each entry records what was chosen, and — where it matters — what was rejected and why. A rejected
@@ -2941,3 +2965,12 @@ Fixed on a fourth review, the code of sessions 32 and 36 and the parser's, put t
 - Settled in the code, put to the user: two or more injections alone in a block finding nothing make
   an empty map, as the same in braces does, where session 42's text left the key out; and `${b}*`
   after a `- ` is a string, as after a key.
+
+### Session 43 — 2026-11-22
+
+- **Stack headroom, by fewer and smaller frames** (§13 item 12), the user's choice of the ways I put,
+  over a lower default limit, an explicit stack and a thread of its own; `TailCalls`, the user's
+  suggestion, recorded there with its catch. Measured with a fresh JVM for each try, a few loads
+  in, where C1's frames make it worst: a map of maps 256 levels deep took 880 KB and takes about
+  620 KB. The test stays at 1 MB: built with coverage, as CI runs it, the frames are larger, and
+  768 KB is not enough.
