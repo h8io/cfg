@@ -70,10 +70,41 @@ class DepthTest extends AnyFlatSpec with Matchers {
 
   "A source a directive parses" should "be read from the depth of the call" in {
     val text = directive("t")(context => context.parse("t", "c { d { } }"))
-    errors("a { b { #t } }", text) shouldBe List(beyond(1, 7, "t"))
+    errors("a { b { #t } }", text) shouldBe List(beyond(1, 3, "t"))
     errors("a { b: #t }", text) shouldBe List(beyond(1, 7, "t"))
     loads("a: #t", text) shouldBe true
   }
+
+  it should "stand a level below its call among fields, as it does as a value" in {
+    val text = directive("t")(context => context.parse("t", "c { d { } }"))
+    errors("#t", directive("t")(context => context.parse("t", "c { d { e { } } }"))) shouldBe List(beyond(1, 11, "t"))
+    errors("a { #t }", text) shouldBe List(beyond(1, 7, "t"))
+    loads("#t", text) shouldBe true
+  }
+
+  "A chain of sources included among fields" should
+    "give errors, never overflow a stack of 1 MB, at the default limit" in {
+      val dir = java.nio.file.Files.createTempDirectory("psi")
+      def write(name: String, text: String) =
+        java.nio.file.Files.write(dir.resolve(name), text.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+      (0 until 63).foreach(i => write("i" + i.toString + ".psi", "#include(file: i" + (i + 1).toString + ")\n"))
+      write("i63.psi", (0 until 255).map(i => "  " * i + "k" + i.toString + ":\n").mkString + "  " * 255 + "v\n")
+      val loader = Psi.builder.withSystemProperties(Map.empty).build.fold(e => fail(e.toString), identity)
+      var loaded: Either[Throwable, List[PsiError]] = Left(new IllegalStateException("never run"))
+      val thread = new Thread(
+        null,
+        { () =>
+          loaded =
+            try Right(loader(dir.resolve("i0.psi").toUri.toURL).fold(_.errors, root => fail(root.toString)))
+            catch { case e: Throwable => Left(e) }
+        },
+        "1 MB",
+        1L << 20
+      )
+      thread.start()
+      thread.join()
+      loaded.map(_.map(_.getClass)) shouldBe Right(List(classOf[DepthExceeded]))
+    }
 
   "A fragment" should "fail its call where it does not fit" in {
     var cached = Option.empty[Fragment]
@@ -151,6 +182,26 @@ class DepthTest extends AnyFlatSpec with Matchers {
     loader(4).parse("s", last).isRight shouldBe true
     errors(first) shouldBe List(ResolutionTooDeep(at(2, 12), "c1", 3))
     errors(last) shouldBe List(ResolutionTooDeep(at(2, 5), "c0", 3))
+  }
+
+  "An index looked up again" should "go past the limit where walking to it would, whatever order the keys are in" in {
+    // resolving `$t` takes steps: a lookup from deep in a chain goes past the limit, whether a shallow one found the
+    // element before it or not
+    val sequence = "t: [a]\ns: [$t, b]\n"
+    val chain = "c1: $c2\nc2: $c3\nc3: $c4\nc4: $s[1]\n"
+    def result(limit: Int, text: String) =
+      Psi.builder
+        .withDepthLimit(limit)
+        .withSystemProperties(Map.empty)
+        .build
+        .fold(e => fail(e.toString), identity)
+        .parse("s", text)
+        .left
+        .map(_.errors)
+    result(5, sequence + "a: $s[1]\n" + chain) shouldBe Left(List(ResolutionTooDeep(at(7, 5), "s[1]", 5)))
+    result(5, sequence + chain + "a: $s[1]\n") shouldBe Left(List(ResolutionTooDeep(at(6, 5), "s[1]", 5)))
+    result(6, sequence + "a: $s[1]\n" + chain).isRight shouldBe true
+    result(6, sequence + chain + "a: $s[1]\n").isRight shouldBe true
   }
 
   "A chain of substitutions" should "go 256 links at the default limit, and no further, in either order" in {
