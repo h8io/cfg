@@ -43,3 +43,8 @@ flat:
   - localhost
   - - a
     - b
+  - - a
+    - b
+copy:
+  - a
+  - b

@@ -66,8 +66,6 @@ private[psi] final class Expand private (
           val values = (e.value, e.put) match {
             case (AST.DirectiveValue(call, _), AST.Put.Elements) =>
               run(call, stack, depth + 2).fold(Vector.empty[AST.Value])(injected(call, _, depth + 1))
-            case (AST.DirectiveValue(call, tag), AST.Put.Found) =>
-              run(call, stack, depth + 2).fold(Vector.empty[AST.Value])(spread(call, tag, _, depth + 1))
             case (other, _) => this.value(other, stack, depth + 1).toVector
           }
           values.map(v => e.copy(value = v))
@@ -75,16 +73,11 @@ private[psi] final class Expand private (
         Some(sequence.copy(elements = elements))
       case AST.DirectiveValue(call, tag) =>
         run(call, stack, depth + 1).fold(Option.empty[AST.Value])(placed(call, tag, _, depth))
-      // what a call gives is kept, to be put once substitutions are resolved (§9)
-      case AST.Injections(items, tag, location) =>
-        val expanded = items.flatMap {
-          case AST.Injected.Calling(call) =>
-            run(call, stack, depth + 1)
-              .fold(Option.empty[AST.Value])(placed(call, None, _, depth))
-              .map(AST.Injected.Given(call, _))
-          case other => Some(other)
-        }
-        if (expanded.isEmpty) None else Some(AST.Injections(expanded, tag, location))
+      // what a call gives is kept, to be put once substitutions are resolved, as what a substitution finds is (§9)
+      case AST.Contents(AST.Injected.Calling(call), tag, location) =>
+        run(call, stack, depth + 1)
+          .fold(Option.empty[AST.Value])(placed(call, None, _, depth))
+          .map(gave => AST.Contents(AST.Injected.Given(call, gave), tag, location))
       case _ => Some(value)
     }
 
@@ -128,18 +121,6 @@ private[psi] final class Expand private (
       case _ =>
         report(DirectiveNotSequence(call.location, call.name))
         Vector.empty
-    }
-
-  /** A fragment in `[…]`, `depth` levels deep: the elements of a sequence, in its place, or anything else as one
-    * element, with the tag written before the call, which a sequence's elements have no place for (§9).
-    */
-  private def spread(call: AST.Call, tag: Option[String], fragment: Fragment.Some, depth: Int): Vector[AST.Value] =
-    fragment match {
-      case Fragment.Built(_: Node.ISeq[?]) if tag.nonEmpty =>
-        report(TaggedDirectiveSequence(call.location, call.name))
-        Vector.empty
-      case Fragment.Built(_: Node.ISeq[?]) => injected(call, fragment, depth)
-      case _ => placed(call, tag, fragment, depth).toVector
     }
 
   /** Whether a fragment reaching `depth` levels fits under the limit; reported at the call when it does not. */
@@ -350,7 +331,8 @@ private[psi] object Expand {
     value match {
       case AST.Block(statements, _, _) => 1 + size(statements)
       case AST.Sequence(elements, _, _) => 1 + elements.iterator.map(element => size(element.value)).sum
-      case AST.Injections(items, _, _) => 1 + items.iterator.collect { case AST.Injected.Given(_, v) => size(v) }.sum
+      // what a call gave, whose root the node it makes stands for
+      case AST.Contents(AST.Injected.Given(_, gave), _, _) => size(gave)
       // a scalar, a `null` and the rest, a marked block among them, being a scalar
       case _ => 1
     }
@@ -366,9 +348,9 @@ private[psi] object Expand {
     value match {
       case AST.Block(statements, _, _) => 1 + levels(statements)
       case AST.Sequence(elements, _, _) => 1 + elements.iterator.map(e => height(e.value)).foldLeft(0)(math.max)
-      // what a call gave, a map or a sequence, stands where the block does
-      case AST.Injections(items, _, _) =>
-        items.iterator.collect { case AST.Injected.Given(_, value) => height(value) }.foldLeft(1)(math.max)
+      // what a call gave, a map or a sequence, stands where the node it makes does
+      case AST.Contents(AST.Injected.Given(_, gave), _, _) => math.max(1, height(gave))
+      case _: AST.Contents => 1
       case _ => 0
     }
 

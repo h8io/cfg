@@ -80,9 +80,9 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
   "A call" should "be reported when its directive is unknown or disabled" in {
     val disabling =
       Psi.builder.disableDirective("include").disableDirective("off").build.fold(e => fail(e.toString), identity)
-    errors(disabling, "#include\na: #off\nb: #x") shouldBe
+    errors(disabling, "#include*\na: #off\nb: #x") shouldBe
       List(DisabledDirective(at(1, 1), "include"), DisabledDirective(at(2, 4), "off"), UnknownDirective(at(3, 4), "x"))
-    errors(loader(), "#include(file: \"x\")") shouldBe List(DirectiveFailed(at(1, 1), "include", IncludeNotFound("x")))
+    errors(loader(), "#include(file: \"x\")*") shouldBe List(DirectiveFailed(at(1, 1), "include", IncludeNotFound("x")))
   }
 
   it should "give its arguments by parameter, in the order the parameters are declared" in {
@@ -92,13 +92,13 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
         received = Some(arguments)
         Right(Fragment.None)
     }
-    loaded(loader(d), "#d(c: 3, a: 1)").isEmpty shouldBe true
+    loaded(loader(d), "#d(c: 3, a: 1)*").isEmpty shouldBe true
     received.map(_.toList) shouldBe
       Some(
         List(
           Node.IScalar(keyed("a"), None, "1", at(1, 13)),
           Node.IScalar(keyed("c"), None, "3", at(1, 7))))
-    loaded(loader(d), "#d(1, 2)").isEmpty shouldBe true
+    loaded(loader(d), "#d(1, 2)*").isEmpty shouldBe true
     received.map(_.toList.map(_.id)) shouldBe Some(List(keyed("a"), keyed("b")))
     received.map(_.location) shouldBe Some(at(1, 1))
   }
@@ -109,7 +109,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
       runs += 1
       Right(Fragment.None)
     }
-    errors(loader(d), "#d(1, 2, 3)\n#d(1, x: 2)\n#d(1, a: 2)\n#d(b: 1)") shouldBe
+    errors(loader(d), "#d(1, 2, 3)*\n#d(1, x: 2)*\n#d(1, a: 2)*\n#d(b: 1)*") shouldBe
       List(
         ExtraArgument(at(1, 10)),
         UnknownArgument(at(2, 7), "x"),
@@ -122,7 +122,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     val (primary, secondary) = ("connection_configuration_primary", "connection_configuration_secondary")
     val d = directive("d", Parameter(primary, required = true), Parameter(secondary, required = true))((_, _) =>
       Right(Fragment.None))
-    errors(loader(d), "#d") shouldBe List(MissingArgument(at(1, 1), primary), MissingArgument(at(1, 1), secondary))
+    errors(loader(d), "#d*") shouldBe List(MissingArgument(at(1, 1), primary), MissingArgument(at(1, 1), secondary))
   }
 
   it should "fail with its handler's message, contributing nothing" in {
@@ -131,7 +131,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
   }
 
   it should "give nothing: no field in statement position, the field or element dropped in value position" in {
-    val root = loaded(loader(nothing), "#none\na: #none\nb: [1, #none, 2]")
+    val root = loaded(loader(nothing), "#none*\na: #none\nb: [1, #none, 2]")
     root.toList.map(_.id) shouldBe List(keyed("b"))
     root("b") match {
       case seq: Node.ISeq[?] => seq.size shouldBe 2
@@ -149,7 +149,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
   }
 
   it should "merge as a map in statement position, overridden by the fields below it" in {
-    val root = loaded(loader(constant("m", Fragment(node("x: 1\ny: [2, null]\nz { w: 3 }")))), "x: 0\n#m\nz { v: 4 }")
+    val root = loaded(loader(constant("m", Fragment(node("x: 1\ny: [2, null]\nz { w: 3 }")))), "x: 0\n#m*\nz { v: 4 }")
     def from(line: Int, column: Int) = DirectiveLocation(at(2, 1), "m", SourceLocation("y", line, column))
     root("x") shouldBe Node.IScalar(keyed("x"), None, "1", from(1, 4))
     root("y") match {
@@ -182,7 +182,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
 
   it should "not stand in statement position unless it is a map" in {
     val scalar = Node.IScalar(Id.Root, None, "v", SourceLocation("y", 1, 1))
-    errors(loader(constant("k", Fragment(scalar))), "#k") shouldBe List(DirectiveNotMap(at(1, 1), "k"))
+    errors(loader(constant("k", Fragment(scalar))), "#k*") shouldBe List(DirectiveNotMap(at(1, 1), "k"))
   }
 
   "A fragment parsed" should "expand its own directives and merge as written in statement position" in {
@@ -193,7 +193,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
       }
     }
     val root = loaded(loader(parsing, constant("k", Fragment(Node.IScalar(Id.Root, None, "v", at(9, 9))))),
-      "#p(text: \"a: 1\\nb: #k\")\nc: @x #p(\"d: 2\")")
+      "#p(text: \"a: 1\\nb: #k\")*\nc: @x #p(\"d: 2\")")
     root("a") shouldBe Node.IScalar(keyed("a"), None, "1", at(1, 4, "t"))
     root("b") shouldBe Node.IScalar(keyed("b"), None, "v", DirectiveLocation(at(2, 4, "t"), "k", at(9, 9)))
     root("c") match {
@@ -207,7 +207,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
 
   it should "report the errors in it with every source's" in {
     val bad = directive("bad")((_, context) => Right(context.parse("t", "a b")))
-    errors(loader(bad), "#bad\nc: ${d}") shouldBe List(ExpectedColon(at(1, 3, "t"), "'b'"))
+    errors(loader(bad), "#bad*\nc: ${d}") shouldBe List(ExpectedColon(at(1, 3, "t"), "'b'"))
   }
 
   it should "carry its errors, reported wherever it is used, once per load, and not where it is not" in {
@@ -219,27 +219,27 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
         fragment
       })
     }
-    errors(loader(cache), "#cache") shouldBe List(ExpectedColon(at(2, 8, "child"), "'value'"))
-    errors(loader(cache), "#cache\na: #cache") shouldBe List(ExpectedColon(at(2, 8, "child"), "'value'"))
+    errors(loader(cache), "#cache*") shouldBe List(ExpectedColon(at(2, 8, "child"), "'value'"))
+    errors(loader(cache), "#cache*\na: #cache") shouldBe List(ExpectedColon(at(2, 8, "child"), "'value'"))
     val dropped = directive("dropped") { (_, context) =>
       val _ = context.parse("child", "broken value")
       Right(Fragment.None)
     }
-    loaded(loader(dropped), "#dropped").isEmpty shouldBe true
+    loaded(loader(dropped), "#dropped*").isEmpty shouldBe true
   }
 
   it should "be a cycle when its source is being expanded, named by the chain" in {
-    val self = directive("self")((_, context) => Right(context.parse("again", "#self")))
-    errors(loader(self), "#self") shouldBe List(DirectiveCycle(at(1, 1, "again"), ::("s", List("again", "again"))))
+    val self = directive("self")((_, context) => Right(context.parse("again", "#self*")))
+    errors(loader(self), "#self*") shouldBe List(DirectiveCycle(at(1, 1, "again"), ::("s", List("again", "again"))))
   }
 
   it should "stop as too deep where no key catches a cycle" in {
     var n = 0
     val deeper = directive("deeper") { (_, context) =>
       n += 1
-      Right(context.parse("n" + n.toString, "#deeper"))
+      Right(context.parse("n" + n.toString, "#deeper*"))
     }
-    errors(loader(deeper), "#deeper") match {
+    errors(loader(deeper), "#deeper*") match {
       case List(DirectiveTooDeep(location, limit)) =>
         limit shouldBe Expand.MaxDepth
         location.source shouldBe "n" + (Expand.MaxDepth - 1).toString
@@ -255,7 +255,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     }
     loaded(loader(d), "a: 1\nb: #d").size shouldBe 1
     seen shouldBe Some((at(2, 4), "s", None))
-    val file = write(Files.createTempDirectory("psi"), "a.psi", "#d")
+    val file = write(Files.createTempDirectory("psi"), "a.psi", "#d*")
     loader(d)(file.toUri.toURL).isRight shouldBe true
     seen shouldBe
       Some((SourceLocation(file.toUri.toURL.toString, 1, 1), file.toUri.toURL.toString, Some(file.toUri.toURL)))
@@ -277,10 +277,10 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
         case other => Left(Problem(other.toString))
       }
     }
-    val main = write(dir, "main.psi", "#inc(\"ok.psi\")\n#inc(\"optional.psi\")")
+    val main = write(dir, "main.psi", "#inc(\"ok.psi\")*\n#inc(\"optional.psi\")*")
     loader(include)(main.toUri.toURL).map(_("x")) shouldBe
       Right(Node.IScalar(keyed("x"), None, "1", SourceLocation(dir.resolve("ok.psi").toUri.toURL.toString, 1, 4)))
-    val broken = write(dir, "broken.psi", "#inc(\"missing.psi\")\n#inc(\"bytes.psi\")")
+    val broken = write(dir, "broken.psi", "#inc(\"missing.psi\")*\n#inc(\"bytes.psi\")*")
     val url = broken.toUri.toURL.toString
     loader(include)(broken.toUri.toURL).left.map(_.errors) shouldBe
       Left(
@@ -292,8 +292,8 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
   it should "know a file by its real path, so a link does not hide a cycle" in {
     val dir = Files.createTempDirectory("psi")
     Files.createSymbolicLink(dir.resolve("link"), dir)
-    val a = write(dir, "a.psi", "#inc(\"link/b.psi\")")
-    write(dir, "b.psi", "#inc(\"a.psi\")")
+    val a = write(dir, "a.psi", "#inc(\"link/b.psi\")*")
+    write(dir, "b.psi", "#inc(\"a.psi\")*")
     val include = directive("inc", Parameter("file", required = true)) { (arguments, context) =>
       arguments("file") match {
         case Node.IScalar(_, _, file, _) =>
@@ -343,7 +343,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     val app = write(
       dir,
       "app.psi",
-      "#find(file: a, optional: true)\n#find(file: a)\n#find(file: b)\n#find(url: x, file: y)\n#find(file: gone)")
+      "#find(file: a, optional: true)*\n#find(file: a)*\n#find(file: b)*\n#find(url: x, file: y)*\n#find(file: gone)*")
     loader(finding)(app.toUri.toURL).isRight shouldBe true
     found.reverse match {
       case List(
@@ -361,7 +361,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     opened.map(url => url.substring(url.lastIndexOf('/') + 1)).reverse shouldBe List("b.text", "gone.txt")
     found = Nil
     loader(finding).parse(
-      "s", "#find(url: \"http://localhost/x\")\n#find(url: \"http://localhost/gone\", optional: true)")
+      "s", "#find(url: \"http://localhost/x\")*\n#find(url: \"http://localhost/gone\", optional: true)*")
       .isRight shouldBe true
     found.reverse shouldBe List(Right(Some("x")), Right(None))
   }
@@ -393,12 +393,13 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     // kept for a later load, every use counted
     errors(by, "a: #keep\nb: #keep\nc: #keep") shouldBe List(FragmentTooLarge(at(3, 4), "keep", 20))
     kept = None
-    errors(by, "#keep\n#keep\n#keep\n#keep") shouldBe List(FragmentTooLarge(at(4, 1), "keep", 20))
+    errors(by, "#keep*\n#keep*\n#keep*\n#keep*") shouldBe List(FragmentTooLarge(at(4, 1), "keep", 20))
   }
 
   it should "count every node it holds, a dotted key's maps and what calls gave among them" in {
-    // 3 for a, 4 for c, 3 for d, the block a call gave, 3 for e.f.g: 13
-    val text = "a { b: 1, $?x }\nc: [1, [2]]\nd:\n  #inner\n  $?y\ne.f.g: 1"
+    // 3 for a, 4 for c, 3 for d, the block a call gave, 3 for e.f.g, 2 for f, what a call gave to inject, and 1 for g,
+    // an injection not resolved yet: 16
+    val text = "a { b: 1, $?x* }\nc: [1, [2]]\nd:\n  #inner*\n  $?y*\ne.f.g: 1\nf: #inner*\ng: $?z*"
     var kept: Option[Fragment] = None
     val inner = directive("inner")((_, context) => Right(context.parse("i", "m: 1")))
     val keeping = directive("keep") { (_, context) =>
@@ -407,9 +408,9 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     }
     def by(limit: Int): PsiLoader =
       Psi.builder.withDirectives(inner, keeping).withSizeLimit(limit, 1000).build.fold(e => fail(e.toString), x => x)
-    by(13).parse("s", "p: #keep\nq: #keep").isRight shouldBe true
+    by(16).parse("s", "p: #keep\nq: #keep").isRight shouldBe true
     kept = None
-    errors(by(12), "p: #keep\nq: #keep") shouldBe List(FragmentTooLarge(at(2, 4), "keep", 12))
+    errors(by(15), "p: #keep\nq: #keep") shouldBe List(FragmentTooLarge(at(2, 4), "keep", 15))
   }
 
   "Going past the node limit" should "fail the load, though the fragment it is found in is dropped" in {
@@ -421,7 +422,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     }
     val by =
       Psi.builder.withDirectives(giving, dropping).withSizeLimit(10, 1000).build.fold(e => fail(e.toString), x => x)
-    errors(by, "#drop\nrequired: #big\nother: 1") shouldBe List(FragmentTooLarge(SourceLocation("d", 1, 4), "big", 10))
+    errors(by, "#drop*\nrequired: #big\nother: 1") shouldBe List(FragmentTooLarge(SourceLocation("d", 1, 4), "big", 10))
   }
 
   it should "read a URL's bytes through the load's read limit" in {
@@ -436,7 +437,7 @@ class DirectiveTest extends AnyFlatSpec with Matchers {
     }
     val dir = Files.createTempDirectory("psi")
     write(dir, "data", "0123456789")
-    val app = write(dir, "app.psi", "#read(data)\n#read(missing)")
+    val app = write(dir, "app.psi", "#read(data)*\n#read(missing)*")
     loader(reading)(app.toUri.toURL).isRight shouldBe true
     read.reverse match {
       case Right(Some(bytes)) :: Left(_: java.io.FileNotFoundException) :: Nil =>

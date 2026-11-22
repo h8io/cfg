@@ -44,9 +44,9 @@ A block is written in braces or by indentation, as in Scala 3, and the two mix f
 
 - `key:` at the end of a line, a tag allowed after it, opens a block on the lines indented deeper below: fields make
   it a map, `- ` elements a sequence, and a value alone is the key's value, as if written after the `:`. A
-  substitution or a directive alone on its line among fields or elements is an
-  [injection](substitutions.md#injections), and so are two or more alone. With nothing deeper below, it is an error;
-  an empty block is written `{}` or `[]`.
+  substitution or a directive marked with a `*` alone on its line is an [injection](substitutions.md#injections) of a
+  map's fields, two or more such lines making a map; among elements every line starts with `- `, `- $a*` injecting a
+  sequence's elements. With nothing deeper below, it is an error; an empty block is written `{}` or `[]`.
 - An element is `- value` at the start of a line, deeper than its key. A map element has its first field after the
   `- ` and the rest aligned under it; `- - x` is a sequence in a sequence; a tag goes after the `- `, with the block
   below it.

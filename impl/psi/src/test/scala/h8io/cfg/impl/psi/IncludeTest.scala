@@ -38,8 +38,8 @@ class IncludeTest extends AnyFlatSpec with Matchers {
 
   "#include(file: …)" should "read a file relative to the including one, named by the URL it resolves to" in {
     val dir = Files.createTempDirectory("psi")
-    val main = write(dir, "main.psi", "a: 0\nb: 0\n#include(file: \"conf.d/extra.psi\")\nb: 2")
-    write(dir, "conf.d/extra.psi", "a: 1\nb: 1\n#include(\"nested\")\nn: #include(file: 'nested.psi')")
+    val main = write(dir, "main.psi", "a: 0\nb: 0\n#include(file: \"conf.d/extra.psi\")*\nb: 2")
+    write(dir, "conf.d/extra.psi", "a: 1\nb: 1\n#include(\"nested\")*\nn: #include(file: 'nested.psi')")
     write(dir, "conf.d/nested.psi", "c: 3")
     val root = loaded(main)
     root("a") shouldBe
@@ -64,7 +64,7 @@ class IncludeTest extends AnyFlatSpec with Matchers {
     write(dir, "y.psi", "v: ascii")
     write(dir, "z.psi", "v: ascii")
     def value(name: String) =
-      scalar(loaded(write(dir, "main.psi", "#include(file: \"" + name + "\")")), "v").toString
+      scalar(loaded(write(dir, "main.psi", "#include(file: \"" + name + "\")*")), "v").toString
     value("x") should include("upper")
     value("y") should include("lower")
     value("z") should include("ascii")
@@ -74,22 +74,22 @@ class IncludeTest extends AnyFlatSpec with Matchers {
     value("conf.d/u") should include("dotted")
     write(dir, "v.psi", "v: root")
     value(dir.resolve("v").toString) should include("root")
-    loaded(write(dir, "root.psi", "#include(file: \"/\", optional: true)")).size shouldBe 0
+    loaded(write(dir, "root.psi", "#include(file: \"/\", optional: true)*")).size shouldBe 0
   }
 
   it should "read an absolute path, and resolve a relative one in a text source against the working directory" in {
     val file = write(Files.createTempDirectory("psi"), "abs.psi", "v: 1")
     val relative = Paths.get("").toAbsolutePath.relativize(file).toString
     def v(text: String) = loader.parse("s", text).map(scalar(_, "v").toString)
-    v("#include(file: \"" + file.toString + "\")").map(_.contains("1")) shouldBe Right(true)
-    v("#include(file: \"" + relative + "\")").map(_.contains("1")) shouldBe Right(true)
+    v("#include(file: \"" + file.toString + "\")*").map(_.contains("1")) shouldBe Right(true)
+    v("#include(file: \"" + relative + "\")*").map(_.contains("1")) shouldBe Right(true)
   }
 
   it should "resolve against an entry of a jar" in {
     val jar = Files.createTempDirectory("psi").resolve("conf.jar")
     val out = new ZipOutputStream(Files.newOutputStream(jar))
     try
-      for ((name, text) <- List("conf/a.psi" -> "#include(file: \"b\")", "conf/b.psi" -> "v: jarred")) {
+      for ((name, text) <- List("conf/a.psi" -> "#include(file: \"b\")*", "conf/b.psi" -> "v: jarred")) {
         out.putNextEntry(new ZipEntry(name))
         out.write(text.getBytes(StandardCharsets.UTF_8))
         out.closeEntry()
@@ -103,19 +103,19 @@ class IncludeTest extends AnyFlatSpec with Matchers {
 
   "#include(resource: …)" should "read from the class path, with the context class loader or Psi's own" in {
     def host(text: String) = loader.parse("s", text).map(_("server").isInstanceOf[Node.IMap[?]])
-    host("#include(resource: \"base\")") shouldBe Right(true)
+    host("#include(resource: \"base\")*") shouldBe Right(true)
     val thread = Thread.currentThread
     val context = thread.getContextClassLoader
     thread.setContextClassLoader(null)
-    try host("#include(resource: \"base.psi\")") shouldBe Right(true)
+    try host("#include(resource: \"base.psi\")*") shouldBe Right(true)
     finally thread.setContextClassLoader(context)
-    loader.parse("s", "#include(resource: \"missing\", optional: true)").map(_.isEmpty) shouldBe Right(true)
+    loader.parse("s", "#include(resource: \"missing\", optional: true)*").map(_.isEmpty) shouldBe Right(true)
   }
 
   "#include(url: …)" should "read an absolute URL as written, and refuse one that is not" in {
     val file = write(Files.createTempDirectory("psi"), "u.psi", "v: 1")
-    loader.parse("s", "#include(url: \"" + url(file) + "\")").map(_.size) shouldBe Right(1)
-    loader.parse("s", "#include(url: \"u.psi\")\n#include(url: \"a b:c\")").left.map(_.errors) shouldBe
+    loader.parse("s", "#include(url: \"" + url(file) + "\")*").map(_.size) shouldBe Right(1)
+    loader.parse("s", "#include(url: \"u.psi\")*\n#include(url: \"a b:c\")*").left.map(_.errors) shouldBe
       Left(
         List(
           DirectiveFailed(SourceLocation("s", 1, 1), "include", IncludeInvalidTarget("u.psi")),
@@ -131,10 +131,10 @@ class IncludeTest extends AnyFlatSpec with Matchers {
     val main = write(
       dir,
       "main.psi",
-      "#include(file: \"missing\", optional: true)\n#include(file: \"missing\")\n" +
-        "#include(url: \"jar:" + url(notZip) + "!/x.psi\", optional: true)\n" +
-        "#include(file: \"bytes.psi\", optional: true)\n#include(file: \"x\", optional: yes)\n" +
-        "#include(file: \"x\", url: \"y\")\n#include\n#include(url: \"a b\")"
+      "#include(file: \"missing\", optional: true)*\n#include(file: \"missing\")*\n" +
+        "#include(url: \"jar:" + url(notZip) + "!/x.psi\", optional: true)*\n" +
+        "#include(file: \"bytes.psi\", optional: true)*\n#include(file: \"x\", optional: yes)*\n" +
+        "#include(file: \"x\", url: \"y\")*\n#include*\n#include(url: \"a b\")*"
     )
     val location = SourceLocation(url(main), _: Int, 1)
     errors(main) match {
@@ -162,7 +162,7 @@ class IncludeTest extends AnyFlatSpec with Matchers {
     write(dir, "x.psi", "v: open")
     Files.setPosixFilePermissions(locked, java.util.Collections.emptySet())
     assume(!Files.isReadable(locked), "the tests run with every permission")
-    val main = write(dir, "main.psi", "#include(file: \"x\")\n#include(file: \"x.Ψ\", optional: true)")
+    val main = write(dir, "main.psi", "#include(file: \"x\")*\n#include(file: \"x.Ψ\", optional: true)*")
     errors(main) match {
       case List(
             DirectiveFailed(_, "include", IncludeUnreadable("x", _)),
@@ -184,10 +184,10 @@ class IncludeTest extends AnyFlatSpec with Matchers {
     val missingJar = "jar:" + url(dir.resolve("none.jar")) + "!/a.psi"
     loader.parse(
       "s",
-      "#include(url: \"" + entry("b.psi") + "\", optional: true)\n#include(url: \"" + missingJar +
-        "\", optional: true)\nx: #include(url: \"" + entry("a.psi") + "\")"
+      "#include(url: \"" + entry("b.psi") + "\", optional: true)*\n#include(url: \"" + missingJar +
+        "\", optional: true)*\nx: #include(url: \"" + entry("a.psi") + "\")"
     ).map(_.size) shouldBe Right(1)
-    loader.parse("s", "#include(url: \"" + entry("b.psi") + "\")").left.map(_.errors) shouldBe
+    loader.parse("s", "#include(url: \"" + entry("b.psi") + "\")*").left.map(_.errors) shouldBe
       Left(List(DirectiveFailed(SourceLocation("s", 1, 1), "include", IncludeNotFound(entry("b.psi")))))
   }
 
@@ -224,11 +224,11 @@ class IncludeTest extends AnyFlatSpec with Matchers {
       val base = "http://" + server.getAddress.getHostString + ":" + server.getAddress.getPort.toString + "/"
       loader.parse(
         "s",
-        "#include(url: \"" + base + "ok.psi\")\n#include(url: \"" + base + "none.psi\", optional: true)\n" +
-          "#include(url: \"jar:" + base + "c.jar!/a.psi\")\n#include(url: \"jar:" + base +
-          "c.jar!/b.psi\", optional: true)"
+        "#include(url: \"" + base + "ok.psi\")*\n#include(url: \"" + base + "none.psi\", optional: true)*\n" +
+          "#include(url: \"jar:" + base + "c.jar!/a.psi\")*\n#include(url: \"jar:" + base +
+          "c.jar!/b.psi\", optional: true)*"
       ).map(_.size) shouldBe Right(2)
-      loader.parse("s", "#include(url: \"" + base + "none.psi\")\n#include(url: \"" + base + "fail.psi\")") match {
+      loader.parse("s", "#include(url: \"" + base + "none.psi\")*\n#include(url: \"" + base + "fail.psi\")*") match {
         case Left(PsiErrors(
               ::(
                 DirectiveFailed(_, "include", IncludeNotFound(_)),
@@ -240,21 +240,21 @@ class IncludeTest extends AnyFlatSpec with Matchers {
   }
 
   it should "take a file URL with a host for no path" in {
-    loader.parse("s", "#include(url: \"file://host/x.psi\")").left.map(_.errors) shouldBe
+    loader.parse("s", "#include(url: \"file://host/x.psi\")*").left.map(_.errors) shouldBe
       Left(List(DirectiveFailed(SourceLocation("s", 1, 1), "include", IncludeInvalidTarget("file://host/x.psi"))))
   }
 
   it should "be caught in a cycle" in {
     val dir = Files.createTempDirectory("psi")
-    val a = write(dir, "a.psi", "#include(file: \"b\")")
-    write(dir, "b.psi", "#include(file: \"a.psi\")")
+    val a = write(dir, "a.psi", "#include(file: \"b\")*")
+    write(dir, "b.psi", "#include(file: \"a.psi\")*")
     val b = url(dir.resolve("b.psi"))
     errors(a) shouldBe List(DirectiveCycle(SourceLocation(b, 1, 1), ::(url(a), List(b, url(a)))))
   }
 
   "Errors in an included source" should "come right after those of the source including it" in {
     val dir = Files.createTempDirectory("psi")
-    val m = write(dir, "m.psi", "x: ${nope1}\n#include(file: \"i\")")
+    val m = write(dir, "m.psi", "x: ${nope1}\n#include(file: \"i\")*")
     write(dir, "i.psi", "y: ${nope2}")
     val n = write(dir, "n.psi", "z: ${nope3}")
     loader(m.toUri.toURL, n.toUri.toURL).left.map(_.errors) shouldBe
@@ -268,8 +268,8 @@ class IncludeTest extends AnyFlatSpec with Matchers {
 
   they should "be told apart, and each come after its own includer, when two are included by the same name" in {
     val dir = Files.createTempDirectory("psi")
-    val m = write(dir, "m/root.psi", "x: ${nope1}\n#include(file: \"common.psi\")")
-    val n = write(dir, "n/root.psi", "y: ${nope3}\n#include(file: \"common.psi\")")
+    val m = write(dir, "m/root.psi", "x: ${nope1}\n#include(file: \"common.psi\")*")
+    val n = write(dir, "n/root.psi", "y: ${nope3}\n#include(file: \"common.psi\")*")
     write(dir, "m/common.psi", "a: ${nope2}")
     write(dir, "n/common.psi", "b: ${nope4}")
     loader(m.toUri.toURL, n.toUri.toURL).left.map(_.errors) shouldBe
@@ -295,7 +295,7 @@ class IncludeTest extends AnyFlatSpec with Matchers {
     val dir = Files.createTempDirectory("psi")
     write(dir, "part:one.psi", "a: 1")
     write(dir, "sub/b:c.psi", "b: 2")
-    val root = loaded(write(dir, "main.psi", "#include(file: \"part:one.psi\")\n#include(file: \"sub/b:c.psi\")"))
+    val root = loaded(write(dir, "main.psi", "#include(file: \"part:one.psi\")*\n#include(file: \"sub/b:c.psi\")*"))
     root.iterator.map {
       case Node.IScalar(_, _, value, location) => value -> location
       case other => fail(other.toString)
@@ -304,7 +304,7 @@ class IncludeTest extends AnyFlatSpec with Matchers {
         "2" -> SourceLocation(url(dir.resolve("sub/b:c.psi")), 1, 4))
   }
 
-  "#include(…, optional: true)" should "fail on a target it cannot tell is there, its directory denying access" in {
+  "#include(…, optional: true)*" should "fail on a target it cannot tell is there, its directory denying access" in {
     val dir = Files.createTempDirectory("psi")
     write(dir, "locked/x.psi", "a: 1")
     write(dir, "locked/x.jar", "not a jar")
@@ -312,7 +312,7 @@ class IncludeTest extends AnyFlatSpec with Matchers {
     val main = write(
       dir,
       "main.psi",
-      "#include(file: \"locked/x.psi\", optional: true)\n#include(url: \"" + jar + "\", optional: true)")
+      "#include(file: \"locked/x.psi\", optional: true)*\n#include(url: \"" + jar + "\", optional: true)*")
     val locked = dir.resolve("locked")
     Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("---------"))
     try {
@@ -327,14 +327,14 @@ class IncludeTest extends AnyFlatSpec with Matchers {
   "An error resolving a source included twice" should "be reported once" in {
     val dir = Files.createTempDirectory("psi")
     write(dir, "common.psi", "x: $missing")
-    val main = write(dir, "main.psi", "a { #include(file: \"common.psi\") }\nb { #include(file: \"common.psi\") }")
+    val main = write(dir, "main.psi", "a { #include(file: \"common.psi\")* }\nb { #include(file: \"common.psi\")* }")
     errors(main) shouldBe List(UnresolvedSubstitution(SourceLocation(url(dir.resolve("common.psi")), 1, 4), "missing"))
   }
 
   "#include(url: …)" should "read a file: URL with a fragment, as a source given so is read" in {
     val dir = Files.createTempDirectory("psi")
-    val target = url(write(dir, "a.psi", "v: 1")) + "#fragment"
-    scalar(loaded(write(dir, "main.psi", "#include(url: \"" + target + "\")")), "v") match {
+    val target = url(write(dir, "a.psi", "v: 1")) + "#fragment*"
+    scalar(loaded(write(dir, "main.psi", "#include(url: \"" + target + "\")*")), "v") match {
       case Node.IScalar(_, _, value, _) => value shouldBe "1"
       case other => fail(other.toString)
     }
@@ -344,8 +344,8 @@ class IncludeTest extends AnyFlatSpec with Matchers {
   "An error in a source two sources include" should "be reported once" in {
     val dir = Files.createTempDirectory("psi")
     write(dir, "common.psi", "a: [")
-    val a = write(dir, "a.psi", "#include(file: \"common.psi\")")
-    val b = write(dir, "b.psi", "#include(file: \"common.psi\")")
+    val a = write(dir, "a.psi", "#include(file: \"common.psi\")*")
+    val b = write(dir, "b.psi", "#include(file: \"common.psi\")*")
     loader(a.toUri.toURL, b.toUri.toURL).left.map(_.errors) shouldBe
       Left(List(UnclosedBracket(SourceLocation(url(dir.resolve("common.psi")), 1, 4), '[')))
   }
@@ -359,7 +359,7 @@ class IncludeTest extends AnyFlatSpec with Matchers {
       out.closeEntry()
     } finally out.close()
     val root = "jar:" + url(jar) + "!/"
-    loader.parse("s", "#include(url: \"" + root + "\")\n#include(url: \"" + root + "\", optional: true)") match {
+    loader.parse("s", "#include(url: \"" + root + "\")*\n#include(url: \"" + root + "\", optional: true)*") match {
       case Left(PsiErrors(
             ::(
               DirectiveFailed(_, "include", IncludeUnreadable(`root`, first)),
@@ -372,9 +372,9 @@ class IncludeTest extends AnyFlatSpec with Matchers {
   "A source two sources include that cannot read its own include" should "be reported once" in {
     val dir = Files.createTempDirectory("psi")
     write(dir, "broken.jar", "not a jar")
-    write(dir, "common.psi", "#include(url: \"jar:" + url(dir.resolve("broken.jar")) + "!/x.psi\")")
-    val a = write(dir, "a.psi", "#include(file: \"common.psi\")")
-    val b = write(dir, "b.psi", "#include(file: \"common.psi\")")
+    write(dir, "common.psi", "#include(url: \"jar:" + url(dir.resolve("broken.jar")) + "!/x.psi\")*")
+    val a = write(dir, "a.psi", "#include(file: \"common.psi\")*")
+    val b = write(dir, "b.psi", "#include(file: \"common.psi\")*")
     loader(a.toUri.toURL, b.toUri.toURL).left.map(_.errors.map(_.location)) shouldBe
       Left(List(SourceLocation(url(dir.resolve("common.psi")), 1, 1)))
   }
@@ -392,11 +392,11 @@ class IncludeTest extends AnyFlatSpec with Matchers {
       }
     finally out.close()
     val entry = "jar:" + url(jar) + "!/only.psi"
-    loader.parse("s", "#include(url: \"" + entry + "#runtime\")").map(_("v")) match {
+    loader.parse("s", "#include(url: \"" + entry + "#runtime\")*").map(_("v")) match {
       case Right(Node.IScalar(_, _, value, _)) => value shouldBe "nine"
       case other => fail(other.toString)
     }
-    loader.parse("s", "#include(url: \"" + entry + "\")").left.map(_.errors) shouldBe
+    loader.parse("s", "#include(url: \"" + entry + "\")*").left.map(_.errors) shouldBe
       Left(List(DirectiveFailed(SourceLocation("s", 1, 1), "include", IncludeNotFound(entry))))
   }
 }

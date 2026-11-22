@@ -175,7 +175,7 @@ class MergeTest extends AnyFlatSpec with Matchers {
   }
 
   it should "keep a block merged over what may turn out no map as written, an injection in it a step of its own" in {
-    root("a: ${x}\na { $y, p := 1, $z }") shouldBe
+    root("a: ${x}\na { $y*, p := 1, $z* }") shouldBe
       top("a" -> Layers(Vector(
         sub("x", 1, 4),
         Tree.Map(
@@ -187,8 +187,8 @@ class MergeTest extends AnyFlatSpec with Matchers {
             Step.Injection(Id.Key("y", Id.Root), optional = false, loc(2, 5)),
             Step.Statements(Vector(
               AST.Field(
-                ::(AST.Key("p", loc(2, 9)), Nil), AST.Operator.Replace, AST.Scalar("1", None, loc(2, 14)), None))),
-            Step.Injection(Id.Key("z", Id.Root), optional = false, loc(2, 17))
+                ::(AST.Key("p", loc(2, 10)), Nil), AST.Operator.Replace, AST.Scalar("1", None, loc(2, 15)), None))),
+            Step.Injection(Id.Key("z", Id.Root), optional = false, loc(2, 18))
           )
         )
       )))
@@ -227,8 +227,9 @@ class MergeTest extends AnyFlatSpec with Matchers {
   }
 
   "A directive" should "be a bug of the loader when it reaches merging unexpanded" in {
-    the[IllegalStateException] thrownBy merge("#x(1)") should have message "#x at s0:1:1 was never expanded"
+    the[IllegalStateException] thrownBy merge("#x(1)*") should have message "#x at s0:1:1 was never expanded"
     the[IllegalStateException] thrownBy merge("a: [#y]") should have message "#y at s0:1:5 was never expanded"
-    the[IllegalStateException] thrownBy merge("a:\n  #z\n  $b") should have message "#z at s0:2:3 was never expanded"
+    the[IllegalStateException] thrownBy merge("a: #z*") should have message "#z at s0:1:4 was never expanded"
+    the[IllegalStateException] thrownBy merge("a:\n  #z*\n  $b*") should have message "#z at s0:2:3 was never expanded"
   }
 }

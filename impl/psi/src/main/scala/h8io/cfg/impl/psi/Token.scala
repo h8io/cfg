@@ -52,6 +52,11 @@ private[psi] object Token {
   /** `#name`, before its arguments */
   final case class Directive(name: String) extends Kind
 
+  /** `$path*`, `${path*}` or their optional forms, unquoted and alone: an injection, the substitution marked with a `*`
+    * (`format.md` §9).
+    */
+  final case class Spread(reference: Reference) extends Kind
+
   /** A scalar in value position, as text and the substitutions inside it, in order: unquoted, or `quoted` in any of
     * `"…"`, `"""…"""`, `'…'` and `'''…'''`, its escapes interpreted and the layout of a block applied. Consecutive text
     * is one part; `""` has no parts. `markers` are the loader's markers on a block, to run over its value (§5).
@@ -134,6 +139,7 @@ private[psi] object Token {
       case Tag(name) => Message.quote("@" + named(name))
       case Integer(value) => Message.quote(value)
       case Directive(name) => Message.quote("#" + named(name))
+      case Spread(reference) => Message.quote(written(Vector(reference)).dropRight(1) + "*}")
       case Scalar(parts, quoted, _) =>
         val text = written(parts)
         if (quoted) "a quoted string " + Message.cut("\"" + text + "\"") else Message.quote(text)

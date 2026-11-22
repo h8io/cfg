@@ -25,27 +25,24 @@ private[psi] object Tree {
   final case class Substitution(path: Id.Branch, optional: Boolean, tag: Option[String], location: SourceLocation)
       extends Layer
 
-  /** `\${path}` or `\${?path}` among the elements of a sequence, an injection: the elements of the sequence it finds,
-    * in its place (§9). What a `required` one finds must be a sequence; any other puts anything else as one element,
-    * with its tag, or the one written before it.
+  /** `\${path*}` or `\${?path*}` among the elements of a sequence, an injection: the elements of the sequence it finds,
+    * which it must be, in its place (§9).
     */
-  final case class Injection(
-      path: Id.Branch,
-      optional: Boolean,
-      tag: Option[String],
-      location: SourceLocation,
-      required: Boolean)
-      extends Value
+  final case class Injection(path: Id.Branch, optional: Boolean, location: SourceLocation) extends Value {
 
-  /** A block of substitutions and what calls gave alone, two or more (§4, §9): the fields of the maps they find or give
-    * merged in turn, or the elements of the sequences, as the first that finds or gives anything says; nothing when
-    * none does.
+    /** None: the elements it puts keep their own, and nothing written before it may tag them. */
+    def tag: Option[String] = None
+  }
+
+  /** An injection after a key, `a: \${b*}` or `a: #d(…)*` (§9): a map holding the fields of the map found or given, or
+    * a sequence holding the elements of the sequence, with `tag` and none of the found node's own; nothing when an
+    * optional one finds nothing.
     *
-    * @param items
-    *   in the order written, what a call gave or a reference
+    * @param item
+    *   what the call gave, or the reference
     */
-  final case class Injections(
-      items: Vector[Either[AST.Injected.Given, Token.Reference]],
+  final case class Contents(
+      item: Either[AST.Injected.Given, Token.Reference],
       tag: Option[String],
       location: SourceLocation)
       extends Layer
@@ -53,9 +50,9 @@ private[psi] object Tree {
   /** A value `:` merges as a layer (`format.md` §7): a map, or what may turn out a map or not once resolved. */
   sealed trait Layer extends Value
 
-  /** What `:` merged in turn at one key, where a substitution or a block of injections alone stands among them, so that
+  /** What `:` merged in turn at one key, where a substitution or an injection after a key stands among them, so that
     * whether the merge is of maps is known only once they are resolved (`format.md` §7): maps merge, anything else
-    * replaces what is before it. Each layer is a map, a substitution, formatted or not, a block of injections alone, or
+    * replaces what is before it. Each layer is a map, a substitution, formatted or not, an injection after a key, or
     * layers merged in their turn into a map.
     */
   final case class Layers(layers: Vector[Layer]) extends Layer {
@@ -123,7 +120,7 @@ private[psi] object Tree {
 
   object Step {
 
-    /** An injection, `$path` among fields, of the map at `path`. */
+    /** An injection, `$path*` among fields, of the map at `path`. */
     final case class Injection(path: Id.Branch, optional: Boolean, location: SourceLocation) extends Step
 
     /** Statements written after an injection, merged as they would have been. */

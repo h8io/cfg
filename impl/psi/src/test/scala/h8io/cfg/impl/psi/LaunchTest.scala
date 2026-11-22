@@ -35,7 +35,7 @@ class LaunchTest extends AnyFlatSpec with Matchers {
       case other => fail(other.toString)
     }
 
-  "#prop" should "give a system property, located at the call and at the property" in {
+  "#prop*" should "give a system property, located at the call and at the property" in {
     loaded("port: #prop(\"app.port\")")("port") shouldBe
       Node.IScalar(
         Id.Key("port", Id.Root),
@@ -48,7 +48,7 @@ class LaunchTest extends AnyFlatSpec with Matchers {
     loaded("java: #prop(java)")("java").toString shouldBe
       "version: 25\nvm:\n  name: HotSpot\n  vendor: Oracle"
     // in statement position, its keys stand in the block
-    loaded("x { #prop(java) }")("x").toString should include("version: 25")
+    loaded("x { #prop(java)* }")("x").toString should include("version: 25")
   }
 
   it should "give the property itself when a name is a property and has properties under it too" in {
@@ -59,7 +59,7 @@ class LaunchTest extends AnyFlatSpec with Matchers {
     errors("c: #prop(c)") shouldBe List(DirectiveFailed(at(1, 4), "prop", PropertyConflict("c.d")))
   }
 
-  "#env" should "give an environment variable, located at the call and at the variable" in {
+  "#env*" should "give an environment variable, located at the call and at the variable" in {
     loaded("home: #env(HOME)")("home") shouldBe
       Node.IScalar(
         Id.Key("home", Id.Root),

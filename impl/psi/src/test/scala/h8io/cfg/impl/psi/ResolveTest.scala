@@ -104,12 +104,11 @@ class ResolveTest extends AnyFlatSpec with Matchers {
         })
     }
     val lookups = "\nk3: $s[3]\nk0: $s[0]\nk5: $?s[5]\nk2: $s[2]\nk4: $s[4]\nk1: $s[1]"
-    values("t: [a, b]\ns: [x, $t, ${?n}, ${t; join(\"-\")}, y]" + lookups, "k0", "k1", "k2", "k3", "k4", "k5") shouldBe
+    values("t: [a, b]\ns: [x, $t*, ${?n}, ${t; join(\"-\")}, y]" + lookups, "k0", "k1", "k2", "k3", "k4", "k5") shouldBe
       Seq("x", "a", "b", "a-b", "y", "INone(Key(k5,Root))")
-    // a block of injections alone gives its sequence anew to each lookup
-    values(
-      "t: [a, b]\nu: [c]\ns:\n  $t\n  $u\nk3: $?s[3]\nk1: $s[1]\nk2: $s[2]\nk0: $s[0]", "k0", "k1", "k2", "k3") shouldBe
-      Seq("a", "b", "c", "INone(Key(k3,Root))")
+    // an injection after a key gives its sequence anew to each lookup
+    values("t: [a, b]\ns: $t*\nk2: $?s[2]\nk1: $s[1]\nk0: $s[0]", "k0", "k1", "k2") shouldBe
+      Seq("a", "b", "INone(Key(k2,Root))")
   }
 
   it should "count from the end with an index after a '-', -1 the last element, walking past every injection" in {
@@ -122,14 +121,14 @@ class ResolveTest extends AnyFlatSpec with Matchers {
         })
     }
     val lookups = "\nm2: $s[-2]\nm5: $?s[-5]\nm1: $s[-1]\nk1: $s[1]\nm4: $s[-4]\nm3: $s[-3]"
-    values("t: [a, b]\ns: [x, $t, ${?n}, y]" + lookups, "m1", "m2", "m3", "m4", "m5", "k1") shouldBe
+    values("t: [a, b]\ns: [x, $t*, ${?n}, y]" + lookups, "m1", "m2", "m3", "m4", "m5", "k1") shouldBe
       Seq("y", "b", "a", "x", "INone(Key(m5,Root))", "a")
     values("s: [x]\ns: [y, z]\nl: $s[-1]\ne: []\nf: $?e[-1]", "l", "f") shouldBe Seq("z", "INone(Key(f,Root))")
   }
 
   it should "take the last of a list gathered from several, located where it was written" in {
-    loaded("a.hosts: [h1, h2]\nb.hosts: [h3]\nall: [$a.hosts, $b.hosts]\nlast: $all[-1]")("last") shouldBe
-      Node.IScalar(keyed("last"), None, "h3", ref(4, 7, "all[-1]", ref(3, 17, "b.hosts[0]", at(2, 11))))
+    loaded("a.hosts: [h1, h2]\nb.hosts: [h3]\nall: [$a.hosts*, $b.hosts*]\nlast: $all[-1]")("last") shouldBe
+      Node.IScalar(keyed("last"), None, "h3", ref(4, 7, "all[-1]", ref(3, 18, "b.hosts[0]", at(2, 11))))
   }
 
   it should "find nothing before the first element, as past the last" in {
@@ -202,11 +201,12 @@ class ResolveTest extends AnyFlatSpec with Matchers {
     shown("a: $?b\na.x: 1") shouldBe "x: 1"
     Psi.parse("s", "a: $?b\na: $?c\nd: 1").fold(e => fail(e.toString), _("a")) shouldBe
       h8io.cfg.Node.INone(h8io.cfg.Id.Key("a", h8io.cfg.Id.Root))
-    // a sequence replaces, and a block of injections alone merges as what it turns out
+    // a sequence replaces, and an injection after a key, or a block of them, merges as what it turns out
     shown("a: $s\na: $t\ns: [1]\nt: [2]") shouldBe "- 2"
-    shown("s: [1]\nt: [2]\nm { k: 1 }\na:\n  $s\n  $t\na: $m") shouldBe "k: 1"
-    shown("s: [1]\nt: [2]\nm { k: 1 }\na: $m\na:\n  $s\n  $t") shouldBe "- 1\n- 2"
-    shown("m { k: 1 }\nn { j: 2 }\na: $m\na:\n  $n\n  $n") shouldBe "k: 1\nj: 2"
+    shown("s: [1]\nm { k: 1 }\na: $s*\na: $m") shouldBe "k: 1"
+    shown("s: [1]\nm { k: 1 }\na: $m\na: $s*") shouldBe "- 1"
+    shown("m { k: 1 }\nn { j: 2 }\na: $m\na: $n*") shouldBe "k: 1\nj: 2"
+    shown("m { k: 1 }\nn { j: 2 }\na: $m\na:\n  $n*\n  $n*") shouldBe "k: 1\nj: 2"
     // looked into by a path, and at any depth, layers within layers
     Psi.parse("s", "a: $b\na.x: 1\nb { y: 2 }\nc: $a.y").fold(e => fail(e.toString), _("c")) match {
       case h8io.cfg.Node.IScalar(_, _, value, _) => value shouldBe "2"
@@ -223,12 +223,12 @@ class ResolveTest extends AnyFlatSpec with Matchers {
     shown("b: @t { n { old: 1 } }\na: $b\na: @u { n := { fresh: 2 } }") shouldBe "@u\n  n:\n    fresh: 2"
     shown("a: $?b\na { n := { fresh: 2 } }") shouldBe "n:\n  fresh: 2"
     // an injection in the block merges where it is written, before the `:=` or after it
-    shown("b { n { old: 1 }, k: 1 }\nc { n { c: 1 } }\na: $b\na { $c, n := { fresh: 2 } }") shouldBe
+    shown("b { n { old: 1 }, k: 1 }\nc { n { c: 1 } }\na: $b\na { $c*, n := { fresh: 2 } }") shouldBe
       "n:\n  fresh: 2\nk: 1"
-    shown("b { n { old: 1 }, k: 1 }\nc { n { c: 1 } }\na: $b\na { n := { fresh: 2 }, $c }") shouldBe
+    shown("b { n { old: 1 }, k: 1 }\nc { n { c: 1 } }\na: $b\na { n := { fresh: 2 }, $c* }") shouldBe
       "n:\n  fresh: 2\n  c: 1\nk: 1"
     // over a block of injections alone, and with more merged after it
-    shown("b { n { old: 1 } }\nx { k: 1 }\na:\n  $b\n  $x\na { n := { fresh: 2 } }") shouldBe
+    shown("b { n { old: 1 } }\nx { k: 1 }\na:\n  $b*\n  $x*\na { n := { fresh: 2 } }") shouldBe
       "n:\n  fresh: 2\nk: 1"
     shown("b { n { old: 1 } }\na: $b\na { n := { fresh: 2 } }\na { n { more: 3 } }") shouldBe
       "n:\n  fresh: 2\n  more: 3"
@@ -271,12 +271,12 @@ class ResolveTest extends AnyFlatSpec with Matchers {
   }
 
   it should "report what its substitutions do not find, and count what they copy" in {
-    errors("a:\n  $nope\n  $none\na.x: 1") shouldBe
+    errors("a:\n  $nope*\n  $none*\na.x: 1") shouldBe
       List(UnresolvedSubstitution(at(2, 3), "nope"), UnresolvedSubstitution(at(3, 3), "none"))
     Psi.builder.withSizeLimit(1, PsiLoader.DefaultCharacterLimit).build.fold(e => fail(e.toString), identity)
       .parse("s", "b { x: 1, y: 2 }\na: $b\na.z: 1").fold(_.errors, root => fail(root.toString)) shouldBe
       List(ResolutionTooLarge(at(2, 4), "b", 1))
-    Psi.parse("s", "a:\n  $?n\n  $?m\na.x: 1").fold(e => fail(e.toString), _("a").toString) shouldBe "x: 1"
+    Psi.parse("s", "a:\n  $?n*\n  $?m*\na.x: 1").fold(e => fail(e.toString), _("a").toString) shouldBe "x: 1"
   }
 
   "A cycle" should "be an error at the reference that closes it" in {
@@ -289,9 +289,11 @@ class ResolveTest extends AnyFlatSpec with Matchers {
   }
 
   it should "be one from the end when the sequence needs the reference to know where its end is" in {
-    errors("a: [x, $a[-1]]") shouldBe List(CycleFromEnd(at(1, 8), "a[-1]"))
-    errors("a: [x, $a[-2], y]") shouldBe List(CycleFromEnd(at(1, 8), "a[-2]"))
-    errors("a: [x, $b, y]\nb: $a[-1]") shouldBe List(CycleFromEnd(at(2, 4), "a[-1]"))
+    errors("a: [x, $a[-1]*]") shouldBe List(CycleFromEnd(at(1, 8), "a[-1]"))
+    errors("a: [x, $a[-2]*, y]") shouldBe List(CycleFromEnd(at(1, 8), "a[-2]"))
+    errors("a: [x, $b*, y]\nb: $a[-1]") shouldBe List(CycleFromEnd(at(2, 4), "a[-1]"))
+    // an element that is no injection is one, and referring to itself it is a cycle like any other
+    errors("a: [x, $a[-1]]") shouldBe List(SubstitutionCycle(at(1, 8), "a[-1]"))
     // the last element contains the reference: a cycle, but not one of counting
     errors("a: [x, { k: $a[-1] }]") shouldBe List(SubstitutionCycle(at(1, 13), "a[-1]"))
     // an index from 0 needs only the elements before it

@@ -9,6 +9,4 @@ unknown: ${hosts; csv}
 missing: ${hosts; join}
 
 // a formatter gives a string, which injects nothing
-block {
-  ${hosts; join(",")}
-}
+injected: ${hosts*; join(",")}

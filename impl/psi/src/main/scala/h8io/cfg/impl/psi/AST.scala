@@ -22,14 +22,15 @@ private[psi] object AST {
 
   final case class Key(name: String, location: SourceLocation)
 
-  /** A directive in statement position, which is to produce a map merged into the block where it stands (§6).
+  /** A directive in statement position, `#name(…)*`, which is to produce a map merged into the block where it stands
+    * (§6).
     *
     * @param doc
     *   the doc comment before it, as written between its delimiters
     */
   final case class DirectiveStatement(call: Call, doc: Option[String]) extends Statement
 
-  /** An injection, `$path` or `${path}` alone among the fields of a block: the fields of the map at `path`, merged
+  /** An injection, `$path*` or `${path*}` alone among the fields of a block: the fields of the map at `path`, merged
     * there as if written there (§7, §9).
     */
   final case class InjectionStatement(path: Id.Branch, optional: Boolean, location: SourceLocation, doc: Option[String])
@@ -86,16 +87,12 @@ private[psi] object AST {
   final case class Substitution(path: Id.Branch, optional: Boolean, tag: Option[String], location: SourceLocation)
       extends Value
 
-  /** A block opened by indentation that holds substitutions and calls alone, two or more, none tagged: what the first
-    * that finds or gives anything finds or gives decides what it is, the fields of maps merged in turn or the elements
-    * of sequences (§4, §9).
-    *
-    * @param items
-    *   in the order written
+  /** An injection after a key, `a: $b*` or `a: #d(…)*`: a node of what it finds or gives, a map holding its fields or a
+    * sequence holding its elements, with the tag written before it and none of the found node's own (§9).
     */
-  final case class Injections(items: Vector[Injected], tag: Option[String], location: SourceLocation) extends Value
+  final case class Contents(item: Injected, tag: Option[String], location: SourceLocation) extends Value
 
-  /** What a block of injections alone holds, in the order written (§9). */
+  /** What an injection after a key injects (§9). */
   sealed trait Injected
 
   object Injected {
@@ -103,8 +100,8 @@ private[psi] object AST {
     /** A call, not expanded yet. */
     final case class Calling(call: Call) extends Injected
 
-    /** What a call gave once expanded, as it would stand as a value: kept until substitutions are resolved, so that
-      * what decides the block is the first that finds or gives anything as written, a call or a substitution.
+    /** What a call gave once expanded, as it would stand as a value: kept until substitutions are resolved, as what a
+      * substitution finds is.
       */
     final case class Given(call: Call, value: Value) extends Injected
 
@@ -142,13 +139,10 @@ private[psi] object AST {
 
   object Put {
 
-    /** As one element: after a `- `. */
+    /** As one element: after a `- ` or in `[…]`, unmarked. */
     case object Whole extends Put
 
-    /** In `[…]`, an injection: the elements of a sequence found or given, anything else as one element. */
-    case object Found extends Put
-
-    /** Alone on its line in a block of `- ` elements, an injection: the elements of a sequence, which it must be. */
+    /** Marked with a `*`, after a `- ` or in `[…]`, an injection: the elements of a sequence, which it must be. */
     case object Elements extends Put
   }
 

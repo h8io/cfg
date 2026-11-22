@@ -98,7 +98,7 @@ host: example.com
 
 `$s[-1]` is the last element of `s` once every source is merged, and a key written twice replaces a sequence, never
 appends to it: of two sources each setting `hosts`, it is the last one's last host. A sequence gathered from several
-is written with injections, `[$a.hosts, $b.hosts]`. Counting from the end needs every element, so an element that
+is written with injections, `[$a.hosts*, $b.hosts*]`. Counting from the end needs every element, so an element that
 counts from the end of its own sequence is an error ([substitutions](substitutions.md)):
 
 ```scala mdoc:passthrough
@@ -113,40 +113,41 @@ last: $hosts[-1]
 Example.psi("""
 base: [db1, db2]
 site: [db3]
-hosts: [$base, $site]
+hosts: [$base*, $site*]
 last: $hosts[-1]
 """)
 ```
 
 ```scala mdoc:passthrough
 Example.psi("""
-all: [x, $all[-1]]
+all: [x, $all[-1]*]
 """)
 ```
 
-## One substitution alone is a value, two inject
+## A second injection below a key makes a map
 
-Below a key, a substitution alone is the key's value, whatever it is. Two or more alone are
-[injections](substitutions.md#injections): their fields, or their elements, are put there, so each has to be a map
-or a sequence. A line added below a substitution that worked can break it:
+Below a key, one injection alone is the key's value, `a:⏎  $s*` meaning `a: $s*`, and takes a map or a sequence. A
+second line makes the block a map, a line with no `- ` being a field's place, so each injection then has to find a
+map ([injections](substitutions.md#injections)). A line added below one that worked can break it; a sequence of
+several is written with dashes, `- $s*` on each line:
 
 ```scala mdoc:passthrough
 Example.psi("""
-name: report
-a { x: 1 }
+s: [a, b]
+m { x: 1 }
 one:
-  $name
+  $s*
 two:
-  $name
-  $a
+  $s*
+  $m*
 """)
 ```
 
 ## A field added below a substitution drops its tag
 
 A substitution alone below a key is the key's value, and brings the tag of what it finds, as `key: $b` does. With a
-field below it, it is an [injection](substitutions.md#injections), which brings the fields and no tag. The fields come
-out the same either way; the tag stays only when the field is merged in from elsewhere:
+field below it, it has to be an [injection](substitutions.md#injections), `$b*`, which brings the fields and no tag.
+The fields come out the same either way; the tag stays only when the field is merged in from elsewhere:
 
 ```scala mdoc:passthrough
 Example.psi("""
@@ -157,32 +158,34 @@ merged:
   $b
 merged.x: 1
 injected:
-  $b
+  $b*
   x: 1
 """)
 ```
 
 To keep the tag, write it again, `injected: @t`, or merge the field in rather than write it below.
 
-## A block of substitutions alone is what the first one finds
+## A `*` after a substitution marks it
 
-Below a key, two or more substitutions alone, with no field and no `- `, make a map when the first finds a map and a
-sequence when it finds a sequence ([injections](substitutions.md#injections)). Nothing written in the block says
-which, so a change where the first is defined, maybe in another source, turns the block into the other kind, and the
-error, if any, lands at the second:
+`$prefix*`, a whole value, is an [injection](substitutions.md#injections), not the text of `prefix` followed by `*`,
+and in a longer value, `$dir*.log`, it is an error. A glob or any other text with a `*` right after a substitution is
+written with braces, which end the path before it:
 
 ```scala mdoc:passthrough
 Example.psi("""
-m { x: 1 }
-s: [a]
-block:
-  $s
-  $m
+dir: /var/log
+logs: $dir*.log
 """)
 ```
 
-Brackets say what the block is: `{ $m, $n }` takes maps only, and anything else is an error. `[$m, $n]` is a
-sequence whatever they find, but one that is not a sequence stands in it as one element rather than failing.
+```scala mdoc:passthrough
+Example.psi("""
+dir: /var/log
+logs: ${dir}/*.log
+prefix: app
+pattern: ${prefix}*
+""")
+```
 
 ## A formatter needs braces
 
@@ -208,9 +211,9 @@ quoted: "$hosts; join(-)"
 
 ## A formatter gives a string, and no tag
 
-A formatted substitution is one string, never the fields or elements of what it finds: alone among fields, or on its
-line among `- ` elements, it is an error rather than an injection. Nor does it keep the node's tag, as `${path}`
-does: it has only the one written before it:
+A formatted substitution is one string, never the fields or elements of what it finds: marked with a `*`,
+`${hosts*; join(",")}`, it is an error. Nor does it keep the node's tag, as `${path}` does: it has only the one written
+before it:
 
 ```scala mdoc:passthrough
 Example.psi("""

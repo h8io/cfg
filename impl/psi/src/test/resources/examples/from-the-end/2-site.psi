@@ -1,7 +1,7 @@
 hosts.site: [db3]
 
 // a sequence gathered from both sources; an index after a '-' counts from its end, -1 the last element
-all: [$hosts.base, $hosts.site]
+all: [$hosts.base*, $hosts.site*]
 primary: $all[0]
 fallback: $all[-1]
 before-fallback: $all[-2]

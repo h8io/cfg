@@ -129,7 +129,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   }
 
   it should "keep a doc comment before an injection or a call that a block opened by indentation starts with" in {
-    statements("a:\n  /** d */\n  $m\n  y: 2") shouldBe
+    statements("a:\n  /** d */\n  $m*\n  y: 2") shouldBe
       Vector(
         field(
           k("a", 1, 1),
@@ -141,10 +141,34 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
         ))
   }
 
-  "A substitution in brackets" should "be an injection of what it finds, with the tags written before it" in {
+  it should "keep the doc comment before each of two or more injections alone in a block opened by indentation" in {
+    statements("a:\n  /** d */\n  $m*\n  $n*") shouldBe
+      Vector(
+        field(
+          k("a", 1, 1),
+          Block(
+            Vector(
+              InjectionStatement(Id.Key("m", Id.Root), optional = false, loc(3, 3), Some(" d ")),
+              InjectionStatement(Id.Key("n", Id.Root), optional = false, loc(4, 3), None)),
+            None,
+            loc(3, 3)
+          )
+        ))
+  }
+
+  "A marked substitution" should "be named with its '*' where it is found out of place" in {
+    errors("a: [1 $b*]") shouldBe List(MissingSeparator(loc(1, 7), "'${b*}'"))
+  }
+
+  "A substitution in brackets" should "be one element with the tag written before it, and inject marked" in {
     statements("a: [@t $b]") match {
-      case Vector(Field(_, _, Sequence(Vector(Element(substitution: Substitution, None, Put.Found)), _, _), _)) =>
+      case Vector(Field(_, _, Sequence(Vector(Element(substitution: Substitution, None, Put.Whole)), _, _), _)) =>
         substitution.tag shouldBe Some("t")
+      case other => fail(other.toString)
+    }
+    statements("a: [$b*]") match {
+      case Vector(Field(_, _, Sequence(Vector(Element(substitution: Substitution, None, Put.Elements)), _, _), _)) =>
+        substitution.tag shouldBe None
       case other => fail(other.toString)
     }
   }
@@ -393,7 +417,7 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
           k("d", 6, 1),
           Sequence(
             Vector(
-              Element(Substitution(at("e"), optional = false, None, loc(6, 5)), None, Put.Found),
+              Element(Substitution(at("e"), optional = false, None, loc(6, 5)), None, Put.Whole),
               Element(Concatenation(Vector(Text("x"), ref(at("e"), 6, 12)), None, loc(6, 11)), None)
             ),
             None,
@@ -415,8 +439,8 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     errors("a: ${x} b: 2") shouldBe List(MissingSeparator(loc(1, 9), "'b:'"))
   }
 
-  "A directive" should "be read in statement position, with or without arguments" in {
-    statements("#include(file: \"x.psi\", optional: true)\n#reload\n#`odd`(1, -2, 'r', `p q`: n)\n#e()") shouldBe
+  "A directive" should "be read in statement position, marked, with or without arguments" in {
+    statements("#include(file: \"x.psi\", optional: true)*\n#reload*\n#`odd`(1, -2, 'r', `p q`: n)*\n#e()*") shouldBe
       Vector(
         directive(
           Call(
@@ -434,12 +458,12 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   }
 
   it should "take a bare name as a positional argument, and quoted strings without substitutions" in {
-    statements("#x(on, '${a}', \"\\${b}\")") shouldBe
+    statements("#x(on, '${a}', \"\\${b}\")*") shouldBe
       Vector(directive(Call("x", Vector(arg("on", 1, 4), arg("${a}", 1, 8), arg("${b}", 1, 16)), loc(1, 1))))
   }
 
   it should "separate its arguments as a block separates fields" in {
-    statements("#x(\n  a: 1\n  , b: 2,\n)") shouldBe
+    statements("#x(\n  a: 1\n  , b: 2,\n)*") shouldBe
       Vector(directive(Call("x", Vector(named("a", "1", (2, 3), (2, 6)), named("b", "2", (3, 5), (3, 8))), loc(1, 1))))
   }
 
@@ -451,8 +475,8 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
           k("b", 2, 1),
           Sequence(
             Vector(
-              Element(DirectiveValue(Call("y", Vector.empty, loc(2, 5)), None), None, Put.Found),
-              Element(DirectiveValue(Call("z", Vector(arg("2", 2, 12)), loc(2, 9)), None), None, Put.Found)
+              Element(DirectiveValue(Call("y", Vector.empty, loc(2, 5)), None), None, Put.Whole),
+              Element(DirectiveValue(Call("z", Vector(arg("2", 2, 12)), loc(2, 9)), None), None, Put.Whole)
             ),
             None,
             loc(2, 4)
@@ -466,18 +490,20 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
   }
 
   it should "keep the doc comment before it" in {
-    statements("/** d */\n#x") shouldBe Vector(DirectiveStatement(Call("x", Vector.empty, loc(2, 1)), Some(" d ")))
+    statements("/** d */\n#x*") shouldBe Vector(DirectiveStatement(Call("x", Vector.empty, loc(2, 1)), Some(" d ")))
   }
 
   it should "end without arguments where no `(` follows, the next token read as it would be otherwise" in {
-    statements("#x\na: 1\n#y, b: 2") shouldBe
+    statements("#x*\na: 1\n#y*, b: 2") shouldBe
       Vector(
         directive(Call("x", Vector.empty, loc(1, 1))),
         field(k("a", 2, 1), str("1", 2, 4)),
         directive(Call("y", Vector.empty, loc(3, 1))),
-        field(k("b", 3, 5), str("2", 3, 8))
+        field(k("b", 3, 6), str("2", 3, 9))
       )
-    errors("#x a: 1") shouldBe List(MissingSeparator(loc(1, 4), "'a:'"))
+    errors("#x* a: 1") shouldBe List(MissingSeparator(loc(1, 5), "'a:'"))
+    // unmarked, it is one node, with no key among fields
+    errors("#x a: 1") shouldBe List(UnmarkedInjection(loc(1, 1)), MissingSeparator(loc(1, 4), "'a:'"))
   }
 
   it should "be left out with the lexer's errors in it, its name's or its arguments'" in {

@@ -13,11 +13,9 @@ import h8io.cfg.impl.psi.Token.{Formatted, KeyMode, Reference, Text, ValueMode}
   * in backticks otherwise (`format.md` §3). A scalar is written bare when the lexer reads it back as the same scalar,
   * in double quotes otherwise; a concatenation always in double quotes.
   *
-  * A merged tree holds what is still unresolved, which only a test or a debugger shows. An injection among `- `
-  * elements and a block of injections alone are written on lines of their own; a sequence holding an injection that
-  * came from `[…]` is written in brackets, an element a line, a map in it in braces. A sequence of nothing but
-  * injections among `- ` elements, which only a call can give, has no source that reads back as it, and neither has
-  * what a call gave in a block of injections alone.
+  * A merged tree holds what is still unresolved, which only a test or a debugger shows. An injection is written with
+  * its `*`, among elements after a `- ` and after a key on the key's line. What a call injected after a key gave has no
+  * source that reads back as it.
   */
 private[psi] object Render {
 
@@ -70,13 +68,11 @@ private[psi] object Render {
     }
   }
 
-  /** A map or a sequence with something in it, or a block of injections alone, which stands in a block below its key.
-    */
+  /** A map or a sequence with something in it, which stands in a block below its key. */
   private def block(value: Tree.Value): Boolean =
     value match {
       case map: Tree.Map => map.keys.nonEmpty
       case sequence: Tree.Sequence => sequence.elements.nonEmpty
-      case _: Tree.Injections => true
       case _ => false
     }
 
@@ -86,71 +82,17 @@ private[psi] object Render {
   private def contents(out: StringBuilder, value: Tree.Value, level: Int, onDash: Boolean = false): Unit =
     value match {
       case map: Tree.Map if map.keys.nonEmpty => fields(out, map, level, onDash)
-      case sequence: Tree.Sequence if sequence.elements.exists(spread) =>
-        if (!onDash) indent(out, level)
-        bracketed(out, sequence, level)
-        val _ = out += '\n'
       case sequence: Tree.Sequence if sequence.elements.nonEmpty =>
         sequence.elements.zipWithIndex.foreach { case (element, i) =>
           if (i > 0 || !onDash) indent(out, level)
-          element match {
-            // alone on its line, it puts the elements of a sequence
-            case _: Tree.Injection =>
-              oneLine(out, element)
-              val _ = out += '\n'
-            case _ =>
-              val _ = out += '-'
-              dashed(out, element, level)
-          }
-        }
-      case Tree.Injections(items, _, _) =>
-        items.zipWithIndex.foreach { case (item, i) =>
-          if (i > 0 || !onDash) indent(out, level)
-          item.fold(
-            gave =>
-              throw new IllegalStateException(
-                "What " + Message.directive(gave.call.name) + " at " + gave.call.location.description +
-                  " gave in a block of injections has no source"),
-            r => reference(out, r.path, r.optional)
-          )
-          val _ = out += '\n'
+          val _ = out += '-'
+          dashed(out, element, level)
         }
       // only a value alone without a tag, as `value` writes one
       case _ =>
         oneLine(out, value)
         val _ = out += '\n'
     }
-
-  /** Whether `element` is an injection from `[…]`, which only brackets write. */
-  private def spread(element: Tree.Value): Boolean =
-    element match {
-      case injection: Tree.Injection => !injection.required
-      case _ => false
-    }
-
-  /** A sequence in brackets that stands at `level`: `[`, an element a line below it, one level deeper, a map in braces
-    * and a sequence in brackets, and `]` on a line of its own.
-    */
-  private def bracketed(out: StringBuilder, sequence: Tree.Sequence, level: Int): Unit = {
-    out ++= "[\n"
-    sequence.elements.foreach { element =>
-      indent(out, level + 1)
-      element.tag.foreach(tag => out ++= "@" ++= name(tag) += ' ')
-      element match {
-        case map: Tree.Map if map.keys.nonEmpty =>
-          out ++= "{\n"
-          fields(out, map, level + 2)
-          indent(out, level + 1)
-          out += '}'
-        case sequence: Tree.Sequence if sequence.elements.nonEmpty => bracketed(out, sequence, level + 1)
-        case _ => oneLine(out, element)
-      }
-      out += '\n'
-    }
-    indent(out, level)
-    out += ']'
-    ()
-  }
 
   /** An element after its `- `, which stands at `level`: an untagged map or sequence starts on the line of the `- `,
     * the rest of it aligned under that start; anything else as after a `:`.
@@ -187,9 +129,15 @@ private[psi] object Render {
       case _: Tree.Map => out ++= "{}"
       case _: Tree.Sequence => out ++= "[]"
       case Tree.Substitution(path, optional, _, _) => reference(out, path, optional)
-      case Tree.Injection(path, optional, _, _, _) => reference(out, path, optional)
-      case injections: Tree.Injections =>
-        throw new IllegalStateException("A block of injections at " + injections.location.description + " on one line")
+      case Tree.Injection(path, optional, _) => reference(out, path, optional, marked = true)
+      case Tree.Contents(item, _, _) =>
+        item.fold(
+          gave =>
+            throw new IllegalStateException(
+              "What " + Message.directive(gave.call.name) + " at " + gave.call.location.description +
+                " gave to inject after a key has no source"),
+          r => reference(out, r.path, r.optional, marked = true)
+        )
       case layers: Tree.Layers =>
         throw new IllegalStateException("Layers at " + layers.location.description + " with no key to write again")
       case Tree.Concatenation(parts, _, _) => quoted(out, parts)
@@ -204,8 +152,8 @@ private[psi] object Render {
   /** A key or a tag, as `Id.path` writes a key. */
   private def name(name: String): String = Id.Key(name, Id.Root).path
 
-  private def reference(out: StringBuilder, path: Id.Branch, optional: Boolean): Unit = {
-    val _ = out ++= (if (optional) "${?" else "${") ++= Message.path(path) += '}'
+  private def reference(out: StringBuilder, path: Id.Branch, optional: Boolean, marked: Boolean = false): Unit = {
+    val _ = out ++= (if (optional) "${?" else "${") ++= Message.path(path) ++= (if (marked) "*}" else "}")
   }
 
   /** A formatted substitution, its call as written: read by its own rules, it stands in quotes as it does outside. */

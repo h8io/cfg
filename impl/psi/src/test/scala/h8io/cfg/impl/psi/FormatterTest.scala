@@ -275,15 +275,15 @@ class FormatterTest extends AnyFlatSpec with Matchers {
   }
 
   it should "be no substitution in a directive's argument" in {
-    errors("#include(file: \"${x; join(\",\")}\")") shouldBe List(SubstitutionInArgument(at(1, 17)))
+    errors("#include(file: \"${x; join(\",\")}\")*") shouldBe List(SubstitutionInArgument(at(1, 17)))
   }
 
-  "A formatted substitution" should "inject nothing, where an injection stands" in {
-    errors("h: [a]\nb { ${h; join(\",\")} }") shouldBe List(FormattedInjection(at(2, 5)))
-    errors("h: [a]\nb:\n  - x\n  ${h; join(\",\")}") shouldBe List(FormattedInjection(at(4, 3)))
-    errors("h: [a]\nb:\n  ${h; join(\",\")}\n  $h") shouldBe List(FormattedInjection(at(3, 3)))
-    errors("h: [a]\nb:\n  $h\n  ${h; join(\",\")}\n  ${h; join(\"-\")}") shouldBe
-      List(FormattedInjection(at(4, 3)), FormattedInjection(at(5, 3)))
+  "A formatted substitution" should "inject nothing: marked, an error, and alone among fields a value with no key" in {
+    errors("h: [a]\nb: ${h*; join(\",\")}") shouldBe List(FormattedInjection(at(2, 4)))
+    errors("h: [a]\nb: [${h*; join(\",\")}]") shouldBe List(FormattedInjection(at(2, 5)))
+    errors("h: [a]\nb { ${h; join(\",\")} }") shouldBe List(ValueAmongFields(at(2, 5)))
+    errors("h: [a]\nb:\n  - x\n  ${h; join(\",\")}") shouldBe List(UndashedElement(at(4, 3)))
+    errors("h: [a]\nb:\n  $h*\n  ${h; join(\",\")}") shouldBe List(ValueAmongFields(at(4, 3)))
   }
 
   it should "be written back as it is written" in {
