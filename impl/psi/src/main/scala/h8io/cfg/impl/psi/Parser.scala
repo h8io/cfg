@@ -77,7 +77,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
   def document(): Result[AST.Document] = {
     // the top level starts at column 1 (§4)
     val statements = new Statements
-    items(KeyMode, None, documented = true, Some(new Region(1, indented = false)))(statements)
+    new Items(KeyMode, None, documented = true, Some(new Region(1, indented = false)), statements).read()
     Result(AST.Document(statements.read.result()), lexer.errors)
   }
 
@@ -144,34 +144,44 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     * @param documented
     *   whether an item may have a doc comment before it; arguments may not
     */
-  private def items(mode: Mode, closing: Option[Closing], documented: Boolean, region: Option[Region] = None)(
-      item: Item): Unit = {
-    val indented = region.exists(_.indented)
-    var separated = true
-    var afterItem = false
-    var mark = lexer.mark()
-    var token = next(mode)
-    var done = false
+  private final class Items(
+      mode: Mode,
+      closing: Option[Closing],
+      documented: Boolean,
+      region: Option[Region],
+      item: Item) {
+    // the state of the loop is kept in fields, not in locals of `read`: an item nested in another recurses through
+    // `read`, and the smaller its frame, the less stack each level costs
+    private val indented = region.exists(_.indented)
+    private var separated = true
+    private var afterItem = false
+    private var mark = lexer.mark()
+    private var token = next(mode)
+    private var done = false
     // the doc comment waiting for its item, with where it starts
-    var doc: Option[(Token, Lexer.Mark)] = None
-    def advance(): Unit = {
+    private var doc: Option[(Token, Lexer.Mark)] = None
+
+    private def advance(): Unit = {
       mark = lexer.mark()
       token = next(mode)
     }
-    def misplaced(): Unit = {
+
+    private def misplaced(): Unit = {
       // at the end a fatal error made, the doc comment may have stood before what it cut off
       doc.foreach(doc => if (token.kind != End || !lexer.halted) record(MisplacedDocComment(doc._1.location)))
       doc = None
     }
+
     // a block opened by indentation ends before `token`, and before the doc comment waiting for it
-    def end(): Unit = {
+    private def end(): Unit = {
       rewind(doc.fold(mark)(_._2))
       doc = None
       done = true
     }
+
     // a line starts at `start`: its first token, or the doc comment it starts with when its item goes on after it;
     // whether the item on it is to be read
-    def lined(region: Region, start: SourceLocation): Boolean = {
+    private def lined(region: Region, start: SourceLocation): Boolean = {
       val column = start.column
       if (region.width < 0) region.width = column
       if (column == region.width) true
@@ -190,94 +200,103 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
         false
       }
     }
-    open = closing.toList ++ open
-    layouts = region :: layouts
-    try
-      while (!done) {
-        val atItem = token.kind match {
-          case Newline =>
-            separated = true
-            advance()
-            false
-          case Comma =>
-            misplaced()
-            if (!afterItem) record(EmptyElement(token.location))
-            afterItem = false
-            separated = true
-            advance()
-            false
-          case End =>
-            closing match {
-              case Some(closing) => halt(token, unclosed(closing), reportedAfter)
-              case None if indented => end()
-              case None =>
-                misplaced()
-                done = true
-            }
-            false
-          case RightBrace | RightBracket | RightParen if indented && open.exists(_.kind == token.kind) =>
-            end()
-            false
-          case RightBrace | RightBracket | RightParen =>
-            misplaced()
-            if (closing.exists(_.kind == token.kind)) done = true
-            else if (open.isEmpty) {
-              record(UnmatchedBracket(token.location, bracket(token), fatal = false))
-              advance()
-            } else closedElsewhere(token, reportedAfter)
-            false
-          case DocComment(_) if documented && (separated || token.startsLine) =>
-            misplaced()
-            doc = Some((token, mark))
-            advance()
-            false
-          case DocComment(_) =>
-            misplaced()
-            record(MisplacedDocComment(token.location))
-            advance()
-            false
-          case _ =>
-            region match {
-              case Some(region) if token.startsLine => lined(region, token.location)
-              case Some(region) =>
-                doc match {
-                  case Some((comment, _)) if comment.startsLine => lined(region, comment.location)
-                  case _ => true
-                }
-              case None => true
-            }
-        }
-        // the item is read here rather than in a helper: an item nested in another recurses through this method, and
-        // every frame on that path costs stack at each level
-        if (atItem) {
-          // a line starts with the item, or with the doc comment before it
-          val starts = token.startsLine || doc.exists(_._1.startsLine)
-          val text = doc.collect { case (Token(DocComment(text), _, _, _), _) => text }
-          docAt = doc.map(_._1.location)
-          itemMark = mark
-          doc = None
-          try {
-            // a line that starts after a block opened by indentation is separated from the item that opened it
-            if (!separated && !starts) afterValue(token, mode, mark)
-            item(token, text)
-            advance()
-          } catch {
-            case Broken(error, reported, at) =>
-              record(error, reported)
-              token = skip(at, mode)
-              // what was reported stays, should a block opened by indentation end before the token
-              mark = lexer.remark(before)
-            case Dropped => advance()
+
+    // whether `token` starts an item, everything else it stands for taken care of
+    private def atItem(): Boolean =
+      token.kind match {
+        case Newline =>
+          separated = true
+          advance()
+          false
+        case Comma =>
+          misplaced()
+          if (!afterItem) record(EmptyElement(token.location))
+          afterItem = false
+          separated = true
+          advance()
+          false
+        case End =>
+          closing match {
+            case Some(closing) => halt(token, unclosed(closing), reportedAfter)
+            case None if indented => end()
+            case None =>
+              misplaced()
+              done = true
           }
-          afterItem = true
-          separated = false
-        }
+          false
+        case RightBrace | RightBracket | RightParen if indented && open.exists(_.kind == token.kind) =>
+          end()
+          false
+        case RightBrace | RightBracket | RightParen =>
+          misplaced()
+          if (closing.exists(_.kind == token.kind)) done = true
+          else if (open.isEmpty) {
+            record(UnmatchedBracket(token.location, bracket(token), fatal = false))
+            advance()
+          } else closedElsewhere(token, reportedAfter)
+          false
+        case DocComment(_) if documented && (separated || token.startsLine) =>
+          misplaced()
+          doc = Some((token, mark))
+          advance()
+          false
+        case DocComment(_) =>
+          misplaced()
+          record(MisplacedDocComment(token.location))
+          advance()
+          false
+        case _ =>
+          region match {
+            case Some(region) if token.startsLine => lined(region, token.location)
+            case Some(region) =>
+              doc match {
+                case Some((comment, _)) if comment.startsLine => lined(region, comment.location)
+                case _ => true
+              }
+            case None => true
+          }
       }
-    catch {
-      case Halt(error, reported) if closing.isEmpty && !indented => lexer.settle(reported, error)
-    } finally {
-      open = open.drop(closing.size)
-      layouts = layouts.tail
+
+    // the item at `token`, its doc comment taken; what it is followed by checked first
+    private def take(): Option[String] = {
+      // a line starts with the item, or with the doc comment before it
+      val starts = token.startsLine || doc.exists(_._1.startsLine)
+      val text = doc.collect { case (Token(DocComment(text), _, _, _), _) => text }
+      docAt = doc.map(_._1.location)
+      itemMark = mark
+      doc = None
+      // a line that starts after a block opened by indentation is separated from the item that opened it
+      if (!separated && !starts) afterValue(token, mode, mark)
+      text
+    }
+
+    def read(): Unit = {
+      open = closing.toList ++ open
+      layouts = region :: layouts
+      try
+        while (!done)
+          // the item is read here rather than in a helper: an item nested in another recurses through this method
+          if (atItem()) {
+            try {
+              item(token, take())
+              advance()
+            } catch {
+              case Broken(error, reported, at) =>
+                record(error, reported)
+                token = skip(at, mode)
+                // what was reported stays, should a block opened by indentation end before the token
+                mark = lexer.remark(before)
+              case Dropped => advance()
+            }
+            afterItem = true
+            separated = false
+          }
+      catch {
+        case Halt(error, reported) if closing.isEmpty && !indented => lexer.settle(reported, error)
+      } finally {
+        open = open.drop(closing.size)
+        layouts = layouts.tail
+      }
     }
   }
 
@@ -423,9 +442,9 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
       case _ => false
     }
 
+  /** A statement that starts with anything but a key, which [[Statements]] reads with [[keys]] itself. */
   private def statement(first: Token, doc: Option[String]): AST.Statement =
     first.kind match {
-      case Name(name, _) => keys(AST.Key(name, first.location), Nil, doc)
       // among the fields of a block a call or a substitution alone injects when marked with a `*` (§6, §9)
       case Directive(name) =>
         val (read, marked) = call(first, name)
@@ -507,7 +526,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
       case LeftBracket =>
         enter(token)
         val elements = new SequenceElements
-        items(ValueMode, Some(Closing(RightBracket, token.location)), documented = true)(elements)
+        new Items(ValueMode, Some(Closing(RightBracket, token.location)), documented = true, None, elements).read()
         ended()
         AST.Sequence(elements.read.result(), tag, token.location)
       case Directive(name) =>
@@ -523,7 +542,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
           // a separator, a closing bracket, the end or a doc comment, where skipping stops or which it drops
           case _ => fail(after, MissingValue(token.location, describe(token.kind)))
         }
-      case Newline => indented(token, tag)
+      case Newline => indented(token, tag).result()
       case DocComment(_) => fail(token, MisplacedDocComment(token.location))
       case _ => fail(token, MissingValue(token.location, describe(token.kind)))
     }
@@ -550,10 +569,11 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
   private def below(column: Int): Unit =
     deeper = layouts.headOption.flatten.fold(column)(region => math.max(region.width, column))
 
-  /** The value below `newline`, which ends the line of a `:`, a tag or a `- `: a block indented deeper than [[deeper]],
-    * with `tag` written before it; with no line deeper, an error (§4).
+  /** The block below `newline`, which ends the line of a `:`, a tag or a `- `, indented deeper than [[deeper]], with
+    * `tag` written before it; with no line deeper, an error (§4). The caller reads it, so that this method's frame is
+    * gone by then: a value nested in a value recurses through the reading.
     */
-  private def indented(newline: Token, tag: Option[String]): AST.Value = {
+  private def indented(newline: Token, tag: Option[String]): Content = {
     val threshold = deeper
     val mark = lexer.mark()
     @tailrec def first(): Token = {
@@ -570,7 +590,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     after.kind match {
       case End | RightBrace | RightBracket | RightParen => fail(newline, NothingIndented(newline.location))
       case _ if after.location.column <= threshold => fail(newline, NothingIndented(newline.location))
-      case _ => content(after.location, tag, after.location.column)
+      case _ => new Content(after.location, tag, after.location.column)
     }
   }
 
@@ -580,24 +600,26 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     * any is a substitution or a call. The first item on its line goes below to a block deeper than `first`, as it would
     * after a `- `.
     */
-  private def content(at: SourceLocation, tag: Option[String], first: Int): AST.Value = {
-    val elements = Vector.newBuilder[AST.Element]
-    val fields = Vector.newBuilder[AST.Statement]
+  private final class Content(at: SourceLocation, tag: Option[String], first: Int) extends Item {
+    // the state of the block is kept in fields, not in locals: a value nested in a value recurses through `apply` and
+    // `result`, and the smaller their frames, the less stack each level costs
+    private val elements = Vector.newBuilder[AST.Element]
+    private val fields = Vector.newBuilder[AST.Statement]
     // a value with its doc comment, where that stands, and its first token
-    val values = Vector.newBuilder[(AST.Value, Option[(String, SourceLocation)], Token)]
-    var kind: BlockKind = Unknown
-    var counted = false
-    var read = 0
+    private val values = Vector.newBuilder[(AST.Value, Option[(String, SourceLocation)], Token)]
+    private var kind: BlockKind = Unknown
+    private var counted = false
+    private var read = 0
     // whether a value read so far is a substitution or a call, which a second makes a fields' place
-    var injecting = false
+    private var injecting = false
     // a map or a sequence is a level, which a block turns out to be once
-    def opens(token: Token): Unit = {
+    private def opens(token: Token): Unit = {
       enter(token)
       levels += 1
       counted = true
     }
     // a value alone on its line among fields: an injection, marked, with no tag before it
-    def field(value: AST.Value, doc: Option[String], at: Token): Unit =
+    private def field(value: AST.Value, doc: Option[String], at: Token): Unit =
       value match {
         case AST.Contents(_, Some(_), _) => record(TaggedInjection(at.location))
         case AST.Contents(AST.Injected.Referring(r), _, _) =>
@@ -610,84 +632,88 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
         case _ => record(ValueAmongFields(at.location))
       }
     // a value alone on its line among `- ` elements, which start with one
-    def element(at: Token): Unit = record(UndashedElement(at.location))
+    private def element(at: Token): Unit = record(UndashedElement(at.location))
     // the block turns out to be `to`, the values read before placed in it
-    def becomes(token: Token, to: BlockKind)(place: (AST.Value, Option[String], Token) => Unit): Unit =
+    private def becomes(token: Token, to: BlockKind)(place: (AST.Value, Option[String], Token) => Unit): Unit =
       if (kind != to) {
         opens(token)
         kind = to
         values.result().foreach { case (value, doc, at) => place(value, doc.map(_._1), at) }
         values.clear()
       }
-    try
-      items(KeyMode, None, documented = true, Some(new Region(at.column, indented = true)))(new Item {
-        def apply(token: Token, doc: Option[String]): Unit = {
-          val doced = docAt
-          val threshold = if (read == 0) first else at.column
-          read += 1
-          token.kind match {
-            case Dash if kind == Fields => fail(token, MixedBlock(token.location))
-            case Dash =>
-              becomes(token, Elements)((_, _, at) => element(at))
-              elements += dashed(token, doc)
-              ()
-            case Name(_, _) if lexer.fieldAhead() =>
-              if (kind == Elements) fail(token, MixedBlock(token.location))
-              becomes(token, Fields)(field)
-              fields += statement(token, doc)
-              ()
-            case _ =>
-              val start = itemMark
-              // tags alone on their line, their value in a block below: a block in a block, which counts as a level
-              var below = false
-              if (tagged(token)) {
-                val ahead = lexer.mark()
-                val after = next(KeyMode)
-                if (after.kind.isInstanceOf[Name] && lexer.fieldAhead()) fail(after, TagBeforeField(token.location))
-                below = after.kind == Newline
-                rewind(ahead)
-              }
-              rewind(start)
-              deeper = threshold
-              val first = next(ValueMode)
-              if (below) {
-                enter(first)
-                levels += 1
-              }
-              val value =
-                try Parser.this.value(first, None)
-                finally if (below) levels -= 1
-              kind match {
-                case Fields => field(value, doc, first)
-                case Elements => element(first)
-                case _ =>
-                  kind = Values
-                  values += ((value, doc.zip(doced), first))
-                  if (injects(value)) injecting = true
-                  // two or more, a substitution or a call among them: lines with no `- `, which are fields' places, the
-                  // block a map, and a level from here, counted as one a field opens is (§9)
-                  if (read > 1 && injecting) becomes(first, Fields)(field)
-              }
+
+    def apply(token: Token, doc: Option[String]): Unit = {
+      val doced = docAt
+      val threshold = if (read == 0) first else at.column
+      read += 1
+      token.kind match {
+        case Dash if kind == Fields => fail(token, MixedBlock(token.location))
+        case Dash =>
+          becomes(token, Elements)((_, _, at) => element(at))
+          elements += dashed(token, doc)
+          ()
+        case Name(name, _) if lexer.fieldAhead() =>
+          if (kind == Elements) fail(token, MixedBlock(token.location))
+          becomes(token, Fields)(field)
+          // the field read here, not through `statement`: a value nested in a value recurses through this
+          fields += keys(AST.Key(name, token.location), Nil, doc)
+          ()
+        case _ =>
+          val start = itemMark
+          // tags alone on their line, their value in a block below: a block in a block, which counts as a level
+          var below = false
+          if (tagged(token)) {
+            val ahead = lexer.mark()
+            val after = next(KeyMode)
+            if (after.kind.isInstanceOf[Name] && lexer.fieldAhead()) fail(after, TagBeforeField(token.location))
+            below = after.kind == Newline
+            rewind(ahead)
           }
-        }
-      })
-    finally if (counted) levels -= 1
-    ended()
-    kind match {
-      case Elements => AST.Sequence(elements.result(), tag, at)
-      case Fields => AST.Block(fields.result(), tag, at)
-      case _ =>
-        val all = values.result()
-        all match {
-          case (value, doc, start) +: rest =>
-            // the tag after the key and one before the value are two on one value (§4, §5)
-            if (tag.isDefined && value.tag.isDefined) record(SecondTag(start.location))
-            doc.foreach { case (_, at) => record(MisplacedDocComment(at)) }
-            rest.foreach { case (_, _, at) => record(SecondValue(at.location)) }
-            lone(value, tag)
-          // every item broken, and reported
-          case _ => AST.Block(Vector.empty, tag, at)
-        }
+          rewind(start)
+          deeper = threshold
+          val first = next(ValueMode)
+          if (below) {
+            enter(first)
+            levels += 1
+          }
+          val value =
+            try Parser.this.value(first, None)
+            finally if (below) levels -= 1
+          kind match {
+            case Fields => field(value, doc, first)
+            case Elements => element(first)
+            case _ =>
+              kind = Values
+              values += ((value, doc.zip(doced), first))
+              if (injects(value)) injecting = true
+              // two or more, a substitution or a call among them: lines with no `- `, which are fields' places, the
+              // block a map, and a level from here, counted as one a field opens is (§9)
+              if (read > 1 && injecting) becomes(first, Fields)(field)
+          }
+      }
+    }
+
+    def result(): AST.Value = {
+      try new Items(KeyMode, None, documented = true, Some(new Region(at.column, indented = true)), this).read()
+      finally if (counted) levels -= 1
+      ended()
+      kind match {
+        case Elements => AST.Sequence(elements.result(), tag, at)
+        case Fields => AST.Block(fields.result(), tag, at)
+        case _ =>
+          val all = values.result()
+          all match {
+            case (value, doc, start) +: rest =>
+              // the tag after the key and one before the value are two on one value (§4, §5)
+              if (tag.isDefined && value.tag.isDefined) record(SecondTag(start.location))
+              doc.foreach { case (_, at) => record(MisplacedDocComment(at)) }
+              rest.foreach { case (_, _, at) => record(SecondValue(at.location)) }
+              lone(value, tag)
+            // every item broken, and reported
+            case _ => AST.Block(Vector.empty, tag, at)
+          }
+      }
+
     }
   }
 
@@ -742,20 +768,21 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     val first = next(KeyMode)
     deeper = dash.location.column
     first.kind match {
-      case Newline => listed(indented(first, None), doc)
+      case Newline => listed(indented(first, None).result(), doc)
       case End | Comma | RightBrace | RightBracket | RightParen =>
         fail(first, MissingValue(first.location, describe(first.kind)))
       case _ =>
         rewind(mark)
-        listed(content(first.location, None, dash.location.column), doc)
+        listed(new Content(first.location, None, dash.location.column).result(), doc)
     }
   }
 
   private def block(open: Token, tag: Option[String]): AST.Block = {
     enter(open)
     val statements = new Statements
-    items(KeyMode, Some(Closing(RightBrace, open.location)), documented = true, Some(new Region(-1, indented = false)))(
-      statements)
+    new Items(
+      KeyMode, Some(Closing(RightBrace, open.location)), documented = true, Some(new Region(-1, indented = false)),
+      statements).read()
     ended()
     AST.Block(statements.read.result(), tag, open.location)
   }
@@ -789,7 +816,12 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     val read: collection.mutable.Builder[AST.Statement, Vector[AST.Statement]] = Vector.newBuilder
 
     def apply(first: Token, doc: Option[String]): Unit = {
-      read += statement(first, doc)
+      // a field read here, not through `statement`: a value nested in a value recurses through this
+      read +=
+        (first.kind match {
+          case Name(name, _) => keys(AST.Key(name, first.location), Nil, doc)
+          case _ => statement(first, doc)
+        })
       ()
     }
   }
@@ -846,19 +878,25 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
   private def arguments(open: Token): Vector[AST.Argument] = {
     var named = Set.empty[String]
     val arguments = Vector.newBuilder[AST.Argument]
-    items(ArgumentMode, Some(Closing(RightParen, open.location)), documented = false)(new Item {
-      def apply(first: Token, doc: Option[String]): Unit = {
-        val read = argument(first)
-        read.name match {
-          case Some(name) =>
-            if (named(name)) record(DuplicateArgument(read.location, name), lexer.errorCount)
-            named += name
-          case None => if (named.nonEmpty) record(PositionalAfterNamed(read.location), lexer.errorCount)
+    new Items(
+      ArgumentMode,
+      Some(Closing(RightParen, open.location)),
+      documented = false,
+      None,
+      new Item {
+        def apply(first: Token, doc: Option[String]): Unit = {
+          val read = argument(first)
+          read.name match {
+            case Some(name) =>
+              if (named(name)) record(DuplicateArgument(read.location, name), lexer.errorCount)
+              named += name
+            case None => if (named.nonEmpty) record(PositionalAfterNamed(read.location), lexer.errorCount)
+          }
+          arguments += read
+          ()
         }
-        arguments += read
-        ()
       }
-    })
+    ).read()
     arguments.result()
   }
 

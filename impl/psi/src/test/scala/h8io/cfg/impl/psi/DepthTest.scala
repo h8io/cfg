@@ -115,8 +115,10 @@ class DepthTest extends AnyFlatSpec with Matchers {
     }
 
   "A source as deep as the default limit" should "load on a stack of 1 MB, however its levels are written" in {
-    // a block opened by indentation is the costliest level to parse, and `- k:` opens two on each line; on a JVM just
-    // started a map of maps 256 levels deep took 1.25 MB, and takes about 900 KB since the parser was slimmed
+    // a block opened by indentation is the costliest level to parse, and `- k:` opens two on each line. The most a map
+    // of maps 256 levels deep takes is with the parser compiled by C1 with profiling, a few loads after the JVM started:
+    // 880 KB before the parser's frames were slimmed a second time, about 620 KB since. Measured with coverage, as CI
+    // runs it, every frame is larger, and 768 KB is not enough
     val sources = List(
       "maps" -> ((0 until 255).map(i => "  " * i + "k:\n").mkString + "  " * 255 + "v\n"),
       "elements of maps" ->
