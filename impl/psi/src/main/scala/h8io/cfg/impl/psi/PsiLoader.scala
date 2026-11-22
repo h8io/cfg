@@ -2,7 +2,9 @@ package h8io.cfg.impl.psi
 
 import h8io.cfg.{Id, Node}
 
+import java.io.IOException
 import java.net.URL
+import scala.jdk.CollectionConverters.*
 
 /** A Psi loader with the directives, markers and formatters it was built with; [[Psi]] is the one with nothing added.
   */
@@ -25,14 +27,35 @@ final class PsiLoader private[psi] (settings: Settings) {
   }
 
   /** Loads and merges the sources at `urls`, in order, each named in locations by its URL as given. */
-  def apply(urls: URL*): Either[PsiErrors, Node.IMap[Id.Root]] = {
+  def apply(urls: URL*): Either[PsiErrors, Node.IMap[Id.Root]] = read(urls.map(Right(_)))
+
+  /** Loads the configuration of a program that names no source: every `reference` on the class path, a library's
+    * defaults, then over them the first `application` found, the program's own, each looked for as `.Ψ`, `.ψ` and
+    * `.psi`. With no `application`, the references alone. Every `reference.Ψ` wins over every `reference.ψ`, and that
+    * over every `reference.psi`; files of one name go in the order of the class path, which nothing fixes. Resources
+    * are looked for with the thread's context class loader, and the sources are merged and resolved as one load.
+    */
+  def standard(): Either[PsiErrors, Node.IMap[Id.Root]] =
+    read(PsiLoader.references ++ PsiLoader.application.map(Right(_)))
+
+  /** Loads every `reference` on the class path, as [[standard]] does, then the sources at `urls` over them, in order:
+    * the configuration of a program that names its own.
+    */
+  def withReferences(urls: URL*): Either[PsiErrors, Node.IMap[Id.Root]] =
+    read(PsiLoader.references ++ urls.map(Right(_)))
+
+  /** Loads the sources at `urls`, in order, an error standing for one that could not even be looked for. */
+  private def read(urls: Seq[Either[PsiError, URL]]): Either[PsiErrors, Node.IMap[Id.Root]] = {
     val budget = new ReadBudget(readBytes, readTime)
     load(
-      urls.flatMap(url =>
-        Source.read(url.toString, url, budget) match {
-          case Right(source) => source.map(Right(_)).toList
-          case Left(error) => Left(error) :: Nil
-        }),
+      urls.flatMap {
+        case Right(url) =>
+          Source.read(url.toString, url, budget) match {
+            case Right(source) => source.map(Right(_)).toList
+            case Left(error) => Left(error) :: Nil
+          }
+        case Left(error) => Left(error) :: Nil
+      },
       budget
     )
   }
@@ -73,6 +96,25 @@ final class PsiLoader private[psi] (settings: Settings) {
 }
 
 private[psi] object PsiLoader {
+
+  /** Every `reference` on the class path (§8), lowest first: Psi's extensions in the reverse of their order, so that
+    * `.Ψ` wins over `.ψ` and `.ψ` over `.psi`, and each in the order of the class path; an error for an extension the
+    * class loader could not look for.
+    */
+  def references: Seq[Either[PsiError, URL]] = {
+    val loader = Include.classLoader
+    Include.Extensions.reverse.flatMap { extension =>
+      val name = "reference" + extension
+      try loader.getResources(name).asScala.map(Right(_)).toSeq
+      catch { case e: IOException => Left(SourceUnreadable(name, e)) :: Nil }
+    }
+  }
+
+  /** The first `application` on the class path, by Psi's extensions in their order (§8). */
+  def application: Option[URL] = {
+    val loader = Include.classLoader
+    Include.Extensions.iterator.flatMap(extension => Option(loader.getResource("application" + extension))).nextOption()
+  }
 
   /** How deep a loaded tree, and the resolution of its substitutions, may go unless the builder says otherwise (§11).
     */

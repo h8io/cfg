@@ -22,6 +22,25 @@ import h8io.cfg.impl.psi.*
 val loaded = Psi.parse("app.psi", "server { host: localhost, port: 8080 }")
 ```
 
+### From the class path
+
+A program that names no source loads its configuration as Typesafe Config's `ConfigFactory.load()` does, from the
+class path, with Psi's extensions. `Psi.standard()` reads every `reference` on the class path, the defaults each
+library ships, then over them `application`, the program's own; `Psi.withReferences(urls*)` reads the references, then
+the sources at `urls` over them, for a program whose configuration is a file. `Psi()` with no URL reads nothing.
+
+- `application` is looked for as `#include(resource: application)` does: `.Ψ`, `.ψ` and `.psi`, the first found
+  read. With none, the references are loaded alone.
+- `reference` is every copy on the class path, of every extension: each `reference.Ψ` over each `reference.ψ`, and
+  those over each `reference.psi`, the copies of one name in the order of the class path.
+- They are the sources of one load, merged in that order and resolved together: a reference refers to what the
+  application sets, as the application to what a reference sets.
+- No system property chooses the file, as `config.file` does in Typesafe Config: a program that takes one reads it
+  itself, and passes the URL to `withReferences`.
+- A reference is read by the loader that loads, with its directives and its limits.
+
+### Locations
+
 A node's `location` is a `PsiLocation`: a source, line and column, or for a value a substitution put somewhere, both
 where it stands and where it came from.
 

@@ -46,6 +46,12 @@ object Psi {
   /** Loads and merges the sources at `urls`, in order, each named in locations by its URL as given. */
   def apply(urls: URL*): Either[PsiErrors, Node.IMap[Id.Root]] = loader.apply(urls*)
 
+  /** Loads every `reference` on the class path, then the first `application` found ([[PsiLoader.standard]]). */
+  def standard(): Either[PsiErrors, Node.IMap[Id.Root]] = loader.standard()
+
+  /** Loads every `reference` on the class path, then the sources at `urls` ([[PsiLoader.withReferences]]). */
+  def withReferences(urls: URL*): Either[PsiErrors, Node.IMap[Id.Root]] = loader.withReferences(urls*)
+
   /** Loads a source held as `text`, named `name` in locations. */
   def parse(name: String, text: String): Either[PsiErrors, Node.IMap[Id.Root]] = loader.parse(name, text)
 

@@ -47,7 +47,7 @@ private[psi] object Include extends Directive {
     find(arguments, Extensions, context.url)(context.parse).map(_.getOrElse(Fragment.None))
 
   /** Psi's extensions, in the order a file or a resource with none is looked for with them (§6). */
-  private val Extensions: Seq[String] = Seq(".Ψ", ".ψ", ".psi")
+  val Extensions: Seq[String] = Seq(".Ψ", ".ψ", ".psi")
 
   /** The target `arguments` name, opened by `open` (`DirectiveContext.find`): the first candidate it opens, a file or a
     * resource with no extension looked for with each of `extensions`, a relative file against `base`; none when no
@@ -95,7 +95,7 @@ private[psi] object Include extends Directive {
           Right(extended(target, Option(Paths.get(target).getFileName).exists(_.toString.contains('.')), extensions)
             .map(file(_, base)))
         case "resource" =>
-          val loader = Option(Thread.currentThread.getContextClassLoader).getOrElse(getClass.getClassLoader)
+          val loader = classLoader
           // a name on the class path separates its segments with `/` on every system
           Right(extended(target, target.substring(target.lastIndexOf('/') + 1).contains('.'), extensions)
             .flatMap(name => Option(loader.getResource(name))))
@@ -106,6 +106,9 @@ private[psi] object Include extends Directive {
       case _: MalformedURLException | _: URISyntaxException | _: IllegalArgumentException =>
         Left(IncludeInvalidTarget(target))
     }
+
+  /** What a resource is looked for with: the thread's context class loader, or with none the one that loaded Psi. */
+  def classLoader: ClassLoader = Option(Thread.currentThread.getContextClassLoader).getOrElse(getClass.getClassLoader)
 
   /** A path or a name with no extension, with each of `extensions`; one with an extension, as it is. */
   private def extended(target: String, extension: Boolean, extensions: Seq[String]): List[String] =
