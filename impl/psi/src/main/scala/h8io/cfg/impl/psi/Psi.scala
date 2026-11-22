@@ -25,12 +25,14 @@ import java.net.URL
   *
   * ==Substitutions==
   * `\${path}` grafts the node at `path` whole, looked up in the merged tree; `\${?path}` with nothing there drops its
-  * field or element, and reads as empty in a concatenation (§9).
+  * field or element, and reads as empty in a concatenation. `\${path; name(…)}` turns the node into a string with the
+  * formatter registered as `name`, the built-in `join` or one of the loader's own (§9).
   *
   * ==Directives==
   * `#name(…)` is expanded by the handler registered for it, while its source is read (§6); [[builder]] builds a loader
   * with handlers of its own. The built-in `#include(file: …)`, `#include(resource: …)` and `#include(url: …)` read
-  * another Psi source where the call stands, and `#prop` and `#env` a value set at launch.
+  * another Psi source where the call stands, and `#prop` and `#env` a value set at launch. `cfg-psi-yaml` and
+  * `cfg-psi-hocon` give handlers that import a YAML or a HOCON file.
   *
   * ==Markers==
   * A triple-quoted block's built-in markers shape its lines; a loader's own markers, registered through the
@@ -39,7 +41,7 @@ import java.net.URL
   */
 object Psi {
 
-  /** A builder of a loader with directives of its own. */
+  /** A builder of a loader with directives, markers, formatters or limits of its own. */
   def builder: PsiBuilder = PsiBuilder.empty
 
   /** Loads and merges the sources at `urls`, in order, each named in locations by its URL as given (§10). */

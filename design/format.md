@@ -491,7 +491,7 @@ without breaking a v1 file. A value starting with `@` is written in quotes (`use
 an unquoted scalar `@` is ordinary (`admin@host`).
 
 A tag name follows the key rule: bare if it matches `Id.SafeKeyPattern`, in backticks otherwise.
-`ISome.tags` holds names only — the prefix and the quotes are syntax of the format, not part of
+`ISome.tag` holds a name only — the prefix and the quotes are syntax of the format, not part of
 the tag: `@duration` gives `duration`, ``@`tag:yaml.org,2002:int` `` gives `tag:yaml.org,2002:int`,
 so there is no need for `!!`. A tag may precede any value, a multi-line string included:
 `query: @sql """…"""`.
@@ -500,7 +500,7 @@ so there is no need for `!!`. A tag may precede any value, a multi-line string i
 `cfg-yaml`, made in step 2a of the plan. It merges YAML's `!foo` and `!<foo>`, two different tags in
 YAML, into one name; the protocol accepts that.
 
-Only tags written in the source reach `ISome.tags`; nothing is ever inferred, and there is no
+Only tags written in the source reach `ISome.tag`; nothing is ever inferred, and there is no
 non-specific tag that resolves to nothing. This matches the rule already settled for `impl/yaml`.
 
 **A value has at most one tag** (session 37): `ISome.tag: Option[String]`, `None` when nothing was

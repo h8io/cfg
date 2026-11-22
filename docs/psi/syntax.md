@@ -20,7 +20,8 @@ backticks is never split.
 - `'…'` is raw, as Perl's single quotes: only `\'` and `\\` are escapes, so a regular expression is written as it is.
 - `null`, unquoted, is the one reserved word. `true`, `false` and every other word are plain strings.
 
-**Blocks** are `{ … }`, and `key { … }` is `key: { … }`, or are written by [indentation](#indentation). **Sequences** are `[ … ]`, separated as fields are.
+**Blocks** are `{ … }`, and `key { … }` is `key: { … }`, or are written by [indentation](#indentation).
+**Sequences** are `[ … ]`, separated as fields are.
 
 **Comments** are `//` to the end of the line and `/* … */`, which nest. `#` is not a comment: it starts a directive.
 
@@ -41,10 +42,11 @@ password: null
 
 A block is written in braces or by indentation, as in Scala 3, and the two mix freely, in one source and in one block.
 
-- `key:` at the end of a line, tags allowed after it, opens a block on the lines indented deeper below: fields make it
-  a map, `- ` elements a sequence, and a value alone is the key's value, as if written after the `:`. A substitution
-  or a directive alone on its line among fields or elements is an [injection](substitutions.md#injections), and so are two or more
-  alone. With nothing deeper below, it is an error; an empty block is written `{}` or `[]`.
+- `key:` at the end of a line, a tag allowed after it, opens a block on the lines indented deeper below: fields make
+  it a map, `- ` elements a sequence, and a value alone is the key's value, as if written after the `:`. A
+  substitution or a directive alone on its line among fields or elements is an
+  [injection](substitutions.md#injections), and so are two or more alone. With nothing deeper below, it is an error;
+  an empty block is written `{}` or `[]`.
 - An element is `- value` at the start of a line, deeper than its key. A map element has its first field after the
   `- ` and the rest aligned under it; `- - x` is a sequence in a sequence; a tag goes after the `- `, with the block
   below it.

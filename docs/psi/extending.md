@@ -12,10 +12,11 @@ How a directive is written, and what it may give where it stands, is [Directives
 A handler declares its parameters and gets the arguments as a map keyed by them, every value a string. It also gets a
 context: where the call stands, the name and URL of the source holding it, a way to parse another Psi source, a search
 for the target its arguments name as `#include`'s do, each candidate opened by a function of the handler's (`find`,
-with `Target.parameters`), and a way to read a URL's bytes under the load's limits on reading (`read`). The nodes of a
-fragment it builds count against the load's node limit, every use of it again. It gives back an error of its own or a `Fragment`: a Psi source the
-context parsed, any `cfg` node, `Fragment(node)`, or nothing, `Fragment.None`, which adds no field among fields and
-leaves the field or element out as a value.
+with `Target.parameters`), and a way to read a URL's bytes under the load's limits on reading (`read`). It gives back
+an error of its own or a `Fragment`: a Psi source the context parsed, any `cfg` node, `Fragment(node)`, or nothing,
+`Fragment.None`, which adds no field among fields and leaves the field or element out as a value. The nodes of a
+fragment count against the load's node limit, every use of it again, except a source the context parsed, the first
+time it is used in the load that parsed it.
 
 This one reads a text file as one value, its target written as `#include`'s is; `cfg-psi-yaml` and `cfg-psi-hocon`
 are built the same way ([Directives](directives.md#importing-yaml-and-hocon)):
@@ -47,8 +48,9 @@ object Text extends Directive {
 }
 ```
 
-Nothing a source holds should make a handler throw: what it fails with is reported at the call, its `message` and `hint` under the directive's name, and the call
-gives nothing; loading goes on. A node a fragment brings keeps its own location behind the call's.
+Nothing a source holds should make a handler throw: what it fails with is reported at the call, its `message` and
+`hint` under the directive's name, and the call gives nothing; loading goes on. What a handler throws is not caught,
+and reaches the program that loads. A node a fragment brings keeps its own location behind the call's.
 
 An error is compared by value: a source included from two places is parsed twice, its calls with it, and two errors
 equal at one call are reported once. One holding an exception, which equals only itself, would be reported twice, so

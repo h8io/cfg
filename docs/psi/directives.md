@@ -6,8 +6,8 @@ import h8io.cfg.pages.Example
 ```
 
 A directive is `#name(arguments)`, or `#name` with none: a call the loader makes where it stands, which gives a value,
-or among fields a block of fields. Psi has three, `#prop`, `#env` and `#include`, and a program can
-[add its own](extending.md) or turn one off. Arguments are literals — strings, integers, bare names — positional ones
+or among fields a block of fields. Psi has three, `#prop`, `#env` and `#include`, and a program can [add its
+own](extending.md) or turn one off. Arguments are literals — strings, integers, bare names — positional ones
 first, then named ones, `name: value`. Where a directive stands decides what it may give, as for a substitution:
 [injections](substitutions.md#injections) say how.
 

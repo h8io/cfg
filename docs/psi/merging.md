@@ -32,10 +32,10 @@ timeout: 10s
 """)
 ```
 
-A [substitution](substitutions.md) standing alone as a value merges too, once it is resolved: what it refers to is known
-only when every source is merged. A block written over it, or under it, merges with it when it turns out a map, its tag
-by the rule above, and replaces it, or is replaced by it, when it does not, as `:` does with any value. So a block copied
-with `${…}` can have one of its fields changed:
+A [substitution](substitutions.md) standing alone as a value merges too, once it is resolved: what it refers to is
+known only when every source is merged. A block written over it, or under it, merges with it when it turns out a map,
+its tag by the rule above, and replaces it, or is replaced by it, when it does not, as `:` does with any value. So a
+block copied with `${…}` can have one of its fields changed:
 
 ```scala mdoc:passthrough
 Example.psi("""
