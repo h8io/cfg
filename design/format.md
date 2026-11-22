@@ -2836,8 +2836,6 @@ Fixed on a third review of session 39's code, nothing of the files' meaning chan
   class path order; one resolution over all the sources, with no check that a reference resolves
   alone; no system property choosing the file, as session 25 has it.
 
-### Session 40 — 2026-11-22
-
 Fixed on a fourth review, the code of sessions 32 and 36 and the parser's, put to the user with the fix:
 
 - **A chain of includes among fields overflowed the stack within both limits**: 63 sources each
