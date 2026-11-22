@@ -28,7 +28,7 @@ private[psi] object Token {
   case object Replace extends Kind
 
   /** `- `, the marker of a sequence's element in the indented syntax: a `-` and whitespace or the end of its line, at
-    * the start of a line or right after another marker (`format.md` §4).
+    * the start of a line or right after another marker.
     */
   case object Dash extends Kind
   case object Equals extends Kind
@@ -52,14 +52,14 @@ private[psi] object Token {
   /** `#name`, before its arguments */
   final case class Directive(name: String) extends Kind
 
-  /** `$path*`, `${path*}` or their optional forms, unquoted and alone: an injection, the substitution marked with a `*`
-    * (`format.md` §9).
+  /** `$path*`, `${path*}` or their optional forms, unquoted and alone: an injection, the substitution marked with a
+    * `*`.
     */
   final case class Spread(reference: Reference) extends Kind
 
   /** A scalar in value position, as text and the substitutions inside it, in order: unquoted, or `quoted` in any of
     * `"…"`, `"""…"""`, `'…'` and `'''…'''`, its escapes interpreted and the layout of a block applied. Consecutive text
-    * is one part; `""` has no parts. `markers` are the loader's markers on a block, to run over its value (§5).
+    * is one part; `""` has no parts. `markers` are the loader's markers on a block, to run over its value.
     */
   final case class Scalar(parts: Vector[Part], quoted: Boolean, markers: Vector[MarkerParser.MarkerCall] = Vector.empty)
       extends Kind
@@ -71,8 +71,7 @@ private[psi] object Token {
   /** `${path}` or `$path`, `${?path}` or `$?path` when `optional`, found at `location`. */
   final case class Reference(path: Id.Branch, optional: Boolean, location: SourceLocation) extends Part
 
-  /** `\${path; name(…)}`: a reference, and the formatter called on what it finds, bound to its arguments (`format.md`
-    * §9).
+  /** `\${path; name(…)}`: a reference, and the formatter called on what it finds, bound to its arguments.
     */
   final case class Formatted(reference: Reference, formatting: Formatting) extends Part
 
@@ -85,7 +84,7 @@ private[psi] object Token {
     def location: SourceLocation
   }
 
-  /** The built-in `join(separator)` (§9). */
+  /** The built-in `join(separator)`. */
   final case class Join(separator: String, call: String, location: SourceLocation) extends Formatting {
     def name: String = "join"
   }
@@ -112,8 +111,8 @@ private[psi] object Token {
   case object KeyMode extends Mode
   case object ValueMode extends Mode
 
-  /** Inside a directive's parentheses: names, integers, quoted strings, `:`, `,` and `)` (`format.md` §6); `=` too,
-    * which the parser explains.
+  /** Inside a directive's parentheses: names, integers, quoted strings, `:`, `,` and `)`; `=` too, which the parser
+    * explains.
     */
   case object ArgumentMode extends Mode
 

@@ -97,7 +97,7 @@ final class PsiBuilder private (settings: Settings) {
 private[psi] object PsiBuilder {
   private val BuiltInMarkers: Seq[String] = Seq("<", ">", "width", "+")
 
-  /** A run of the marker symbols, or a name by the key rule, as the syntax reads a marker's name (§5). */
+  /** A run of the marker symbols, or a name by the key rule, as the syntax reads a marker's name. */
   private def isMarkerName(name: String): Boolean =
     name.nonEmpty &&
       (name.forall(MarkerParser.isSymbol) ||

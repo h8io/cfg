@@ -1,6 +1,6 @@
 package h8io.cfg.impl.psi
 
-/** Pieces of the texts of errors (`format.md` §11). */
+/** Pieces of the texts of errors. */
 private[psi] object Message {
 
   /** How many code points of found text a message shows before cutting it. */

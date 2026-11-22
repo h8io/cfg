@@ -40,9 +40,8 @@ final case class PropertyConflict(name: String) extends LaunchError {
   def message: String = "the system property " + Message.quote(name) + " has a value and properties under it"
 }
 
-/** The built-in `#prop(name)` and `#env(name)` (`format.md` §6): the value of a system property or an environment
-  * variable, read where the call stands; with `optional: true`, nothing when it is not set, and with `default: …`, the
-  * default.
+/** The built-in `#prop(name)` and `#env(name)`: the value of a system property or an environment variable, read where
+  * the call stands; with `optional: true`, nothing when it is not set, and with `default: …`, the default.
   */
 private[psi] abstract class Launch(val name: String) extends Directive {
   val parameters: Seq[Parameter] =

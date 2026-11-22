@@ -15,7 +15,7 @@ sealed trait PsiLocation extends Location {}
 
 private[psi] object PsiLocation {
 
-  /** The longest description, past which it is cut off with an ellipsis (`format.md` §10). */
+  /** The longest description, past which it is cut off with an ellipsis. */
   val DescriptionLimit: Int = 10000
 
   /** The description of `location`, built with a stack of its own rather than by recursion: a chain of substitutions

@@ -8,10 +8,10 @@ import java.nio.CharBuffer
 import scala.annotation.tailrec
 import scala.collection.mutable
 
-/** Reads the tokens of one source, in the mode the parser asks for (`format.md` §3).
+/** Reads the tokens of one source, in the mode the parser asks for.
   *
   * Errors are collected rather than thrown. A fatal one — an unterminated quote or comment — leaves nothing to
-  * resynchronise on, so the lexer reports it and answers [[Token.End]] from then on (§11).
+  * resynchronise on, so the lexer reports it and answers [[Token.End]] from then on.
   */
 private[psi] final class Lexer(
     source: Source,
@@ -60,7 +60,7 @@ private[psi] final class Lexer(
   }
 
   /** Whether a `*` stands right here, touching what was read last, which it marks as an injection: a call's name or the
-    * `)` of its arguments (`format.md` §6, §9); read past when it does.
+    * `)` of its arguments; read past when it does.
     */
   def marker(): Boolean =
     at(offset, '*') && {
@@ -69,7 +69,7 @@ private[psi] final class Lexer(
     }
 
   /** Whether a field goes on from the key just read, read ahead and come back from: dotted keys, then `:` or `:=` with
-    * whitespace after it, or `{` (`format.md` §4). With none, a `:` is text of a value, as in `http://host`.
+    * whitespace after it, or `{`. With none, a `:` is text of a value, as in `http://host`.
     */
   def fieldAhead(): Boolean = {
     val mark = this.mark()
@@ -127,14 +127,14 @@ private[psi] final class Lexer(
   /** A CR that is not part of a CRLF: an error, read as whitespace once reported. */
   private def isLoneCarriageReturn(i: Int): Boolean = at(i, '\r') && !at(i + 1, '\n')
 
-  /** NEL, U+2028 and U+2029, which some tools show as a line break and others do not (`format.md` §3). An error
-    * anywhere, as a lone CR is.
+  /** NEL, U+2028 and U+2029, which some tools show as a line break and others do not. An error anywhere, as a lone CR
+    * is.
     */
   private def isForeignLineBreak(c: Char): Boolean = c == '\u0085' || c == '\u2028' || c == '\u2029'
 
-  /** A character that is an error anywhere, quotes and comments included (`format.md` §3): a lone CR, NEL, U+2028 or
-    * U+2029, which tools disagree on whether it ends a line; a control character other than tab; or an invisible
-    * character, which makes the source read otherwise than it parses.
+  /** A character that is an error anywhere, quotes and comments included: a lone CR, NEL, U+2028 or U+2029, which tools
+    * disagree on whether it ends a line; a control character other than tab; or an invisible character, which makes the
+    * source read otherwise than it parses.
     */
   private def isForbidden(i: Int): Boolean =
     isLoneCarriageReturn(i) || has(i) && {
@@ -142,9 +142,9 @@ private[psi] final class Lexer(
       isForeignLineBreak(c) || isControl(c) || isInvisible(c)
     }
 
-  /** Whitespace other than space and the line breaks — NBSP and the other Unicode spaces (`format.md` §3). An error
-    * outside quotes and comments, read as whitespace once reported; content inside them. All of them are single UTF-16
-    * units. Those that are control characters, such as FF and VT, are forbidden.
+  /** Whitespace other than space and the line breaks — NBSP and the other Unicode spaces. An error outside quotes and
+    * comments, read as whitespace once reported; content inside them. All of them are single UTF-16 units. Those that
+    * are control characters, such as FF and VT, are forbidden.
     */
   private def isForeignSpace(c: Char): Boolean =
     c != ' ' && !isForeignLineBreak(c) &&
@@ -182,9 +182,8 @@ private[psi] final class Lexer(
     * characters read as whitespace once reported. Newlines are tokens.
     *
     * At the start of a line what it skips is the line's indentation, comments included, and the first tab in it is
-    * reported, in its place among the errors, if a token follows: a blank or comment-only line has no indentation
-    * (`format.md` §3). A line is what newline tokens delimit, so one that a block comment carries on past is still the
-    * same line.
+    * reported, in its place among the errors, if a token follows: a blank or comment-only line has no indentation. A
+    * line is what newline tokens delimit, so one that a block comment carries on past is still the same line.
     */
   private def skipBlanks(): Unit = {
     var tab = -1
@@ -286,7 +285,7 @@ private[psi] final class Lexer(
         val kind = if (at(offset + 1, '=')) advance(2, Replace) else advance(1, Colon)
         if (has(offset) && !isBreak(offset)) report(ColonWithoutSpace.apply, start)
         kind
-      // a substitution among the fields of a block: an injection, which the parser takes (§9)
+      // a substitution among the fields of a block: an injection, which the parser takes
       case '$' if startsWith("${") || startsBare(offset) => unquoted()
       case _ =>
         while (has(offset) && !endsKey(offset)) offset += 1
@@ -305,7 +304,7 @@ private[psi] final class Lexer(
         if (has(offset) && !isBreak(offset)) report(ColonWithoutSpace.apply, start)
         Colon
       case '$' if startsWith("${") =>
-        // an argument is literal (§6): reported, and read as the text written
+        // an argument is literal: reported, and read as the text written
         report(SubstitutionInArgument.apply, start)
         reference(quoted = false).foreach(_ => ())
         Name(text.substring(start, offset), quoted = false)
@@ -414,7 +413,7 @@ private[psi] final class Lexer(
     */
   private def unquoted(): Kind = {
     val parts = new Parts
-    // where each substitution marked with a `*` starts, which must be the whole scalar (§9)
+    // where each substitution marked with a `*` starts, which must be the whole scalar
     var marks = List.empty[Int]
     while (!ended && has(offset) && !endsUnquoted(offset))
       if (startsWith("${") || at(offset, '$') && startsBare(offset)) {
@@ -472,8 +471,8 @@ private[psi] final class Lexer(
       Some(text.charAt(offset - 1))
     } else None
 
-  /** A triple-quoted string from its opening delimiter, `"""` or `'''` (`format.md` §5): always a block, and what
-    * stands between the delimiter and the end of its line are its markers, read by [[MarkerParser]].
+  /** A triple-quoted string from its opening delimiter, `"""` or `'''`: always a block, and what stands between the
+    * delimiter and the end of its line are its markers, read by [[MarkerParser]].
     */
   private def triple(start: Int, quote: Char): Kind = {
     offset = start + 3
@@ -549,9 +548,8 @@ private[psi] final class Lexer(
       offset += 1
     }
 
-  /** Applies the layout stages of a block (`format.md` §5) to its lines, in order, the last line being the one of the
-    * closing delimiter, which is dropped with the newline before it when it holds nothing but whitespace. Trailing
-    * whitespace goes first.
+  /** Applies the layout stages of a block to its lines, in order, the last line being the one of the closing delimiter,
+    * which is dropped with the newline before it when it holds nothing but whitespace. Trailing whitespace goes first.
     */
   private def arrange(lines: Vector[Line], stages: Vector[Stage], start: Int): Vector[Piece] = {
     val last = lines.last
@@ -670,9 +668,9 @@ private[psi] final class Lexer(
   }
 
   /** `${path}` or `${?path}` from its `$`, its path written as `Id.path` renders one, and a formatter after a `;` if
-    * any (`format.md` §9). A path that cannot be read is reported — at the space or tab, if that is what broke it, at
-    * the `${` otherwise — and skipped up to the next `}` on its line, or with none up to where the scalar around it
-    * ends; so is a formatter that cannot be read, from where it stops fitting.
+    * any. A path that cannot be read is reported — at the space or tab, if that is what broke it, at the `${` otherwise
+    * — and skipped up to the next `}` on its line, or with none up to where the scalar around it ends; so is a
+    * formatter that cannot be read, from where it stops fitting.
     */
   private def reference(quoted: Boolean): Option[Part] = {
     val start = offset
@@ -683,7 +681,7 @@ private[psi] final class Lexer(
       case Some(path) if at(offset, '}') =>
         offset += 1
         Some(Reference(path, optional, source.location(start)))
-      // marked with a `*` (§9): an injection unquoted and alone, an error in quotes, which hold a string
+      // marked with a `*`: an injection unquoted and alone, an error in quotes, which hold a string
       case Some(path) if at(offset, '*') && at(offset + 1, '}') =>
         offset += 2
         if (quoted) report(MarkedInString.apply, start) else marked = true
@@ -730,7 +728,7 @@ private[psi] final class Lexer(
     else while (has(offset) && !endsAfterReference(offset, quoted)) offset += 1
   }
 
-  /** `reference` with the formatter after its `;`, read by its own rules up to the `}` (§9): in quotes, a `"` or a `}`
+  /** `reference` with the formatter after its `;`, read by its own rules up to the `}`: in quotes, a `"` or a `}`
     * inside an argument closes nothing. One that cannot be read, or that its arguments do not bind, is reported, and
     * the substitution is skipped.
     */
@@ -761,10 +759,10 @@ private[psi] final class Lexer(
     at(path, '`') || has(path) && isNameStart(text.codePointAt(path))
   }
 
-  /** `$path` or `$?path` from its `$` (`format.md` §9), a path with no braces around it: it takes all it can, a `.`
-    * followed by a key and an `[index]`, and stops before anything else, which is text again — `$name.txt` is the path
-    * `name.txt`, and `${name}.txt` the path `name` and the text `.txt`. A `*` right after the path marks it, and is
-    * read with it. `None` once an unterminated key in backticks has ended the source.
+  /** `$path` or `$?path` from its `$`, a path with no braces around it: it takes all it can, a `.` followed by a key
+    * and an `[index]`, and stops before anything else, which is text again — `$name.txt` is the path `name.txt`, and
+    * `${name}.txt` the path `name` and the text `.txt`. A `*` right after the path marks it, and is read with it.
+    * `None` once an unterminated key in backticks has ended the source.
     */
   private def bare(): Option[Part] = {
     val start = offset
@@ -781,7 +779,7 @@ private[psi] final class Lexer(
     }
   }
 
-  /** Whether the last substitution read was marked with a `*`, `$a*` or `${a*}`, unquoted (§9). */
+  /** Whether the last substitution read was marked with a `*`, `$a*` or `${a*}`, unquoted. */
   private var marked = false
 
   /** The segments of a path with no braces after `current`, as many as there are. */
@@ -895,20 +893,20 @@ private[psi] object Lexer {
       val ended: Boolean,
       val reported: Int)
 
-  /** An integer argument: an optional `-` and decimal digits with no leading zeros (`format.md` §6). */
+  /** An integer argument: an optional `-` and decimal digits with no leading zeros. */
   private val IntegerPattern = java.util.regex.Pattern.compile("^-?(0|[1-9][0-9]*)$")
 
-  /** Whitespace inside a line: space and tab, nothing else (`format.md` §3). */
+  /** Whitespace inside a line: space and tab, nothing else. */
   def isSpace(c: Char): Boolean = c == ' ' || c == '\t'
 
-  /** A control character other than tab, LF and CR (`format.md` §3), C1 and DEL included; NEL is one, with an error of
-    * its own. LF and CR are line breaks, a lone CR being forbidden too.
+  /** A control character other than tab, LF and CR, C1 and DEL included; NEL is one, with an error of its own. LF and
+    * CR are line breaks, a lone CR being forbidden too.
     */
   def isControl(c: Char): Boolean = Character.getType(c) == Character.CONTROL && c != '\t' && c != '\n' && c != '\r'
 
-  /** A character that makes source read otherwise than it parses (`format.md` §3): the bidirectional embeddings,
-    * overrides and isolates, U+202A–U+202E and U+2066–U+2069; the zero-width space U+200B; the word joiner and the
-    * invisible operators, U+2060–U+2064; and U+FEFF past the start of a source.
+  /** A character that makes source read otherwise than it parses: the bidirectional embeddings, overrides and isolates,
+    * U+202A–U+202E and U+2066–U+2069; the zero-width space U+200B; the word joiner and the invisible operators,
+    * U+2060–U+2064; and U+FEFF past the start of a source.
     */
   def isInvisible(c: Char): Boolean = {
     val code = c.toInt
@@ -924,8 +922,8 @@ private[psi] object Lexer {
       kind == Character.DECIMAL_DIGIT_NUMBER || kind == Character.LETTER_NUMBER || kind == Character.OTHER_NUMBER
     }
 
-  /** The escape whose backslash stands at `i` of `s` (`format.md` §3): what it gives, `None` for one outside the set,
-    * and where it ends. `next` says whether a character the escape can take follows the backslash.
+  /** The escape whose backslash stands at `i` of `s`: what it gives, `None` for one outside the set, and where it ends.
+    * `next` says whether a character the escape can take follows the backslash.
     */
   def readEscape(s: CharSequence, i: Int, next: Boolean): (Option[String], Int) =
     if (!next) (None, i + 1)
@@ -944,8 +942,8 @@ private[psi] object Lexer {
 
   private def isHexDigit(c: Char): Boolean = Character.digit(c, 16) >= 0
 
-  /** What a line of a triple-quoted string holds before its layout is applied (`format.md` §5): a character as written,
-    * what an escape produced — never whitespace to the layout, which comes first — or a substitution.
+  /** What a line of a triple-quoted string holds before its layout is applied: a character as written, what an escape
+    * produced — never whitespace to the layout, which comes first — or a substitution.
     */
   sealed trait Piece
   final case class Written(c: Char) extends Piece
@@ -968,7 +966,7 @@ private[psi] object Lexer {
     def trimmed: Line = copy(pieces = pieces.reverseIterator.dropWhile(isBlank).toVector.reverse)
   }
 
-  /** A step of a block's layout, picked by a marker (`format.md` §5). */
+  /** A step of a block's layout, picked by a marker. */
   sealed trait Stage
 
   /** A stage that sets the indent; one per block. */

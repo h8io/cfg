@@ -1,13 +1,13 @@
 package h8io.cfg.impl.psi
 
-/** Merges the syntax trees of the sources into one tree, in order (`format.md` §7): deep merge, the last one wins.
+/** Merges the syntax trees of the sources into one tree, in order: deep merge, the last one wins.
   *
   * Duplicate keys in a block, dotted keys and the sources passed to the loader are one rule: every field is merged in
   * turn into the map built so far, a block into the map at its key, so a `:=` anywhere, in a later source included,
   * replaces whatever its key held before. `a.b.c: v` is `a { b { c: v } }`, each block standing at its key.
   *
-  * Directives are expanded before merging (§8): one left in a syntax tree is a bug of the loader. Merging finds no
-  * error of its own: where it cannot tell maps from anything else yet, it keeps what it merges for resolution.
+  * Directives are expanded before merging: one left in a syntax tree is a bug of the loader. Merging finds no error of
+  * its own: where it cannot tell maps from anything else yet, it keeps what it merges for resolution.
   */
 private[psi] final class Merge {
 
@@ -22,7 +22,7 @@ private[psi] final class Merge {
   }
 
   /** Merges the statements of a block into `map`, in order: from an injection on, they are kept as its steps, merged
-    * once the injection is resolved (§9).
+    * once the injection is resolved.
     */
   private[psi] def block(map: Tree.Map, statements: Vector[AST.Statement]): Tree.Map =
     statements.foldLeft(map) {
@@ -33,7 +33,7 @@ private[psi] final class Merge {
       case (_, AST.DirectiveStatement(call, _)) => unexpanded(call)
     }
 
-  /** `keys: value`, the operator applying to the last key, every key before it a block at its key (§4). */
+  /** `keys: value`, the operator applying to the last key, every key before it a block at its key. */
   private def field(map: Tree.Map, keys: ::[AST.Key], operator: AST.Operator, value: AST.Value): Tree.Map =
     keys.tail match {
       case Nil => put(map, keys.head.name, operator, value)
@@ -51,7 +51,7 @@ private[psi] final class Merge {
   /** `value` merged with a `:` over `earlier`: maps merge, the later tag if written and the earlier otherwise, and
     * anything else replaces what was there, with only its own tag. Where either may turn out a map or not, a
     * substitution or an injection after a key, and the other may be a map, both are kept as layers, merged so once
-    * resolved (§7).
+    * resolved.
     */
   private def merged(earlier: Tree.Value, value: AST.Value): Tree.Value =
     (earlier, value) match {
@@ -62,7 +62,7 @@ private[psi] final class Merge {
       case (earlier: Tree.Layer, contents: AST.Contents) => Tree.Layers(earlier, this.contents(contents))
       case (earlier: Tree.Layer, AST.Formatted(part, tag, location)) =>
         Tree.Layers(earlier, Tree.Formatted(part, tag, location))
-      // what finds nothing puts nothing, and what stands before it, no map, stands then (§7)
+      // what finds nothing puts nothing, and what stands before it, no map, stands then
       case (earlier, AST.Substitution(path, true, tag, location)) =>
         Tree.Layers(Tree.Kept(earlier), Tree.Substitution(path, optional = true, tag, location))
       case (earlier, contents @ AST.Contents(AST.Injected.Referring(reference), _, _)) if reference.optional =>
@@ -103,7 +103,7 @@ private[psi] final class Merge {
   private[psi] def sequence(elements: Vector[AST.Element], tag: Option[String], location: PsiLocation): Tree.Sequence =
     Tree.Sequence(elements.map(element), tag, location)
 
-  /** An element of a sequence, where a substitution may be an injection (§9). */
+  /** An element of a sequence, where a substitution may be an injection. */
   private def element(element: AST.Element): Tree.Value =
     (element.value, element.put) match {
       case (AST.Substitution(path, optional, _, location), AST.Put.Elements) => Tree.Injection(path, optional, location)

@@ -14,12 +14,12 @@ import scala.util.control.NonFatal
   * its text into a location.
   *
   * @param name
-  *   the source as it was named (`format.md` §10)
+  *   the source as it was named
   * @param url
   *   where it was read from, none for a source given as text
   * @param key
-  *   what tells it from another source when directives parse sources (§6): a URL's normalized URI, a file's real path,
-  *   or the name of a source given as text
+  *   what tells it from another source when directives parse sources: a URL's normalized URI, a file's real path, or
+  *   the name of a source given as text
   */
 private[psi] final class Source private (val name: String, val text: String, val url: Option[URL], val key: String) {
 
@@ -63,10 +63,10 @@ private[psi] object Source {
   def apply(name: String, text: String): Source =
     new Source(name, if (text.nonEmpty && text.charAt(0) == ByteOrderMark) text.substring(1) else text, None, name)
 
-  /** How long reading a URL waits for a connection, in milliseconds (`format.md` §6). */
+  /** How long reading a URL waits for a connection, in milliseconds. */
   def ConnectTimeout: Int = 10000
 
-  /** How long reading a URL waits for its next bytes, in milliseconds (`format.md` §6). */
+  /** How long reading a URL waits for its next bytes, in milliseconds. */
   def ReadTimeout: Int = 30000
 
   /** Reads `url` as UTF-8, under the load's `budget`: an unreadable source and one that is not UTF-8 are errors, and so

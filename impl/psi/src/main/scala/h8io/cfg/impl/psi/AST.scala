@@ -2,7 +2,7 @@ package h8io.cfg.impl.psi
 
 import h8io.cfg.Id
 
-/** The syntax tree of one source (`format.md` §4): fields in source order with their operators, nothing merged yet. */
+/** The syntax tree of one source: fields in source order with their operators, nothing merged yet. */
 private[psi] object AST {
 
   /** A whole source: the fields of its top-level block. */
@@ -14,7 +14,7 @@ private[psi] object AST {
   /** `a.b.c: value`, `a.b.c := value` or `a.b.c { … }`, the last a `:` with a block for its value.
     *
     * @param keys
-    *   the keys of a dotted key, outermost first; the operator applies to the last one (`format.md` §7)
+    *   the keys of a dotted key, outermost first; the operator applies to the last one
     * @param doc
     *   the doc comment before the field, as written between its delimiters
     */
@@ -22,8 +22,7 @@ private[psi] object AST {
 
   final case class Key(name: String, location: SourceLocation)
 
-  /** A directive in statement position, `#name(…)*`, which is to produce a map merged into the block where it stands
-    * (§6).
+  /** A directive in statement position, `#name(…)*`, which is to produce a map merged into the block where it stands.
     *
     * @param doc
     *   the doc comment before it, as written between its delimiters
@@ -31,7 +30,7 @@ private[psi] object AST {
   final case class DirectiveStatement(call: Call, doc: Option[String]) extends Statement
 
   /** An injection, `$path*` or `${path*}` alone among the fields of a block: the fields of the map at `path`, merged
-    * there as if written there (§7, §9).
+    * there as if written there.
     */
   final case class InjectionStatement(path: Id.Branch, optional: Boolean, location: SourceLocation, doc: Option[String])
       extends Statement
@@ -39,7 +38,7 @@ private[psi] object AST {
   /** `#name(arguments)`, or `#name` alone with none, at `location`, the `#`. */
   final case class Call(name: String, arguments: Vector[Argument], location: SourceLocation)
 
-  /** An argument, `name: value` or positional with no name; every value is a string, as the handler gets it (§6).
+  /** An argument, `name: value` or positional with no name; every value is a string, as the handler gets it.
     *
     * @param location
     *   where the argument starts, its name or its value
@@ -82,17 +81,17 @@ private[psi] object AST {
   final case class Sequence(elements: Vector[Element], tag: Option[String], location: PsiLocation) extends Value
 
   /** `\${path}` or `\${?path}` unquoted and alone: the node it refers to, grafted whole, as a field's value or as an
-    * element of a sequence (§9).
+    * element of a sequence.
     */
   final case class Substitution(path: Id.Branch, optional: Boolean, tag: Option[String], location: SourceLocation)
       extends Value
 
   /** An injection after a key, `a: $b*` or `a: #d(…)*`: a node of what it finds or gives, a map holding its fields or a
-    * sequence holding its elements, with the tag written before it and none of the found node's own (§9).
+    * sequence holding its elements, with the tag written before it and none of the found node's own.
     */
   final case class Contents(item: Injected, tag: Option[String], location: SourceLocation) extends Value
 
-  /** What an injection after a key injects (§9). */
+  /** What an injection after a key injects. */
   sealed trait Injected
 
   object Injected {
@@ -109,32 +108,32 @@ private[psi] object AST {
     final case class Referring(reference: Token.Reference) extends Injected
   }
 
-  /** A scalar with `\${…}` inside it, or quoted around one alone, such as `"\${a}"`: always a scalar (§9).
+  /** A scalar with `\${…}` inside it, or quoted around one alone, such as `"\${a}"`: always a scalar.
     *
     * @param parts
     *   text and substitutions in the order written, as the lexer read them
     */
   final case class Concatenation(parts: Vector[Token.Part], tag: Option[String], location: SourceLocation) extends Value
 
-  /** `\${path; name(…)}` unquoted and alone: the text the formatter gives for the node found, a scalar (§9); nothing
-    * when an optional one finds nothing.
+  /** `\${path; name(…)}` unquoted and alone: the text the formatter gives for the node found, a scalar; nothing when an
+    * optional one finds nothing.
     */
   final case class Formatted(part: Token.Formatted, tag: Option[String], location: SourceLocation) extends Value
 
   /** A block, a scalar or a concatenation, with the loader's markers to run over its value once its substitutions are
-    * resolved (§5).
+    * resolved.
     */
   final case class Marked(value: Value, markers: Vector[MarkerParser.MarkerCall]) extends Value {
     def tag: Option[String] = value.tag
     def location: PsiLocation = value.location
   }
 
-  /** A directive in value position, which is to produce a node; the tag replaces that node's (§6). */
+  /** A directive in value position, which is to produce a node; the tag replaces that node's. */
   final case class DirectiveValue(call: Call, tag: Option[String]) extends Value {
     def location: SourceLocation = call.location
   }
 
-  /** How an element that is a substitution or a call stands among the elements of a sequence (§6, §9). */
+  /** How an element that is a substitution or a call stands among the elements of a sequence. */
   sealed trait Put
 
   object Put {

@@ -35,8 +35,7 @@ final case class IncludeUnreadable(target: String, cause: IOException) extends I
   def message: String = target + " cannot be read: " + cause.toString
 }
 
-/** The built-in `#include` (`format.md` §6): a Psi source from a file, a resource or a URL, parsed and expanded where
-  * the call stands.
+/** The built-in `#include`: a Psi source from a file, a resource or a URL, parsed and expanded where the call stands.
   */
 private[psi] object Include extends Directive {
   def name: String = "include"
@@ -46,7 +45,7 @@ private[psi] object Include extends Directive {
   def apply(arguments: Node.IMap[Id.Root], context: DirectiveContext): Either[DirectiveError, Fragment] =
     find(arguments, Extensions, context.url)(context.parse).map(_.getOrElse(Fragment.None))
 
-  /** Psi's extensions, in the order a file or a resource with none is looked for with them (§6). */
+  /** Psi's extensions, in the order a file or a resource with none is looked for with them. */
   val Extensions: Seq[String] = Seq(".Ψ", ".ψ", ".psi")
 
   /** The target `arguments` name, opened by `open` (`DirectiveContext.find`): the first candidate it opens, a file or a

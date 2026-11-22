@@ -3,9 +3,9 @@ package h8io.cfg.impl.psi
 import java.io.IOException
 import java.time.Duration
 
-/** What reading the sources of one load may take, in all (`format.md` §6, §11): `bytes`, every read counted, a source
-  * read twice twice, and `time`, from the start of the load. The first read to go past either is the load's error;
-  * every read after it is dropped, its source taken as empty, and not reported.
+/** What reading the sources of one load may take, in all: `bytes`, every read counted, a source read twice twice, and
+  * `time`, from the start of the load. The first read to go past either is the load's error; every read after it is
+  * dropped, its source taken as empty, and not reported.
   */
 private[psi] final class ReadBudget(bytes: Int, time: Duration) {
   private val started = System.nanoTime
@@ -46,10 +46,10 @@ private[psi] final class ReadBudget(bytes: Int, time: Duration) {
 
 private[psi] object ReadBudget {
 
-  /** How many bytes the sources of a load may take, every read counted, unless the builder says otherwise (§11). */
+  /** How many bytes the sources of a load may take, every read counted, unless the builder says otherwise. */
   def DefaultBytes: Int = 10000000
 
-  /** How long reading the sources of a load may take unless the builder says otherwise (§11). */
+  /** How long reading the sources of a load may take unless the builder says otherwise. */
   val DefaultTime: Duration = Duration.ofSeconds(60)
 
   /** A read stopped by the budget, which holds its error. */

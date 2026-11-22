@@ -97,9 +97,9 @@ final class PsiLoader private[psi] (settings: Settings) {
 
 private[psi] object PsiLoader {
 
-  /** Every `reference` on the class path (§8), lowest first: Psi's extensions in the reverse of their order, so that
-    * `.Ψ` wins over `.ψ` and `.ψ` over `.psi`, and each in the order of the class path; an error for an extension the
-    * class loader could not look for.
+  /** Every `reference` on the class path, lowest first: Psi's extensions in the reverse of their order, so that `.Ψ`
+    * wins over `.ψ` and `.ψ` over `.psi`, and each in the order of the class path; an error for an extension the class
+    * loader could not look for.
     */
   def references: Seq[Either[PsiError, URL]] = {
     val loader = Include.classLoader
@@ -110,28 +110,27 @@ private[psi] object PsiLoader {
     }
   }
 
-  /** The first `application` on the class path, by Psi's extensions in their order (§8). */
+  /** The first `application` on the class path, by Psi's extensions in their order. */
   def application: Option[URL] = {
     val loader = Include.classLoader
     Include.Extensions.iterator.flatMap(extension => Option(loader.getResource("application" + extension))).nextOption()
   }
 
-  /** How deep a loaded tree, and the resolution of its substitutions, may go unless the builder says otherwise (§11).
+  /** How deep a loaded tree, and the resolution of its substitutions, may go unless the builder says otherwise.
     */
   def DefaultDepthLimit: Int = 256
 
-  /** The names of the built-in directives, which no handler may take (§6). */
+  /** The names of the built-in directives, which no handler may take. */
   val BuiltInDirectives: Seq[String] = Seq("include", "prop", "env")
 
-  /** The names of the built-in formatters, which no handler may take (§9). */
+  /** The names of the built-in formatters, which no handler may take. */
   val BuiltInFormatters: Seq[String] = Seq("join")
 
-  /** How many nodes resolving the substitutions may copy into the tree by grafts unless the builder says otherwise
-    * (§11).
+  /** How many nodes resolving the substitutions may copy into the tree by grafts unless the builder says otherwise.
     */
   def DefaultNodeLimit: Int = 1000000
 
-  /** How many characters the scalars built by concatenations may hold together unless the builder says otherwise (§11).
+  /** How many characters the scalars built by concatenations may hold together unless the builder says otherwise.
     */
   def DefaultCharacterLimit: Int = 10000000
 

@@ -5,24 +5,23 @@ import h8io.cfg.Id
 import scala.annotation.tailrec
 import scala.collection.mutable
 
-/** Resolves the substitutions of a merged tree (`format.md` §9), its values already overridden at launch, giving a tree
-  * with none left.
+/** Resolves the substitutions of a merged tree, its values already overridden at launch, giving a tree with none left.
   *
   * A path is looked up in the tree alone. A substitution on the way is resolved first, to look into what it grafts; the
   * node found is resolved whole before it is grafted. Each substitution of the tree is resolved once, by its position,
   * and the position is marked while it is being resolved: reaching it again is a cycle, reported by the reference that
   * reached it.
   *
-  * Errors are root causes only (§11): a node that depends on a failed one fails silently, and so does every container
-  * holding it — the result is then discarded anyway.
+  * Errors are root causes only: a node that depends on a failed one fails silently, and so does every container holding
+  * it — the result is then discarded anyway.
   *
   * Resolution goes at most `limit` steps deep, each a level descended or a substitution followed, and a value is
-  * grafted only where it fits under `limit` levels (§11). A substitution already resolved counts as deep as resolving
-  * it went, so that what goes past the limit does not depend on the order the tree is resolved in.
+  * grafted only where it fits under `limit` levels. A substitution already resolved counts as deep as resolving it
+  * went, so that what goes past the limit does not depend on the order the tree is resolved in.
   *
-  * What resolution adds to the tree is limited too (§11): at most `nodeLimit` nodes copied by grafts, and
-  * `characterLimit` characters in the scalars concatenations build, each counted before it is built. Past either, the
-  * load fails: the first to go past is reported, and nothing is built after it.
+  * What resolution adds to the tree is limited too: at most `nodeLimit` nodes copied by grafts, and `characterLimit`
+  * characters in the scalars concatenations build, each counted before it is built. Past either, the load fails: the
+  * first to go past is reported, and nothing is built after it.
   */
 private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, characterLimit: Int, built: Long) {
   import Resolve.*
@@ -48,8 +47,8 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
   /** The positions `once` has begun resolving since a group of abandoned fields began, when one is being resolved. */
   private var marked: Option[mutable.ListBuffer[Id]] = None
 
-  /** The nodes grafts have copied, those of the fragments handlers built among them, counted before resolution (§11);
-    * and the characters of the scalars concatenations have built.
+  /** The nodes grafts have copied, those of the fragments handlers built among them, counted before resolution; and the
+    * characters of the scalars concatenations have built.
     */
   private var nodes = built
   private var characters = 0L
@@ -75,7 +74,7 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
   private var cycleFromEnd = false
 
   def tree: Result[Tree.Map] = {
-    // every path goes through the root: an injection there would refer to the tree it is building (§9)
+    // every path goes through the root: an injection there would refer to the tree it is building
     errors ++= root.steps.collect { case Tree.Step.Injection(_, _, at) => InjectionAtRoot(at) }
     val resolved = if (root.steps.isEmpty) map(Id.Root, root).toOption else None
     Result(resolved.getOrElse(root), errors.toList)
@@ -116,7 +115,7 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
           this.markers(value, markers))
     }
 
-  /** A block's `value`, a scalar or a concatenation, with the loader's `markers` run over it (§5). */
+  /** A block's `value`, a scalar or a concatenation, with the loader's `markers` run over it. */
   private def markers(value: Tree.Value, markers: Vector[MarkerParser.MarkerCall]): Resolution = {
     val text = value match {
       case concatenation: Tree.Concatenation => this.concatenation(concatenation)
@@ -127,7 +126,7 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     text.map(scalar => Some(marked(scalar, markers)))
   }
 
-  /** `scalar` with the loader's markers run over its value in turn (§5); with none of them when one fails. */
+  /** `scalar` with the loader's markers run over its value in turn; with none of them when one fails. */
   private def marked(scalar: Tree.Scalar, markers: Vector[MarkerParser.MarkerCall]): Tree.Scalar =
     markers.foldLeft[Either[PsiError, String]](Right(scalar.value)) { (text, call) =>
       text.flatMap(text => call.marker(call.arguments, text).left.map(MarkerFailed(call.location, call.name, _)))
@@ -157,11 +156,11 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
   }
 
   /** `map`, which has steps, completed once: each injection resolved and merged in turn with what is written after it,
-    * as if what it found were written there (§9). Its children are resolved apart, after it, so that one may refer to
+    * as if what it found were written there. Its children are resolved apart, after it, so that one may refer to
     * another; only what an injection refers to through the map itself leads back to it.
     *
-    * An injection that fails fails the map. What follows it is resolved all the same, so that it reports its own errors
-    * (§11), but nothing more is merged into the map: what the failed one would have brought is unknown, and a conflict
+    * An injection that fails fails the map. What follows it is resolved all the same, so that it reports its own
+    * errors, but nothing more is merged into the map: what the failed one would have brought is unknown, and a conflict
     * with what follows it would be no root cause. The injections after it are resolved into nothing, and the fields
     * between two of them are merged into nothing and kept in `abandoned`, to be resolved once the map has failed, as
     * its children would be: what an injection between them would have brought is no more known.
@@ -266,8 +265,8 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
         // a sequence grafted is a sequence
         .map(_ => graft(found, at, path, None).asInstanceOf[Tree.Sequence].elements)
 
-  /** What an injection after a key at `id` gives (§9), as [[read]] reads it, once: a map or a sequence with its
-    * children not resolved yet.
+  /** What an injection after a key at `id` gives, as [[read]] reads it, once: a map or a sequence with its children not
+    * resolved yet.
     */
   private def gathered(id: Id, contents: Tree.Contents): Resolution =
     once(id, contents.item.toOption.map(r => new Following(r.location, r.path)))(
@@ -289,9 +288,9 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       case other => other
     }
 
-  /** An injection after a key read as a map or a sequence, still to be resolved (§9): a map holding the fields of the
-    * map found or given, or a sequence holding the elements of the sequence, with the tag written before it and none of
-    * the found node's own; none when an optional one finds nothing. Anything else is an error.
+  /** An injection after a key read as a map or a sequence, still to be resolved: a map holding the fields of the map
+    * found or given, or a sequence holding the elements of the sequence, with the tag written before it and none of the
+    * found node's own; none when an optional one finds nothing. Anything else is an error.
     */
   private def read(contents: Tree.Contents): Either[Failure, Option[Either[Tree.Map, Tree.Sequence]]] = {
     val Tree.Contents(item, tag, location) = contents
@@ -340,8 +339,8 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     })
   }
 
-  /** `current` with the fields of `content` merged into it as `:` merges them (§7): maps merge, anything else replaces,
-    * and where either may turn out a map or not, they are kept as layers, merged so once resolved.
+  /** `current` with the fields of `content` merged into it as `:` merges them: maps merge, anything else replaces, and
+    * where either may turn out a map or not, they are kept as layers, merged so once resolved.
     */
   private def over(current: Tree.Map, content: Tree.Map): Tree.Map =
     content.keys.foldLeft(current) { (map, key) =>
@@ -366,9 +365,9 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     else tagged.copy(steps = tagged.steps ++ (Tree.Step.Graft(written) +: content.steps))
   }
 
-  /** What layers merged with `:` at `id` end up as (§7). They are read from the last back to the first that is no map,
-    * which the maps after it replace, or which stands alone when none comes after it; the maps after it are then merged
-    * in turn as written, those a substitution finds with their tag. A layer that finds nothing puts nothing, and what
+  /** What layers merged with `:` at `id` end up as. They are read from the last back to the first that is no map, which
+    * the maps after it replace, or which stands alone when none comes after it; the maps after it are then merged in
+    * turn as written, those a substitution finds with their tag. A layer that finds nothing puts nothing, and what
     * stands before the first that is no map is not resolved, as what a value replaces is not.
     */
   /** What `layers` at `id` merge to, once: a map or a sequence with its children not resolved yet, or anything else
@@ -634,9 +633,9 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     }
   }
 
-  /** A formatted substitution alone (§9): the text its formatter gives, a scalar with the tag written before it, and
-    * nothing when an optional one finds nothing. What a loader's formatter gives is not counted, being a handler's, and
-    * what `join` builds is (§11).
+  /** A formatted substitution alone: the text its formatter gives, a scalar with the tag written before it, and nothing
+    * when an optional one finds nothing. What a loader's formatter gives is not counted, being a handler's, and what
+    * `join` builds is.
     */
   private def formatted(formatted: Tree.Formatted): Resolution = {
     val Tree.Formatted(Token.Formatted(Token.Reference(path, optional, at), formatting), tag, location) = formatted
@@ -670,7 +669,7 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     }
 
   /** The text `formatting` gives for `found`, the node at `path`, in pieces not joined yet, so that what they add is
-    * counted before it is built (§11); an error of the formatter is reported at its name.
+    * counted before it is built; an error of the formatter is reported at its name.
     */
   private def format(formatting: Token.Formatting, found: Tree.Value, path: Id.Branch)
       : Either[Failure, Vector[String]] =
@@ -799,8 +798,8 @@ private[psi] object Resolve {
     loop(id, Nil)
   }
 
-  /** `value` grafted at `at` by `\${path}`, with the tag written before it in place of its own (§9, §10): every node of
-    * it keeps its origin under a reference to the path it was taken by.
+  /** `value` grafted at `at` by `\${path}`, with the tag written before it in place of its own: every node of it keeps
+    * its origin under a reference to the path it was taken by.
     */
   private[psi] def graft(value: Tree.Value, at: SourceLocation, path: Id.Branch, tag: Option[String]): Tree.Value = {
     def moved(value: Tree.Value, id: Id.Branch, tag: Option[String]): Tree.Value = {

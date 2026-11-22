@@ -7,9 +7,13 @@ import h8io.cfg.{Id, Node}
 
 import scala.collection.{immutable, mutable}
 
-/** Reads calls written as a marker's are (`format.md` §5, §6), a name and its arguments in parentheses, from `line`:
-  * the text to read, and `offsets`, the offset in the source of each of its characters and of the end after them. An
-  * error is reported where it stands; [[failed]] says whether any was.
+/** Reads calls, a name and its arguments in parentheses, as the markers of a triple-quoted block and the formatter of a
+  * substitution are written, from `line`: the text to read, and `offsets`, the offset in the source of each of its
+  * characters and of the end after them. An error is reported where it stands; [[failed]] says whether any was.
+  *
+  * A directive's arguments follow the same rules but are read by [[Parser]] from tokens: they may span lines, newlines
+  * separating them as in a block, while markers and a formatter stand within one line, inside a string or a
+  * substitution, before there are tokens.
   */
 private[psi] abstract class CallReader(
     protected val line: CharSequence,
@@ -48,8 +52,8 @@ private[psi] abstract class CallReader(
       while (has(i) && isNamePart(Character.codePointAt(line, i))) i +=
         Character.charCount(Character.codePointAt(line, i))
 
-  /** `(name: literal, …)` from its `(`, separated as a directive's arguments are (§6): a trailing `,` is allowed, and a
-    * `,` with no argument before it is an empty one. Once they are read, `i` stands just after the `)`.
+  /** `(name: literal, …)` from its `(`, separated as a directive's arguments are: a trailing `,` is allowed, and a `,`
+    * with no argument before it is an empty one. Once they are read, `i` stands just after the `)`.
     */
   protected def arguments(): Option[Vector[Argument]] = {
     i += 1
@@ -83,7 +87,7 @@ private[psi] abstract class CallReader(
   }
 
   /** `name: literal`, or a literal alone, positional; `name = literal` is reported and read as the former. A name is
-    * bare or in backticks, as every name is (§6); a value in backticks is an error.
+    * bare or in backticks, as every name is; a value in backticks is an error.
     */
   protected def argument(): Option[Argument] = {
     val start = i
@@ -143,7 +147,7 @@ private[psi] abstract class CallReader(
     }
   }
 
-  /** A string in `"…"` or `'…'`, an integer or a name, as a directive's arguments are (§6). */
+  /** A string in `"…"` or `'…'`, an integer or a name, as a directive's arguments are. */
   protected def literal(): Option[Literal] =
     if (at(i, '"')) quoted()
     else if (at(i, '\'')) raw()
@@ -219,7 +223,7 @@ private[psi] abstract class CallReader(
     MapImpl(Id.Root, Tree.Map(entries.map(_._1), immutable.Map(entries*), None, locate(offsets(call.at))))
   }
 
-  /** A literal as a handler gets it: a string, an integer as written, a bare name (§6). */
+  /** A literal as a handler gets it: a string, an integer as written, a bare name. */
   protected def text(literal: Literal): String =
     literal match {
       case StringLiteral(value) => value

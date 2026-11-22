@@ -30,7 +30,7 @@ package object yaml {
   /** How many levels a configuration may nest, each mapping and sequence one, the root's among them: snakeyaml-engine
     * composes a document, and this module walks it, by recursion with no limit of its own, and the default stack of 1
     * MB overflows before 1 000 levels of block mappings, a `StackOverflowError` that may leave a class broken for the
-    * JVM (`format.md` §13 item 10). 256, as Psi's default.
+    * JVM. 256, as Psi's default.
     */
   private[yaml] def DepthLimit: Int = 256
 

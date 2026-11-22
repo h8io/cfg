@@ -4,8 +4,8 @@ import h8io.cfg.impl.psi.Lexer.*
 
 import h8io.cfg.{Id, Node}
 
-/** Reads the markers of a triple-quoted block (`format.md` §5) — what stands between the opening delimiter and the end
-  * of its line — into the layout stages they pick.
+/** Reads the markers of a triple-quoted block — what stands between the opening delimiter and the end of its line —
+  * into the layout stages they pick.
   *
   * `line` is that text with the forbidden characters already reported and left out, and `offsets` the offset in the
   * source of each of its characters, and of the end of the line after them. A syntax error is reported where it stands,
@@ -23,7 +23,7 @@ private[psi] final class MarkerParser(
   protected val invalidCall: SourceLocation => PsiError = InvalidMarker.apply
 
   /** The stages to apply, in order, Java's rule first when no marker sets the indent, and the loader's markers to run
-    * over the value after them (`format.md` §5); none of the latter when any marker is wrong.
+    * over the value after them; none of the latter when any marker is wrong.
     */
   def stages(): (Vector[Stage], Vector[MarkerCall]) = {
     val read = chain().map(check)
@@ -156,7 +156,7 @@ private object MarkerParser {
   /** An argument, named or positional. */
   final case class Argument(name: Option[String], at: Int, value: Literal, valueAt: Int)
 
-  /** A loader's marker called on a block by `name`, with its arguments, at `location`, run over the block's value (§5).
+  /** A loader's marker called on a block by `name`, with its arguments, at `location`, run over the block's value.
     */
   final case class MarkerCall(name: String, marker: Marker, arguments: Node.IMap[Id.Root], location: SourceLocation)
 
@@ -166,7 +166,7 @@ private object MarkerParser {
   sealed trait Literal
   final case class StringLiteral(value: String) extends Literal
 
-  /** An integer as written, `-0` included (§5, §6): a handler gets it as text, as it gets a directive's. */
+  /** An integer as written, `-0` included: a handler gets it as text, as it gets a directive's. */
   final case class IntegerLiteral(text: String) extends Literal
 
   /** A bare name, `true` and `false` included: a literal has no type until a handler reads it. */
