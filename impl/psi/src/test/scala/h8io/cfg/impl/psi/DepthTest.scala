@@ -106,6 +106,35 @@ class DepthTest extends AnyFlatSpec with Matchers {
       loaded.map(_.map(_.getClass)) shouldBe Right(List(classOf[DepthExceeded]))
     }
 
+  "A source as deep as the default limit" should "load on a stack of 1 MB, however its levels are written" in {
+    // a block opened by indentation is the costliest level to parse, and `- k:` opens two on each line; on a JVM just
+    // started a map of maps 256 levels deep took 1.25 MB, and takes about 900 KB since the parser was slimmed
+    val sources = List(
+      "maps" -> ((0 until 255).map(i => "  " * i + "k:\n").mkString + "  " * 255 + "v\n"),
+      "elements of maps" ->
+        ("a:\n" + (0 until 127).map(i => "    " * i + "  - k:\n").mkString + "    " * 127 + "  v\n"),
+      "braces" -> ("a: " + "{ a: " * 254 + "{ }" + " }" * 254)
+    )
+    val loader = Psi.builder.withSystemProperties(Map.empty).build.fold(e => fail(e.toString), identity)
+    val loaded = sources.map { case (name, text) =>
+      var result: Either[Throwable, Boolean] = Left(new IllegalStateException("never run"))
+      val thread = new Thread(
+        null,
+        { () =>
+          result =
+            try Right(loader.parse("s", text).isRight)
+            catch { case e: Throwable => Left(e) }
+        },
+        "1 MB",
+        1L << 20
+      )
+      thread.start()
+      thread.join()
+      name -> result.map(_.toString)
+    }
+    loaded shouldBe sources.map { case (name, _) => name -> Right("true") }
+  }
+
   "A fragment" should "fail its call where it does not fit" in {
     var cached = Option.empty[Fragment]
     val cache = directive("cache") { context =>
