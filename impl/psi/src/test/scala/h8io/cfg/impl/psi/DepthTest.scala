@@ -233,6 +233,22 @@ class DepthTest extends AnyFlatSpec with Matchers {
     result(6, sequence + chain + "a: $s[1]\n").isRight shouldBe true
   }
 
+  "An index from the end" should "count as deep as walking to the end, injections after its element included" in {
+    val sequence = "t: [a]\ns: [b, $t]\n"
+    def result(limit: Int, index: String) =
+      Psi.builder
+        .withDepthLimit(limit)
+        .withSystemProperties(Map.empty)
+        .build
+        .fold(e => fail(e.toString), identity)
+        .parse("s", sequence + "c1: $c2\nc2: $c3\nc3: $c4\nc4: $s[" + index + "]\n")
+        .left
+        .map(_.errors)
+    result(5, "0").isRight shouldBe true
+    result(5, "-2") shouldBe Left(List(ResolutionTooDeep(at(6, 5), "s[-2]", 5)))
+    result(6, "-2").isRight shouldBe true
+  }
+
   "A chain of substitutions" should "go 256 links at the default limit, and no further, in either order" in {
     def chain(n: Int): List[String] =
       "a0: x" :: (1 to n).map(i => "a" + i.toString + ": $" + "{a" + (i - 1).toString + "}").toList

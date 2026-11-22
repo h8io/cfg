@@ -94,6 +94,27 @@ host: example.com
 """)
 ```
 
+## An index from the end needs the whole sequence
+
+`$s[-1]` is the last element of `s` once every source is merged, and a key written twice replaces a sequence, never
+appends to it: of two sources each setting `hosts`, it is the last one's last host. A sequence gathered from several
+is written with injections, `[$a.hosts, $b.hosts]`. Counting from the end needs every element, so an element that
+counts from the end of its own sequence is an error ([substitutions](substitutions.md)):
+
+```scala mdoc:passthrough
+Example.psi("""
+hosts: [db1, db2]
+hosts: [db3]
+last: $hosts[-1]
+""")
+```
+
+```scala mdoc:passthrough
+Example.psi("""
+all: [x, $all[-1]]
+""")
+```
+
 ## One substitution alone is a value, two inject
 
 Below a key, a substitution alone is the key's value, whatever it is. Two or more alone are

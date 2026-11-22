@@ -103,6 +103,7 @@ class LexicalMessageTest extends AnyFlatSpec with Matchers {
     text(InvalidSubstitution(at)) shouldBe
       ((
         "the path of a substitution cannot be read",
-        Some("a path is keys joined by dots and indexes in brackets, a key that is not bare in backticks")))
+        Some(
+          "a path is keys joined by dots and indexes in brackets, -1 the last, a key that is not bare in backticks")))
   }
 }

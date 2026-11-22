@@ -35,6 +35,10 @@ class ResolutionMessageTest extends AnyFlatSpec with Matchers {
     text(UnresolvedSubstitution(at(1), "a.b")) shouldBe
       (("nothing at 'a.b' to substitute", Some("write '$" + "{?a.b}' if it may be missing")))
     text(SubstitutionCycle(at(1), "a")) shouldBe (("'$" + "{a}' leads back to itself", None))
+    text(CycleFromEnd(at(1), "a[-1]")) shouldBe
+      ((
+        "'$" + "{a[-1]}' counts from the end of a sequence that needs it to know where its end is",
+        Some("an index from 0 needs only the elements before it; or refer to the sequence from outside it")))
     text(NonScalarInConcatenation(at(2), "m", at(1))) shouldBe
       (("'$" + "{m}' in a string is not a scalar; it is defined at s:1:1", None))
   }

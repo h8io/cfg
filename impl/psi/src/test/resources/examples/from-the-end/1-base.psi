@@ -1,0 +1,1 @@
+hosts.base: [db1, db2]

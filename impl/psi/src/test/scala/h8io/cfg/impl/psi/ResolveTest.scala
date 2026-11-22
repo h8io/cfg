@@ -112,6 +112,32 @@ class ResolveTest extends AnyFlatSpec with Matchers {
       Seq("a", "b", "c", "INone(Key(k3,Root))")
   }
 
+  it should "count from the end with an index after a '-', -1 the last element, walking past every injection" in {
+    def values(text: String, keys: String*): Seq[String] = {
+      val root = loaded(text)
+      keys.map(key =>
+        root(key) match {
+          case scalar: Node.IScalar[?] => scalar.value
+          case other => other.toString
+        })
+    }
+    val lookups = "\nm2: $s[-2]\nm5: $?s[-5]\nm1: $s[-1]\nk1: $s[1]\nm4: $s[-4]\nm3: $s[-3]"
+    values("t: [a, b]\ns: [x, $t, ${?n}, y]" + lookups, "m1", "m2", "m3", "m4", "m5", "k1") shouldBe
+      Seq("y", "b", "a", "x", "INone(Key(m5,Root))", "a")
+    values("s: [x]\ns: [y, z]\nl: $s[-1]\ne: []\nf: $?e[-1]", "l", "f") shouldBe Seq("z", "INone(Key(f,Root))")
+  }
+
+  it should "take the last of a list gathered from several, located where it was written" in {
+    loaded("a.hosts: [h1, h2]\nb.hosts: [h3]\nall: [$a.hosts, $b.hosts]\nlast: $all[-1]")("last") shouldBe
+      Node.IScalar(keyed("last"), None, "h3", ref(4, 7, "all[-1]", ref(3, 17, "b.hosts[0]", at(2, 11))))
+  }
+
+  it should "find nothing before the first element, as past the last" in {
+    errors("s: [1, 2]\nt: $s[-3]") shouldBe List(UnresolvedSubstitution(at(2, 4), "s[-3]"))
+    // an element after it failing, the end is not known, and only that element's error is reported
+    errors("s: [1, $nope]\nt: $s[-2]") shouldBe List(UnresolvedSubstitution(at(1, 8), "nope"))
+  }
+
   it should "read as empty in a concatenation" in {
     loaded("e: \"${?x}\"")("e") shouldBe Node.IScalar(keyed("e"), None, "", at(1, 4))
   }
@@ -260,6 +286,16 @@ class ResolveTest extends AnyFlatSpec with Matchers {
     errors("a: ${a.x}") shouldBe List(SubstitutionCycle(at(1, 4), "a.x"))
     errors("b { x: ${b} }") shouldBe List(SubstitutionCycle(at(1, 8), "b"))
     errors("s: [${?s[1]}, 1]") shouldBe List(SubstitutionCycle(at(1, 5), "s[1]"))
+  }
+
+  it should "be one from the end when the sequence needs the reference to know where its end is" in {
+    errors("a: [x, $a[-1]]") shouldBe List(CycleFromEnd(at(1, 8), "a[-1]"))
+    errors("a: [x, $a[-2], y]") shouldBe List(CycleFromEnd(at(1, 8), "a[-2]"))
+    errors("a: [x, $b, y]\nb: $a[-1]") shouldBe List(CycleFromEnd(at(2, 4), "a[-1]"))
+    // the last element contains the reference: a cycle, but not one of counting
+    errors("a: [x, { k: $a[-1] }]") shouldBe List(SubstitutionCycle(at(1, 13), "a[-1]"))
+    // an index from 0 needs only the elements before it
+    loaded("a: [x, $a[0]]").toString shouldBe "a:\n  - x\n  - x\n"
   }
 
   it should "be reported over a failure beside it" in {

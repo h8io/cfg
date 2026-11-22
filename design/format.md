@@ -911,9 +911,19 @@ file — Psi reads no `config.file`, nothing set at launch reaching a load on it
 - **A path is written as `Id.path` renders one** (§3), right after `${` or `${?` and right up to
   `}`, with no whitespace: keys joined by dots, quoted in backticks when
   not bare, and indices into sequences in brackets — `${x.y[7].z}`, `${a[0][1]}`,
-  ``${server.`odd key`[0]}``. An index is a decimal with no sign and no leading zeros, as `Id.path`
-  prints it, so `[07]` and `[-1]` are errors. An index past the end of a sequence resolves to
+  ``${server.`odd key`[0]}``. An index is a decimal with no leading zeros, as `Id.path`
+  prints it, so `[07]` is an error. An index past the end of a sequence resolves to
   nothing, as a missing key does: an error for `${…}`, an omitted field for `${?…}`.
+- **An index after a `-` counts from the end** (session 41): `${hosts[-1]}` is the last element,
+  `[-2]` the one before it. The one thing a path takes that `Id.path` never renders: the path is
+  kept as written, and errors name it so, `hosts[-1]`, never the position it resolved to. `[-0]`
+  and `[-01]` are errors, and `[-n]` before the first element is nothing, as past the last. Counting
+  from the end needs every element: an injection or an optional substitution anywhere in the
+  sequence is resolved, and the lookup counts as deep as that walk (§11). So an element that needs
+  the reference to know where the end is — the reference itself, `a: [x, $a[-1]]`, or one it is
+  found through, `a: [x, $b]` with `b: $a[-1]` — is a cycle, reported as one of counting from the
+  end. An index from 0 needs only the elements before it, and `a: [x, $a[0]]` stays `[x, x]`. No
+  slices: a part of a sequence is a new value, which is value expressions (§13 item 1).
 - **Outside quotes the braces may be left out**, `$path` and `$?path` meaning `${path}` and
   `${?path}` (session 25): `a: $b`, `url: jdbc:$host/db`. With no `}` to end it, the path takes all
   it can — a key, then `.key` and `[index]` as long as they follow — and stops before anything
@@ -2853,3 +2863,16 @@ Fixed on a fourth review, the code of sessions 32 and 36 and the parser's, put t
   and fails where that would go past the limit, as the walk would, so the limit still does not
   depend on order (§11).
 
+### Session 41 — 2026-11-22
+
+- **Indices from the end** (§9), `${hosts[-1]}`, as Python's: the user's request, for the last
+  element of a sequence gathered from several sources. Put to the user and agreed with point by
+  point: one element only, no slices, which build a new value (§13 item 1); the path kept and
+  reported as written, the one exception to a path being what `Id.path` renders, since it is what
+  the source holds; `[-0]` an error, as `[07]` is; an index before the first element nothing, as
+  one past the last; a cycle of its own for an element that the end depends on, `a: [x, $a[-1]]`,
+  which an index from 0 never makes. Meta-fields (§13 item 6) left as they are.
+- Breaks: unbraced, `$a[-1]` was the substitution `a` and the text `[-1]`; it is now an index.
+- Mine, put to the user: the reference keeps `Id.Index(-1, …)` in its path, `cfg`'s `Id` taking
+  any `Int`, and only the lookup turns it into a position; nothing outside a reference ever holds
+  one.
