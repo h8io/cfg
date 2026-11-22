@@ -588,6 +588,8 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     var kind: BlockKind = Unknown
     var counted = false
     var read = 0
+    // whether a value read so far is a substitution or a call, which a second makes a fields' place
+    var injecting = false
     // a map or a sequence is a level, which a block turns out to be once
     def opens(token: Token): Unit = {
       enter(token)
@@ -661,7 +663,10 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
                 case _ =>
                   kind = Values
                   values += ((value, doc.zip(doced), first))
-                  ()
+                  if (injects(value)) injecting = true
+                  // two or more, a substitution or a call among them: lines with no `- `, which are fields' places, the
+                  // block a map, and a level from here, counted as one a field opens is (§9)
+                  if (read > 1 && injecting) becomes(first, Fields)(field)
               }
           }
         }
@@ -674,10 +679,6 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
       case _ =>
         val all = values.result()
         all match {
-          // two or more, a substitution or a call among them: lines with no `- `, which are fields' places (§9)
-          case _ +: _ +: _ if all.exists { case (value, _, _) => injects(value) } =>
-            all.foreach { case (value, doc, start) => field(value, doc.map(_._1), start) }
-            AST.Block(fields.result(), tag, at)
           case (value, doc, start) +: rest =>
             // the tag after the key and one before the value are two on one value (§4, §5)
             if (tag.isDefined && value.tag.isDefined) record(SecondTag(start.location))

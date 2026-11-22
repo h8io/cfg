@@ -560,7 +560,11 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     else {
       val position = Id.Index(walk.scanned, id)
       walk.sequence.elements(walk.scanned) match {
-        case value @ (_: Tree.Injection | Tree.Substitution(_, true, _, _) | _: Tree.Formatted) =>
+        // what may put other than one element: an injection, and an optional substitution, formatted or not, which may
+        // put none; a required formatted one is one element, a string, and resolving it to count would be a cycle
+        // where it refers into its own sequence
+        case value @ (_: Tree.Injection | Tree.Substitution(_, true, _, _) |
+            Tree.Formatted(Token.Formatted(Token.Reference(_, true, _), _), _, _)) =>
           val outer = deepest
           deepest = steps
           val resolution = resolve(position, value)

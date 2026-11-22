@@ -126,6 +126,12 @@ class ResolveTest extends AnyFlatSpec with Matchers {
     values("s: [x]\ns: [y, z]\nl: $s[-1]\ne: []\nf: $?e[-1]", "l", "f") shouldBe Seq("z", "INone(Key(f,Root))")
   }
 
+  it should "count a formatted substitution as one element, resolved only when optional" in {
+    // required, it is one element, a string: resolving it to count was a cycle when it referred into its own sequence
+    loaded("a: [${a[1]; join(\",\")}, [z]]").toString shouldBe "a:\n  - z\n  - - z\n"
+    loaded("a: [${a[-1]; join(\",\")}, [z]]").toString shouldBe "a:\n  - z\n  - - z\n"
+  }
+
   it should "take the last of a list gathered from several, located where it was written" in {
     loaded("a.hosts: [h1, h2]\nb.hosts: [h3]\nall: [$a.hosts*, $b.hosts*]\nlast: $all[-1]")("last") shouldBe
       Node.IScalar(keyed("last"), None, "h3", ref(4, 7, "all[-1]", ref(3, 18, "b.hosts[0]", at(2, 11))))

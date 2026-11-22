@@ -68,6 +68,14 @@ class DepthTest extends AnyFlatSpec with Matchers {
     errors("a: 1 #x((((") shouldBe List(MissingSeparator(at(1, 6), "'#x'"), beyond(1, 11))
   }
 
+  "Two or more injections alone in a block opened by indentation" should "open a level, a map's, as a field does" in {
+    // the map they make was a level the parser never counted: at the limit, resolution stopped where no substitution
+    // was being followed, with nothing reported, and the load gave back its tree unresolved
+    val injections = "m { c: $v }\nn {}\nv: x\na:\n  b:\n    c:\n"
+    errors(injections + "      d:\n        $m*\n        $n*") shouldBe List(beyond(9, 9))
+    loads("m { c: 1 }\nn {}\na:\n  $m*\n  $n*") shouldBe true
+  }
+
   "A source a directive parses" should "be read from the depth of the call" in {
     val text = directive("t")(context => context.parse("t", "c { d { } }"))
     errors("a { b { #t* } }", text) shouldBe List(beyond(1, 3, "t"))
