@@ -49,7 +49,7 @@ private[psi] abstract class CallReader(
         Character.charCount(Character.codePointAt(line, i))
 
   /** `(name: literal, …)` from its `(`, separated as a directive's arguments are (§6): a trailing `,` is allowed, and a
-    * `,` with no argument before it is an empty one.
+    * `,` with no argument before it is an empty one. Once they are read, `i` stands just after the `)`.
     */
   protected def arguments(): Option[Vector[Argument]] = {
     i += 1
