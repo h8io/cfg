@@ -1,7 +1,7 @@
 # Psi: loading
 
 How a program loads [Psi](README.md), reads what it loaded or what went wrong, and builds a loader of its own. Adding
-directives and markers is [Extending](extending.md).
+directives, markers and formatters is [Extending](extending.md).
 
 ```scala
 libraryDependencies += "io.h8" %% "cfg-psi" % "@VERSION@"

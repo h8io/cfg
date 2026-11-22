@@ -51,7 +51,7 @@ elements. A substitution injects where nothing before it, no key and no `- `, gi
   the hosts and then the host. Brackets around it nest a sequence whole: `[[$hosts]]`.
 - Two or more alone in a block below a key, none tagged, take what the first that finds anything finds: the fields of
   maps, merged in turn, or the elements of sequences. One alone there is the key's value, the node itself.
-- An injection takes no tags: the fields and elements it puts keep their own. In `[…]` a tag goes to the one element
+- An injection takes no tag: the fields and elements it puts keep their own. In `[…]` a tag goes to the one element
   a node that is no sequence makes.
 - A directive does wherever it stands what a substitution standing there does, what it gives in place of the node:
   among fields, the fields of a map; alone on its line among `- ` elements, the elements of a sequence; in `[…]`, a

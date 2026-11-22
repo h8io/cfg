@@ -48,7 +48,9 @@ price: "$5"
 ## An optional substitution in a string can vanish
 
 `${?path}` with nothing at `path` is left out: a field disappears, an element is dropped, and inside a string it is
-empty, so that `"jdbc:${?db.host}/orders"` silently loses its host.
+empty, so that `"jdbc:${?db.host}/orders"` silently loses its host. `${?path; join(",")}` is no different: with
+nothing at `path` no formatter is called, and `[${?hosts; join(",")}]` is an empty sequence rather than one holding an
+empty string.
 
 ## A replacing value brings its own tag only
 
@@ -58,6 +60,19 @@ Merged maps keep a tag, but a value that replaces another does not inherit one (
 Example.psi("""
 timeout: @duration 5s
 timeout: 10s
+""")
+```
+
+## A value has one tag
+
+A value carries one tag at most, so tags never add up: `@a @b x` is an error, and maps merged keep the later's tag,
+not both. Two sources that tag one map differently leave it with the tag of the source loaded last
+([merging](merging.md)):
+
+```scala mdoc:passthrough
+Example.psi("""
+pool: @pooled { max: 10 }
+pool: @readonly { min: 1 }
 """)
 ```
 
@@ -139,7 +154,51 @@ block:
 Brackets say what the block is: `{ $m, $n }` takes maps only, and anything else is an error. `[$m, $n]` is a
 sequence whatever they find, but one that is not a sequence stands in it as one element rather than failing.
 
+## A formatter needs braces
+
+`${path; name(…)}` formats only in braces ([formatters](substitutions.md#formatters)). With none, `$hosts` is a
+substitution and `;join(-)` text after it, a concatenation, and the error says that a sequence is no part of a
+string, with no word of a formatter:
+
+```scala mdoc:passthrough
+Example.psi("""
+hosts: [a, b]
+bare: $hosts;join(-)
+""")
+```
+
+In quotes, `$hosts` with no braces is text, and the value is taken as written:
+
+```scala mdoc:passthrough
+Example.psi("""
+hosts: [a, b]
+quoted: "$hosts; join(-)"
+""")
+```
+
+## A formatter gives a string, and no tag
+
+A formatted substitution is one string, never the fields or elements of what it finds: alone among fields, or on its
+line among `- ` elements, it is an error rather than an injection. Nor does it keep the node's tag, as `${path}`
+does: it has only the one written before it:
+
+```scala mdoc:passthrough
+Example.psi("""
+hosts: @hosts [a, b]
+copy: ${hosts}
+joined: ${hosts; join(",")}
+tagged: @csv ${hosts; join(",")}
+""")
+```
+
 ## An empty block is written
 
 `key:` at the end of a line needs something deeper below it; an empty block is `{}` or `[]`
 ([indentation](syntax.md#indentation)).
+
+## `#hocon` reads one file
+
+With no extension, `#hocon(file: app)` reads the first of `app.conf`, `app.json` and `app.properties` it finds, and
+only that one ([importing](directives.md#importing-yaml-and-hocon)). Typesafe Config's own `include "app"` merges every
+one of them, `.conf` over `.json` over `.properties`. To have that, write one `#hocon` for each, with its extension, in
+that order from `.properties` to `.conf`, so that the later wins, and `optional: true` on those that may be missing.

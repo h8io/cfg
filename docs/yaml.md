@@ -18,7 +18,8 @@ val cfg = YAML(defaults, local) // a Node.IMap[Id.Root]
 - YAML 1.2 with the core schema: `~`, `null`, `Null` and `NULL` are nulls, and `<<` merge keys work.
 - Each source is one document, rooted at a mapping. Keys are scalars.
 - A key repeated in a mapping keeps its last value.
-- An alias shares its anchor's node; one that makes a node contain itself is an error.
+- An alias shares its anchor's node; one that makes a node contain itself is an error, a merge key included:
+  `a: &a {<<: *a}`.
 - No substitutions and no includes: a file is taken as written.
 
 ## Overlaying
@@ -33,7 +34,8 @@ mapping, and its locations named `name`. It is what Psi's `#yaml` imports
 
 ## Tags
 
-`tag` is the tag written on a node, expanded through the tag handles in effect, without its leading `!`:
+`tag` is the tag written on a node, one at most as YAML allows, expanded through the tag handles in effect, without
+its leading `!`:
 
 | Written | `tag` |
 |---|---|
