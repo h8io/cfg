@@ -202,3 +202,17 @@ With no extension, `#hocon(file: app)` reads the first of `app.conf`, `app.json`
 only that one ([importing](directives.md#importing-yaml-and-hocon)). Typesafe Config's own `include "app"` merges every
 one of them, `.conf` over `.json` over `.properties`. To have that, write one `#hocon` for each, with its extension, in
 that order from `.properties` to `.conf`, so that the later wins, and `optional: true` on those that may be missing.
+
+## Two references setting one key
+
+`standard()` and `withReferences` merge every `reference` on the class path, those of one name in the order of the
+class path ([loading](api.md#from-the-class-path)). Nothing fixes that order, so two libraries that set one key are
+settled by where their jars stand, silently, as in Typesafe Config. The program's own configuration, merged over
+them, settles it for good.
+
+## A reference resolves with the application
+
+A reference is resolved with everything else, not on its own as Typesafe Config requires: it sees what the
+application overrides, and it may refer to a key only the application sets. Loaded without such an application, it
+fails at the reference, in the library's jar.
+

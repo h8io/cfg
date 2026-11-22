@@ -881,6 +881,28 @@ The consequence worth stating out loud: because 2 runs before 4, an included fil
 values from the file that included it and vice versa — but an include target can never be computed
 from a substitution.
 
+**A program that names no source** (session 40) loads the class path's, as Typesafe Config's
+`ConfigFactory.load()` does. `standard()` reads every `reference` on the class path, a library's
+defaults, then over them the first `application` found, the program's own; `withReferences(urls*)`
+reads the references, then the URLs it is given over them, for a program whose configuration is a
+file — Psi reads no `config.file`, nothing set at launch reaching a load on its own (session 25).
+`apply()` with no URL stays an empty tree, so that an empty list of files never reads the class path.
+
+- `application` is looked for as `#include(resource: application)` looks: `.Ψ`, `.ψ` and `.psi`,
+  the first found read, one file; with none, the references alone, and no error.
+- `reference` is every copy of every extension on the class path: each library ships its own.
+  The lowest go first, `.psi`, then `.ψ`, then `.Ψ`, so that `.Ψ` wins as it does in a search, and
+  each in the order of the class path, which nothing fixes: two libraries setting one key are
+  settled by the order of their jars, silently, as in Typesafe Config. It cannot be an error,
+  libraries overriding each other's defaults on purpose.
+- They are all sources of one load, merged in order and resolved once (phases 3 and 4): a
+  reference refers to what the application sets, and the application to what a reference sets.
+  A reference need not resolve on its own, as Typesafe Config requires of `reference.conf`; one
+  that refers to a key only the application gives fails, without it, at the reference.
+- A reference is read by the program's loader, its directives, its disabled ones and its limits:
+  a library's own directive in its `reference` is unknown unless the program registers it.
+  Resources are looked for with the thread's context class loader, as `#include`'s.
+
 ## 9. Substitutions
 
 - `${path}` in place of a whole value grafts the referenced node, whatever it is — scalar, block or
@@ -2795,3 +2817,20 @@ Fixed on a third review of session 39's code, nothing of the files' meaning chan
   inside snakeyaml-engine, which merges keys while composing, before `cfg-yaml` checked for
   cycles. `cfg-yaml` refuses an alias to a mapping or a sequence not yet ended as the parser gives
   it, before the composer sees it; the check after composing had nothing left to find.
+
+### Session 40 — 2026-11-22
+
+- **Loading with no source named** (§8), the user's request, as Typesafe Config's
+  `ConfigFactory.load()`: `application` and every `reference` on the class path, with Psi's
+  extensions. Typesafe Config, read in its 1.4.2 sources: `application` merges every syntax it
+  finds, `.conf` over `.json` over `.properties`, and `config.resource`, `config.file` and
+  `config.url` replace it; `reference` is `reference.conf` alone, but every copy on the class path,
+  each required to resolve on its own and then merged unresolved below the application, the
+  system properties over all.
+- Mine, put to the user and agreed with as a whole, the names included: separate methods,
+  `standard()` and `withReferences(urls*)`, over `apply()` with no URL, which would make an empty
+  list of files read the class path; the first `application` found, as `#include` and `#hocon`
+  read, over merging every one; every extension of `reference`, `.Ψ` over `.ψ` over `.psi`, then
+  class path order; one resolution over all the sources, with no check that a reference resolves
+  alone; no system property choosing the file, as session 25 has it.
+
