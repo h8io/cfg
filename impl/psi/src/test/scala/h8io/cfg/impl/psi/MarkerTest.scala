@@ -147,4 +147,9 @@ class MarkerTest extends AnyFlatSpec with Matchers {
       Resolve(Tree.Map(Vector("a"), Map("a" -> onNull), None, at(1, 1))) should have message
       "Markers on a non-scalar at s:1:4"
   }
+
+  "A block with markers" should "run them below an optional substitution that finds nothing, the block standing" in {
+    value(loaded(loader(upper), "h: db\nu: \"\"\"upper\n  jdbc:${h}\n  \"\"\"\nu: $?missing")("u")) shouldBe "JDBC:DB"
+    value(loaded(loader(upper), "u: \"\"\"upper\n  abc\n  \"\"\"\nu: $?missing")("u")) shouldBe "ABC"
+  }
 }

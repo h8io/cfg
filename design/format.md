@@ -854,7 +854,7 @@ c: 5               // 5, whatever ${x} turns out to be, as before
 ```
 
 The same holds for `${?x}`, which finding nothing puts nothing, so that `a: ${?x}` and `a.port: 1`
-give `a { port: 1 }`, and for a block of injections alone (§9), calls in it included, and `a: $b*`:
+give `a { port: 1 }`, and `a: 1` then `a: ${?x}` gives `a: 1`, whatever stood before it (session 44), and for a block of injections alone (§9), calls in it included, and `a: $b*`:
 what each injection finds or gives is known only once it is resolved. It holds at every depth of a recursive merge, and
 `a.port: 1` is `a { port: 1 }` (§4). What a value that is no map replaces, layers before it
 included, is not resolved, as what a value written over it is not; a lookup through the key, `${a.port}`,
@@ -2974,3 +2974,26 @@ Fixed on a fourth review, the code of sessions 32 and 36 and the parser's, put t
   in, where C1's frames make it worst: a map of maps 256 levels deep took 880 KB and takes about
   620 KB. The test stays at 1 MB: built with coverage, as CI runs it, the frames are larger, and
   768 KB is not enough.
+
+### Session 44 — 2026-11-22
+
+Fixed on a fifth review, put to the user with the fixes:
+
+- **A block of two or more injections alone, opened by indentation, was a level the parser never
+  counted** (session 42): at the limit, resolution stopped where no substitution was being followed,
+  reporting nothing, and the load gave back its tree unresolved, `${…}` left in it, the root's other
+  fields included. The block opens its level as soon as a second line makes it a map, as a field
+  does, and past the limit the source ends there (§11).
+- **An index into a sequence resolved a required formatted substitution to count it** (§9), though it
+  is always one element, a string: `a: [${a[1]; join(",")}, [z]]`, or `[-1]`, was a cycle. Only an
+  optional one, which may put none, is resolved.
+- **`cfg-yaml` rendered two anchors named alike as written**: two overlaid files each naming an anchor
+  `x` were written with two `&x`, and an alias after the second read back as it, so a value changed
+  through `toString`. Each rendering names its anchors anew, a node keeping its own name while no
+  node before it has taken it.
+- **`a: 1` then `a: ${?x}` left `a` out when `x` was missing** (§7), where `b: 1`, `a: ${b}` and then
+  `a: ${?x}` gave 1: a value that is no map was replaced at the merge, before the optional one was
+  known to put nothing. The user's call, as I put it: what stands before an optional substitution,
+  formatted or not, or an optional injection after a key, stands when it finds nothing, kept below
+  it as `Tree.Kept`.
+

@@ -52,8 +52,8 @@ private[psi] object Tree {
 
   /** What `:` merged in turn at one key, where a substitution or an injection after a key stands among them, so that
     * whether the merge is of maps is known only once they are resolved (`format.md` §7): maps merge, anything else
-    * replaces what is before it. Each layer is a map, a substitution, formatted or not, an injection after a key, or
-    * layers merged in their turn into a map.
+    * replaces what is before it. Each layer is a map, a substitution, formatted or not, an injection after a key,
+    * layers merged in their turn into a map, or first a value that is no map kept below an optional one ([[Kept]]).
     */
   final case class Layers(layers: Vector[Layer]) extends Layer {
 
@@ -71,6 +71,14 @@ private[psi] object Tree {
         case Layers(layers) => Layers(layers :+ value)
         case _ => Layers(Vector(earlier, value))
       }
+  }
+
+  /** A value that is no map, below an optional substitution, formatted or not, or an injection after a key, merged over
+    * it: what finds nothing puts nothing, and the value then stands (§7). Only ever the first of [[Layers]].
+    */
+  final case class Kept(value: Value) extends Layer {
+    def tag: Option[String] = value.tag
+    def location: PsiLocation = value.location
   }
 
   /** A scalar with `\${…}` inside it. */

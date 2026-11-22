@@ -222,6 +222,26 @@ class ResolveTest extends AnyFlatSpec with Matchers {
       "k:\n  p: 1\n  s: 1\n  q: 2"
   }
 
+  it should "leave what stands before an optional one that finds nothing, whatever it is" in {
+    def shown(text: String): String =
+      Psi.parse("s", text).fold(e => fail(e.toString), _("a")) match {
+        case h8io.cfg.Node.IScalar(_, _, value, _) => value
+        case _: h8io.cfg.Node.INull[?] => "null"
+        case other => other.toString
+      }
+    // as it does below a substitution that finds what an optional one then does not
+    shown("b: 1\na: $b\na: $?missing") shouldBe "1"
+    shown("a: 1\na: $?missing") shouldBe "1"
+    shown("a: [1]\na: $?missing*") shouldBe "- 1"
+    shown("a: null\nh: [x]\na: ${?missing; join(\",\")}") shouldBe "null"
+    shown("x: 2\na: \"v${x}\"\na: $?missing\na: $?none") shouldBe "v2"
+    // a value found replaces it, a map merging over none of it
+    shown("a: 1\nb { c: 2 }\na: $?b") shouldBe "c: 2"
+    shown("a: [1]\nb: [2]\na: $?b*") shouldBe "- 2"
+    shown("a: 1\na: $?missing\na: 3") shouldBe "3"
+    shown("a: 1\nb: $?missing\nb: $?none\na: $?b") shouldBe "1"
+  }
+
   it should "merge a block over what it finds as written there, a `:=` in it replacing" in {
     def shown(text: String): String = Psi.parse("s", text).fold(e => fail(e.toString), _("a").toString)
     shown("b { n { old: 1 } }\na: $b\na { n := { fresh: 2 } }") shouldBe "n:\n  fresh: 2"

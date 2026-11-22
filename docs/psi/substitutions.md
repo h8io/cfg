@@ -15,7 +15,8 @@ source set it.
   [injection](#injections) instead, and alone among fields it has to be one.
 - Inside a value, `jdbc:${host}/db` or `"jdbc:${host}/db"`, it builds a string, and the node has to be a value.
 - `${?path}` is optional: with nothing at `path`, the field is left out, an element of a sequence is dropped, and a
-  part of a string is empty.
+  part of a string is empty. Written over an earlier value of its key, it leaves that value: `port: 80` then
+  `port: ${?env.port}` is 80 when nothing is at `env.port`.
 - An index past either end finds nothing, as a missing key does: `${s[5]}` and `${s[-5]}` on three elements are
   errors, and `${?s[-5]}` is left out. Counting from the end needs the whole sequence, so a reference inside a
   sequence, or one that an element of it needs, cannot count from that sequence's end:
