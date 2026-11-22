@@ -69,6 +69,11 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
   /** By position, the walk of the last sequence looked into there by index ([[indexed]]). */
   private val walks = mutable.Map.empty[Id, Walk]
 
+  /** Whether the cycle the innermost substitution being followed is about to report was found walking a sequence to its
+    * end for an index from the end, which [[reference]] reports as such and clears.
+    */
+  private var cycleFromEnd = false
+
   def tree: Result[Tree.Map] = {
     // every path goes through the root: an injection there would refer to the tree it is building (§9)
     errors ++= root.steps.collect { case Tree.Step.Injection(_, _, at) => InjectionAtRoot(at) }
@@ -479,6 +484,9 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     following = new Following(at, path) :: following
     try
       step(lookup(path)) match {
+        case Left(Cycle) if cycleFromEnd =>
+          cycleFromEnd = false
+          failed(CycleFromEnd(at, Message.path(path)))
         case Left(Cycle) => failed(SubstitutionCycle(at, Message.path(path)))
         case Right(None) if !optional => failed(UnresolvedSubstitution(at, Message.path(path)))
         case other => other
@@ -546,14 +554,26 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       walks(id) = walk
       walk
     }
-    val height = if (index < walk.found.size) walk.heights(index) else walk.height
+    // an index from the end walks to the end, and counts as deep as that
+    val height = if (index >= 0 && index < walk.found.size) walk.heights(index) else walk.height
     if (height >= 0 && steps + height > limit) {
       // resolved before, and so once more past the limit, the failure reported as resolving it again reports it
       val (first, _) = walk.resolved.find { case (_, height) => steps + height > limit }.get
       Left(resolve(Id.Index(first, id), sequence.elements(first)).swap.toOption.get)
     } else {
       deepest = math.max(deepest, steps + height)
-      extended(id, walk, index)
+      if (index >= 0) extended(id, walk, index)
+      else
+        extended(id, walk, Int.MaxValue) match {
+          case Left(Cycle) =>
+            // an element after the one it names leads back to it, or it is itself one of them
+            cycleFromEnd = true
+            Left(Cycle)
+          case Left(failure) => Left(failure)
+          case Right(_) =>
+            val position = walk.found.size + index
+            Right(if (position >= 0) Some(walk.found(position)) else None)
+        }
     }
   }
 

@@ -5,8 +5,9 @@ import h8io.cfg.pages.Example
 ```
 
 `${path}` is replaced by the node at `path`, written as keys joined by dots, in backticks when they are not bare, with
-indexes in brackets: `${servers[0].host}`. Substitutions are resolved once every source is merged, so a value refers
-to its final state, whichever source set it.
+indexes in brackets: `${servers[0].host}`. An index after a `-` counts from the end, `${servers[-1]}` being the last
+element. Substitutions are resolved once every source is merged, so a value refers to its final state, whichever
+source set it.
 
 - `${path}` alone, unquoted, after a key or a `- ` puts the node there whatever it is: a block, a sequence, a value.
   A tag written before it, `@t ${path}`, replaces the node's own, which it keeps otherwise; so does a tag before a
@@ -16,6 +17,10 @@ to its final state, whichever source set it.
 - Inside a value, `jdbc:${host}/db` or `"jdbc:${host}/db"`, it builds a string, and the node has to be a value.
 - `${?path}` is optional: with nothing at `path`, the field is left out, an element of a sequence is dropped, and a
   part of a string is empty.
+- An index past either end finds nothing, as a missing key does: `${s[5]}` and `${s[-5]}` on three elements are
+  errors, and `${?s[-5]}` is left out. Counting from the end needs the whole sequence, so a reference inside a
+  sequence, or one that an element of it needs, cannot count from that sequence's end:
+  `a: [x, $a[-1]]` is an error, while `a: [x, $a[0]]` is `[x, x]`.
 - Outside quotes the braces may be left out: `$path` is `${path}`, and `$?path` is `${?path}`. The path then takes
   all it can, so `$host/db` is `host` and the text `/db`, but `$host-name` and `$name.txt` are paths whole; braces end
   a path where it would go on, `${name}.txt`.

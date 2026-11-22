@@ -314,7 +314,7 @@ final case class InvalidSubstitution(location: SourceLocation) extends PsiError 
   def message: String = "the path of a substitution cannot be read"
 
   override def hint: Option[String] =
-    Some("a path is keys joined by dots and indexes in brackets, a key that is not bare in backticks")
+    Some("a path is keys joined by dots and indexes in brackets, -1 the last, a key that is not bare in backticks")
 }
 
 /** Where a key is expected, at the start of a field or after a dot, something that cannot be one, such as a `:` or a
@@ -610,6 +610,17 @@ final case class UnresolvedSubstitution(location: SourceLocation, path: String) 
   */
 final case class SubstitutionCycle(location: SourceLocation, path: String) extends PsiError {
   def message: String = "'${" + Message.cut(path) + "}' leads back to itself"
+}
+
+/** `\${path}` at `location`, with an index from the end, that leads back to itself: counting from the end needs every
+  * element of the sequence, and an element walked past to find the end is the reference itself or needs it.
+  */
+final case class CycleFromEnd(location: SourceLocation, path: String) extends PsiError {
+  def message: String =
+    "'${" + Message.cut(path) + "}' counts from the end of a sequence that needs it to know where its end is"
+
+  override def hint: Option[String] =
+    Some("an index from 0 needs only the elements before it; or refer to the sequence from outside it")
 }
 
 /** `\${path}` at `location`, a part of a concatenation, referring to a node that is not a scalar: a map, a sequence or

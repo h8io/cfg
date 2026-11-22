@@ -1,0 +1,13 @@
+hosts:
+  base:
+    - db1
+    - db2
+  site:
+    - db3
+all:
+  - db1
+  - db2
+  - db3
+primary: db1
+fallback: db3
+before-fallback: db2

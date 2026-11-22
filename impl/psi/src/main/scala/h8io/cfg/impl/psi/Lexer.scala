@@ -801,16 +801,20 @@ private[psi] final class Lexer(
       Some(Id.Key(text.substring(start, offset), parent))
     } else None
 
-  /** An index after its `[`: a decimal with no sign and no leading zeros, as `Id.path` prints one. */
+  /** An index after its `[`: a decimal with no leading zeros, as `Id.path` prints one, or after a `-` one that is not
+    * zero, counting from the end, `-1` the last element.
+    */
   private def index(parent: Id): Option[Id.Index] = {
+    val negative = at(offset, '-')
+    if (negative) offset += 1
     val start = offset
     while (has(offset) && text.charAt(offset) >= '0' && text.charAt(offset) <= '9') offset += 1
     val digits = text.substring(start, offset)
-    if (digits.isEmpty || digits.length > 1 && digits.charAt(0) == '0' || !at(offset, ']')) None
+    if (digits.isEmpty || digits.charAt(0) == '0' && (digits.length > 1 || negative) || !at(offset, ']')) None
     else if (digits.length > 10 || digits.toLong > Int.MaxValue) None
     else {
       offset += 1
-      Some(Id.Index(digits.toInt, parent))
+      Some(Id.Index(if (negative) -digits.toInt else digits.toInt, parent))
     }
   }
 

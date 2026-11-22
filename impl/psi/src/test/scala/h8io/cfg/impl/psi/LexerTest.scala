@@ -633,7 +633,7 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   }
 
   "A substitution with no braces" should "take a path as all it can, and stop before anything else" in {
-    lex("$a $?b x$a.b[0].c-d/e $a. $a[x] $a[07] $`odd key`.y $a.`b c`") shouldBe
+    lex("$a $?b x$a.b[0].c-d/e $a. $a[x] $a[07] $`odd key`.y $a.`b c` $a[-1].b $a[-0]") shouldBe
       Lexed(
         List(
           scalar(ref(at("a"), 1, 1)),
@@ -646,7 +646,11 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
           scalar(ref(at("a"), 1, 33), Text("[07")),
           RightBracket,
           scalar(ref(Id.Key("y", at("odd key")), 1, 40)),
-          scalar(ref(Id.Key("b c", at("a")), 1, 53))
+          scalar(ref(Id.Key("b c", at("a")), 1, 53)),
+          // an index from the end, as one from 0; `-0` is none
+          scalar(ref(Id.Key("b", Id.Index(-1, at("a"))), 1, 62)),
+          scalar(ref(at("a"), 1, 71), Text("[-0")),
+          RightBracket
         ),
         Nil
       )
@@ -668,13 +672,15 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   }
 
   "A substitution" should "take a path as Id.path renders one" in {
-    lex("${x.y[7].z} ${a[0][1]} ${server.`odd key`[0]} ${ключ[2147483647]}") shouldBe
+    lex("${x.y[7].z} ${a[0][1]} ${server.`odd key`[0]} ${ключ[2147483647]} ${a[-1]} ${b[-2147483647][-10]}") shouldBe
       Lexed(
         List(
           scalar(ref(Id.Key("z", Id.Index(7, Id.Key("y", at("x")))), 1, 1)),
           scalar(ref(Id.Index(1, Id.Index(0, at("a"))), 1, 13)),
           scalar(ref(Id.Index(0, Id.Key("odd key", at("server"))), 1, 24)),
-          scalar(ref(Id.Index(Int.MaxValue, at("ключ")), 1, 47))
+          scalar(ref(Id.Index(Int.MaxValue, at("ключ")), 1, 47)),
+          scalar(ref(Id.Index(-1, at("a")), 1, 67)),
+          scalar(ref(Id.Index(-10, Id.Index(-Int.MaxValue, at("b"))), 1, 76))
         ),
         Nil
       )
@@ -682,8 +688,23 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
 
   it should "be reported at its start when its path cannot be read, and skipped" in {
     val broken =
-      List("${}", "${[0]}", "${a.}", "${a[]}", "${a[07]}", "${a[-1]}", "${a[1x]}", "${a[0}", "${a[12345678901]}",
-        "${a[2147483648]}", "${-a}")
+      List(
+        "${}",
+        "${[0]}",
+        "${a.}",
+        "${a[]}",
+        "${a[07]}",
+        "${a[-0]}",
+        "${a[-01]}",
+        "${a[-]}",
+        "${a[--1]}",
+        "${a[-2147483648]}",
+        "${a[1x]}",
+        "${a[0}",
+        "${a[12345678901]}",
+        "${a[2147483648]}",
+        "${-a}"
+      )
     broken.foreach { written =>
       withClue(written) {
         lex(written + " x") shouldBe Lexed(List(scalar(), plain("x")), List(InvalidSubstitution(loc(1, 1))))
