@@ -116,7 +116,7 @@ private[psi] final class MarkerParser(
     (stages.result(), loaders.result())
   }
 
-  /** The markers every loader knows until handlers can be registered (plan step 10), each with its parameters. */
+  /** The built-in markers every loader knows, each with its parameters. */
   private val builtIns: Map[String, BuiltIn] =
     Map(
       "<" -> BuiltIn(Vector.empty, (_, _) => Some(StripIndent)),

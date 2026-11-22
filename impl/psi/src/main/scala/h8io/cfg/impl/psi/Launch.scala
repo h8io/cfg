@@ -4,7 +4,7 @@ import h8io.cfg.{Id, Node}
 
 import scala.collection.mutable
 
-/** Why `#prop` or `#env` failed (`format.md` §6), carried by the [[DirectiveFailed]] at the call. */
+/** Why `#prop` or `#env` failed, carried by the [[DirectiveFailed]] at the call. */
 sealed trait LaunchError extends DirectiveError
 
 /** No system property `name`, nor any whose name starts with `name.`, and neither `optional` nor `default` given. */

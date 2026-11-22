@@ -19,7 +19,7 @@ sealed trait Fragment {
 object Fragment {
 
   /** Nothing: no field in statement position, and in value position the field or the element left out, as an optional
-    * substitution that finds nothing leaves it out (§6). Not an empty map, which `a: #d` would give as `a: {}`.
+    * substitution that finds nothing leaves it out. Not an empty map, which `a: #d` would give as `a: {}`.
     */
   case object None extends Fragment
 
@@ -27,7 +27,7 @@ object Fragment {
   private[psi] sealed trait Some extends Fragment
 
   /** A fragment of `node`, which holds no substitution; its ids are dropped, and its locations are kept as origins
-    * behind the call (§10).
+    * behind the call.
     */
   def apply(node: Node.ISome[Id]): Fragment = Built(node)
 

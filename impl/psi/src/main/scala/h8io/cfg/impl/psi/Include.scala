@@ -7,7 +7,7 @@ import java.net.{JarURLConnection, MalformedURLException, URI, URISyntaxExceptio
 import java.nio.file.{Files, Paths}
 import scala.annotation.tailrec
 
-/** Why `#include` failed (`format.md` §6), carried by the [[DirectiveFailed]] at the call. */
+/** Why `#include` failed, carried by the [[DirectiveFailed]] at the call. */
 sealed trait IncludeError extends DirectiveError
 
 /** No target, or more than one: `targets` names the ones given, of `file`, `resource` and `url`. */

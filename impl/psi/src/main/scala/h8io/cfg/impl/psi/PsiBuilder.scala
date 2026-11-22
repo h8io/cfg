@@ -3,7 +3,7 @@ package h8io.cfg.impl.psi
 import java.time.Duration
 import scala.collection.mutable
 
-/** Builds a [[PsiLoader]] (`format.md` §5, §6): every method gives a new builder. */
+/** Builds a [[PsiLoader]]: every method gives a new builder. */
 final class PsiBuilder private (settings: Settings) {
 
   /** Adds `directive`, called by `#name`, to those registered, the built-in `#include`, `#prop` and `#env` among them.
@@ -20,38 +20,35 @@ final class PsiBuilder private (settings: Settings) {
   def withMarker(name: String, marker: Marker): PsiBuilder =
     new PsiBuilder(settings.copy(markers = settings.markers :+ (name -> marker)))
 
-  /** Adds `formatter`, called by `name` in `\${path; name(…)}`, to those registered, the built-in `join` among them
-    * (`format.md` §9).
+  /** Adds `formatter`, called by `name` in `\${path; name(…)}`, to those registered, the built-in `join` among them.
     */
   def withFormatter(name: String, formatter: Formatter): PsiBuilder =
     new PsiBuilder(settings.copy(formatters = settings.formatters :+ (name -> formatter)))
 
-  /** The system properties `#prop` reads, rather than `sys.props` read at every load (§6). */
+  /** The system properties `#prop` reads, rather than `sys.props` read at every load. */
   def withSystemProperties(properties: Map[String, String]): PsiBuilder =
     new PsiBuilder(settings.copy(properties = Some(properties)))
 
-  /** The environment variables `#env` reads, rather than `sys.env` (§6). */
+  /** The environment variables `#env` reads, rather than `sys.env`. */
   def withEnvironment(environment: Map[String, String]): PsiBuilder =
     new PsiBuilder(settings.copy(environment = Some(environment)))
 
   /** Limits the depth of the tree loaded, and of the resolution of its substitutions, to `limit`, at least 1, rather
-    * than to 256 (`format.md` §11). The default holds on a thread with the JVM's default stack; lower it for a thread
-    * with a smaller one.
+    * than to 256. The default holds on a thread with the JVM's default stack; lower it for a thread with a smaller one.
     */
   def withDepthLimit(limit: Int): PsiBuilder = new PsiBuilder(settings.copy(depthLimit = limit))
 
-  /** Limits what a load adds to the tree of its sources, rather than to 1 000 000 nodes and 10 000 000 characters
-    * (`format.md` §11): `nodes`, those the fragments directives build bring, every use counted, and those grafts copy,
-    * and `characters`, those of the scalars built by concatenations, each at least 0. The sources' own nodes and text
-    * are not counted. Some 350 000 nodes fill a heap of 64 MB.
+  /** Limits what a load adds to the tree of its sources, rather than to 1 000 000 nodes and 10 000 000 characters :
+    * `nodes`, those the fragments directives build bring, every use counted, and those grafts copy, and `characters`,
+    * those of the scalars built by concatenations, each at least 0. The sources' own nodes and text are not counted.
+    * Some 350 000 nodes fill a heap of 64 MB.
     */
   def withSizeLimit(nodes: Int, characters: Int): PsiBuilder =
     new PsiBuilder(settings.copy(nodeLimit = nodes, characterLimit = characters))
 
-  /** Limits reading the sources of a load, rather than to 10 000 000 bytes and 60 seconds (`format.md` §6, §11):
-    * `bytes` in all, every read counted, a source read twice twice, each at least 0; and `time` from the start of the
-    * load, not negative, which a wait already begun may outrun by the read timeout at most. A source given as text is
-    * not counted.
+  /** Limits reading the sources of a load, rather than to 10 000 000 bytes and 60 seconds: `bytes` in all, every read
+    * counted, a source read twice twice, each at least 0; and `time` from the start of the load, not negative, which a
+    * wait already begun may outrun by the read timeout at most. A source given as text is not counted.
     */
   def withReadLimit(bytes: Int, time: Duration): PsiBuilder =
     new PsiBuilder(settings.copy(readBytes = bytes, readTime = time))

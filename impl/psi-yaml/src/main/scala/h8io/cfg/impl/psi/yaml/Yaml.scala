@@ -10,7 +10,7 @@ final case class YamlInvalid(source: String, reason: String) extends DirectiveEr
   def message: String = source + " cannot be read as YAML: " + reason
 }
 
-/** Psi's import of a YAML file (`format.md` §6), registered under a name of the loader's choosing, `yaml` by custom:
+/** Psi's import of a YAML file, registered under a name of the loader's choosing, `yaml` by custom:
   * `Psi.builder.withDirective("yaml", Yaml)`.
   *
   * `#yaml(file: "db.yaml")` gives the file's whole tree where the call stands, its root any node, its tags the tags

@@ -4,8 +4,8 @@ import java.io.IOException
 import java.time.Duration
 
 /** An error found while loading a Psi configuration. Every error points at the place it is about, says what is wrong
-  * there and, where it can, what to do about it (`format.md` §11). The texts are for people and may change in any
-  * release; a program reads an error by its type and fields.
+  * there and, where it can, what to do about it. The texts are for people and may change in any release; a program
+  * reads an error by its type and fields.
   */
 sealed trait PsiError {
   def location: SourceLocation
@@ -31,8 +31,8 @@ final case class InvalidEncoding(location: SourceLocation) extends PsiError {
   override def hint: Option[String] = Some("save the source as UTF-8")
 }
 
-/** Reading the sources of a load taking more than `limit` bytes in all, every read counted (`format.md` §6, §11): at
-  * the source whose reading went past, after which every read of the load is dropped and not reported.
+/** Reading the sources of a load taking more than `limit` bytes in all, every read counted: at the source whose reading
+  * went past, after which every read of the load is dropped and not reported.
   */
 final case class ReadLimitExceeded(source: String, limit: Int) extends PsiError {
   def location: SourceLocation = SourceLocation(source, 1, 1)
@@ -44,8 +44,8 @@ final case class ReadLimitExceeded(source: String, limit: Int) extends PsiError 
     Some("include fewer or smaller sources, or build the loader with a higher withReadLimit")
 }
 
-/** Reading the sources of a load taking longer than `limit` (`format.md` §6, §11): at the source being read then, after
-  * which every read of the load is dropped and not reported.
+/** Reading the sources of a load taking longer than `limit`: at the source being read then, after which every read of
+  * the load is dropped and not reported.
   */
 final case class ReadTimeExceeded(source: String, limit: Duration) extends PsiError {
   def location: SourceLocation = SourceLocation(source, 1, 1)
@@ -144,9 +144,9 @@ final case class WhitespaceAfterDelimiter(location: SourceLocation) extends PsiE
 }
 
 /** The markers after the opening delimiter of a triple-quoted block cannot be read: names separated by whitespace, each
-  * with arguments in parentheses or none (`format.md` §5). The error points at the first character that does not fit,
-  * the rest of the line is not looked at, and the block is read as with no marker. A string meant to be one line and
-  * not closed on it gives this error, or an [[UnknownMarker]]: a block starts on the line after the delimiter.
+  * with arguments in parentheses or none. The error points at the first character that does not fit, the rest of the
+  * line is not looked at, and the block is read as with no marker. A string meant to be one line and not closed on it
+  * gives this error, or an [[UnknownMarker]]: a block starts on the line after the delimiter.
   */
 final case class InvalidMarker(location: SourceLocation) extends PsiError {
   def message: String = "the markers of a block cannot be read from here; the block is read with no marker"
@@ -257,7 +257,7 @@ final case class ColonWithoutSpace(location: SourceLocation) extends PsiError {
   override def hint: Option[String] = Some("put a space after it, as in 'key: value'")
 }
 
-/** A `$` outside quotes that opens no substitution: no path after it, bare or in backticks (`format.md` §3, §9). */
+/** A `$` outside quotes that opens no substitution: no path after it, bare or in backticks. */
 final case class StrayDollar(location: SourceLocation) extends PsiError {
   def message: String = "a '$' outside quotes opens a substitution, and no path follows it"
 
@@ -281,8 +281,8 @@ final case class ReservedTagRemoval(location: SourceLocation) extends PsiError {
   def message: String = "'@-' is reserved for removing an inherited tag"
 }
 
-/** A second tag on one value, which has at most one (`format.md` §5): `@a @b x`, `@a @a x`, or a tag after a key with
-  * another before the one value in the block below it.
+/** A second tag on one value, which has at most one: `@a @b x`, `@a @a x`, or a tag after a key with another before the
+  * one value in the block below it.
   */
 final case class SecondTag(location: SourceLocation) extends PsiError {
   def message: String = "a second tag on one value, which takes at most one"
@@ -429,8 +429,7 @@ final case class MissingValue(location: SourceLocation, found: String) extends P
   def message: String = "expected a value, found " + found
 }
 
-/** A value on a line after its tag inside `[…]`, where indentation means nothing: it goes on the tag's line
-  * (`format.md` §4).
+/** A value on a line after its tag inside `[…]`, where indentation means nothing: it goes on the tag's line.
   */
 final case class ValueOnNextLine(location: SourceLocation) extends PsiError {
   def message: String = "a value on a line after its tag"
@@ -438,8 +437,7 @@ final case class ValueOnNextLine(location: SourceLocation) extends PsiError {
   override def hint: Option[String] = Some("put it on the same line")
 }
 
-/** A `:`, `:=`, tag or `- ` at the end of a line, `location`, with no line indented deeper after it to hold its value
-  * (`format.md` §4).
+/** A `:`, `:=`, tag or `- ` at the end of a line, `location`, with no line indented deeper after it to hold its value.
   */
 final case class NothingIndented(location: SourceLocation) extends PsiError {
   def message: String = "nothing indented deeper below to be the value"
@@ -449,7 +447,7 @@ final case class NothingIndented(location: SourceLocation) extends PsiError {
 }
 
 /** A line indented deeper than the lines of its block, where nothing opens a block: Psi has no continuation lines, and
-  * the top level starts at column 1 (`format.md` §4).
+  * the top level starts at column 1.
   */
 final case class UnexpectedIndent(location: SourceLocation) extends PsiError {
   def message: String = "a line indented deeper than its block, where nothing opens one"
@@ -457,21 +455,21 @@ final case class UnexpectedIndent(location: SourceLocation) extends PsiError {
   override def hint: Option[String] = Some("align it with the lines of its block")
 }
 
-/** A line indented less than the lines of its block, landing on the width of no block still open (`format.md` §4). */
+/** A line indented less than the lines of its block, landing on the width of no block still open. */
 final case class MisalignedIndent(location: SourceLocation) extends PsiError {
   def message: String = "a line indented less than its block lands on the width of no block still open"
 
   override def hint: Option[String] = Some("align it with the lines of the block it belongs to")
 }
 
-/** A block opened by indentation that holds `- ` elements and anything else (`format.md` §4). */
+/** A block opened by indentation that holds `- ` elements and anything else. */
 final case class MixedBlock(location: SourceLocation) extends PsiError {
   def message: String = "a block holds '- ' elements or anything else, not both"
 
   override def hint: Option[String] = Some("give the elements a key of their own, or write them all with '- '")
 }
 
-/** A second value in a block opened by indentation, which holds one value, fields or `- ` elements (`format.md` §4).
+/** A second value in a block opened by indentation, which holds one value, fields or `- ` elements.
   */
 final case class SecondValue(location: SourceLocation) extends PsiError {
   def message: String = "a second value in a block that holds one"
@@ -479,14 +477,14 @@ final case class SecondValue(location: SourceLocation) extends PsiError {
   override def hint: Option[String] = Some("write each as an element, '- value', or give each a key")
 }
 
-/** A value among the fields of a block opened by indentation, with no key (`format.md` §4). */
+/** A value among the fields of a block opened by indentation, with no key. */
 final case class ValueAmongFields(location: SourceLocation) extends PsiError {
   def message: String = "a value among the fields of a block"
 
   override def hint: Option[String] = Some("write a key and ':' before it")
 }
 
-/** A tag before the first field of a map written by indentation, which has no place for one (`format.md` §4). */
+/** A tag before the first field of a map written by indentation, which has no place for one. */
 final case class TagBeforeField(location: SourceLocation) extends PsiError {
   def message: String = "a tag before the first field of a map, which has no place for it"
 
@@ -542,9 +540,9 @@ final case class UnclosedBracket(location: SourceLocation, bracket: Char) extend
   def message: String = Message.quote(bracket.toString) + " is never closed" + Message.Fatal
 }
 
-/** A level past the depth limit, `limit` (`format.md` §11), where it was crossed: in a source's text, which ends the
-  * source (`fatal`); at a directive's call, whose fragment does not fit where it lands; at a substitution, whose value
-  * does not fit where it is grafted.
+/** A level past the depth limit, `limit`, where it was crossed: in a source's text, which ends the source (`fatal`); at
+  * a directive's call, whose fragment does not fit where it lands; at a substitution, whose value does not fit where it
+  * is grafted.
   */
 final case class DepthExceeded(location: SourceLocation, limit: Int, fatal: Boolean) extends PsiError {
   def message: String = "nested deeper than " + limit.toString + " levels" + (if (fatal) Message.Fatal else "")
@@ -553,7 +551,7 @@ final case class DepthExceeded(location: SourceLocation, limit: Int, fatal: Bool
 }
 
 /** `\${path}` at `location`, the innermost substitution being resolved when resolution went more than `limit` steps
-  * deep, each a level descended or a substitution followed (`format.md` §11).
+  * deep, each a level descended or a substitution followed.
   */
 final case class ResolutionTooDeep(location: SourceLocation, path: String, limit: Int) extends PsiError {
   def message: String =
@@ -565,8 +563,8 @@ final case class ResolutionTooDeep(location: SourceLocation, path: String, limit
 }
 
 /** A call, at `location`, whose handler built a fragment taking the nodes such fragments bring past `limit`, the load's
-  * node limit (`format.md` §11): each counted before it is built, a YAML alias as many times as it is used. Reported at
-  * the first call to go past it; what comes after gives nothing.
+  * node limit: each counted before it is built, a YAML alias as many times as it is used. Reported at the first call to
+  * go past it; what comes after gives nothing.
   */
 final case class FragmentTooLarge(location: SourceLocation, name: String, limit: Int) extends PsiError {
   def message: String = Message.directive(name) + " gives more than " + limit.toString + " nodes, fragments together"
@@ -575,9 +573,9 @@ final case class FragmentTooLarge(location: SourceLocation, name: String, limit:
     Some("give less, such as a YAML alias used fewer times, or build the loader with a higher withSizeLimit")
 }
 
-/** A graft, of `\${path}` at `location`, that would take the nodes grafts copy into the tree past `limit` (`format.md`
-  * §11): the first thing resolution would build past either of its size limits, the nodes of the fragments handlers
-  * built counted first.
+/** A graft, of `\${path}` at `location`, that would take the nodes grafts copy into the tree past `limit`: the first
+  * thing resolution would build past either of its size limits, the nodes of the fragments handlers built counted
+  * first.
   */
 final case class ResolutionTooLarge(location: SourceLocation, path: String, limit: Int) extends PsiError {
   def message: String =
@@ -589,7 +587,7 @@ final case class ResolutionTooLarge(location: SourceLocation, path: String, limi
 }
 
 /** A concatenation, written at `location`, that would take the characters of the scalars concatenations build past
-  * `limit` (`format.md` §11): the first thing resolution would build past either of its size limits.
+  * `limit`: the first thing resolution would build past either of its size limits.
   */
 final case class ConcatenationTooLong(location: SourceLocation, limit: Int) extends PsiError {
   def message: String =
@@ -599,8 +597,7 @@ final case class ConcatenationTooLong(location: SourceLocation, limit: Int) exte
     Some("concatenate long values fewer times, or build the loader with a higher withSizeLimit")
 }
 
-/** `\${path}`, alone or in a concatenation, at `location`, the `\${`, with nothing at `path` in the tree (`format.md`
-  * §9).
+/** `\${path}`, alone or in a concatenation, at `location`, the `\${`, with nothing at `path` in the tree.
   */
 final case class UnresolvedSubstitution(location: SourceLocation, path: String) extends PsiError {
   def message: String = "nothing at " + Message.quote(path) + " to substitute"
@@ -608,15 +605,15 @@ final case class UnresolvedSubstitution(location: SourceLocation, path: String) 
   override def hint: Option[String] = Some("write '${?" + Message.cut(path) + "}' if it may be missing")
 }
 
-/** `\${path}` at `location` that leads back to itself, directly or through other substitutions (§9). Reported once, at
-  * the reference that closes the cycle.
+/** `\${path}` at `location` that leads back to itself, directly or through other substitutions. Reported once, at the
+  * reference that closes the cycle.
   */
 final case class SubstitutionCycle(location: SourceLocation, path: String) extends PsiError {
   def message: String = "'${" + Message.cut(path) + "}' leads back to itself"
 }
 
 /** `\${path}` at `location`, a part of a concatenation, referring to a node that is not a scalar: a map, a sequence or
-  * `null`, defined at `origin` (§9).
+  * `null`, defined at `origin`.
   */
 final case class NonScalarInConcatenation(location: SourceLocation, path: String, origin: PsiLocation)
     extends PsiError {
@@ -625,7 +622,7 @@ final case class NonScalarInConcatenation(location: SourceLocation, path: String
 }
 
 /** Among the fields of a block, an unquoted scalar holding a substitution and more than it: an injection stands alone
-  * there (`format.md` §9).
+  * there.
   */
 final case class MisplacedInjection(location: SourceLocation) extends PsiError {
   def message: String = "an injection stands alone among the fields of a block"
@@ -634,7 +631,7 @@ final case class MisplacedInjection(location: SourceLocation) extends PsiError {
 }
 
 /** A tag before a substitution or a call alone on its line among the fields or the `- ` elements of a block, an
-  * injection, whose fields or elements keep their own tags, so that the tag has no node to go to (`format.md` §9).
+  * injection, whose fields or elements keep their own tags, so that the tag has no node to go to.
   */
 final case class TaggedInjection(location: SourceLocation) extends PsiError {
   def message: String = "a tag before an injection, whose fields or elements keep their own tags"
@@ -644,7 +641,7 @@ final case class TaggedInjection(location: SourceLocation) extends PsiError {
 }
 
 /** A tag in `[…]` before a substitution, at `location`, of `\${path}`, which is a sequence: its elements stand there
-  * with tags of their own, and the tag has no node to go to; `found` is where the sequence is defined (`format.md` §9).
+  * with tags of their own, and the tag has no node to go to; `found` is where the sequence is defined.
   */
 final case class TaggedSequence(location: SourceLocation, path: String, found: PsiLocation) extends PsiError {
   def message: String =
@@ -656,7 +653,7 @@ final case class TaggedSequence(location: SourceLocation, path: String, found: P
 }
 
 /** A tag in `[…]` before a call that gave a sequence: its elements stand there with tags of their own, and the tag has
-  * no node to go to (`format.md` §6, §9).
+  * no node to go to.
   */
 final case class TaggedDirectiveSequence(location: SourceLocation, name: String) extends PsiError {
   def message: String =
@@ -667,7 +664,7 @@ final case class TaggedDirectiveSequence(location: SourceLocation, name: String)
 }
 
 /** An injection among the elements of a sequence, at `location`, of `\${path}`, which is not a sequence; `found` is
-  * where its node is defined (`format.md` §9).
+  * where its node is defined.
   */
 final case class InjectionNotSequence(location: SourceLocation, path: String, found: PsiLocation) extends PsiError {
   def message: String =
@@ -677,7 +674,7 @@ final case class InjectionNotSequence(location: SourceLocation, path: String, fo
 }
 
 /** A call alone on its line among the `- ` elements of a block, an injection, whose handler gave something other than a
-  * sequence (`format.md` §6, §9).
+  * sequence.
   */
 final case class DirectiveNotSequence(location: SourceLocation, name: String) extends PsiError {
   def message: String = Message.directive(name) + " injected among elements gave something other than a sequence"
@@ -686,8 +683,7 @@ final case class DirectiveNotSequence(location: SourceLocation, name: String) ex
 }
 
 /** In a block of injections alone, the first substitution, at `location`, that finds anything: `\${path}`, which is
-  * neither a map nor a sequence, so that the block is neither; `found` is where its node is defined (`format.md` §4,
-  * §9).
+  * neither a map nor a sequence, so that the block is neither; `found` is where its node is defined.
   */
 final case class InjectionNotContainer(location: SourceLocation, path: String, found: PsiLocation) extends PsiError {
   def message: String =
@@ -699,7 +695,7 @@ final case class InjectionNotContainer(location: SourceLocation, path: String, f
 }
 
 /** In a block of injections alone, the first call that gives anything, which gave neither a map nor a sequence, so that
-  * the block is neither (`format.md` §4, §6).
+  * the block is neither.
   */
 final case class DirectiveNotContainer(location: SourceLocation, name: String) extends PsiError {
   def message: String =
@@ -710,7 +706,7 @@ final case class DirectiveNotContainer(location: SourceLocation, name: String) e
 }
 
 /** An injection among the fields of the root, which every path goes through, so that it would refer to the tree it
-  * builds (`format.md` §9); a source included in a block puts its injections in the block.
+  * builds; a source included in a block puts its injections in the block.
   */
 final case class InjectionAtRoot(location: SourceLocation) extends PsiError {
   def message: String = "an injection at the root, which every path goes through, refers to the tree it builds"
@@ -719,15 +715,15 @@ final case class InjectionAtRoot(location: SourceLocation) extends PsiError {
 }
 
 /** An injection among the fields of a block, at `location`, of `\${path}`, which is not a map; `found` is where its
-  * node is defined (`format.md` §9).
+  * node is defined.
   */
 final case class InjectionNotMap(location: SourceLocation, path: String, found: PsiLocation) extends PsiError {
   def message: String =
     "'${" + Message.cut(path) + "}' injected among fields is not a map; it is defined at " + found.description
 }
 
-/** A loader's marker that failed on a block's value, with its handler's error (`format.md` §5); the block stands for
-  * its value with none of the loader's markers.
+/** A loader's marker that failed on a block's value, with its handler's error; the block stands for its value with none
+  * of the loader's markers.
   */
 final case class MarkerFailed(location: SourceLocation, name: String, error: MarkerError) extends PsiError {
   def message: String = "marker " + Message.quote(name) + ": " + error.message
@@ -736,7 +732,7 @@ final case class MarkerFailed(location: SourceLocation, name: String, error: Mar
 }
 
 /** A built-in marker after one of the loader's: the built-in ones shape the lines, before the loader's run over the
-  * value (§5); the block is read as with no marker.
+  * value; the block is read as with no marker.
   */
 final case class BuiltInMarkerAfterLoaders(location: SourceLocation, name: String) extends PsiError {
   def message: String =
@@ -746,8 +742,7 @@ final case class BuiltInMarkerAfterLoaders(location: SourceLocation, name: Strin
 }
 
 /** The formatter after a substitution's `;` cannot be read: a name by the key rule with arguments in parentheses or
-  * none, then the `}` (`format.md` §9). The error points at the first character that does not fit, and the substitution
-  * is skipped.
+  * none, then the `}`. The error points at the first character that does not fit, and the substitution is skipped.
   */
 final case class InvalidFormatter(location: SourceLocation) extends PsiError {
   def message: String = "the formatter of a substitution cannot be read from here"
@@ -756,7 +751,7 @@ final case class InvalidFormatter(location: SourceLocation) extends PsiError {
     Some("a formatter is a name with its arguments in parentheses or none, right before the '}'")
 }
 
-/** A second `;` after a substitution's formatter: a substitution takes one (§9). */
+/** A second `;` after a substitution's formatter: a substitution takes one. */
 final case class SecondFormatter(location: SourceLocation) extends PsiError {
   def message: String = "a second formatter in one substitution"
 
@@ -768,7 +763,7 @@ final case class UnknownFormatter(location: SourceLocation, name: String) extend
   def message: String = "unknown formatter " + Message.quote(name)
 }
 
-/** A formatter that refused its arguments or failed on what its substitution found, with its error (§9), at its name.
+/** A formatter that refused its arguments or failed on what its substitution found, with its error, at its name.
   */
 final case class FormatterFailed(location: SourceLocation, name: String, error: FormatterError) extends PsiError {
   def message: String = "formatter " + Message.quote(name) + ": " + error.message
@@ -777,7 +772,7 @@ final case class FormatterFailed(location: SourceLocation, name: String, error: 
 }
 
 /** A formatted substitution where an injection stands: alone among fields, alone on its line among `- ` elements, or in
-  * a block of injections alone. What a formatter gives is a string, which is neither fields nor elements (§9).
+  * a block of injections alone. What a formatter gives is a string, which is neither fields nor elements.
   */
 final case class FormattedInjection(location: SourceLocation) extends PsiError {
   def message: String = "a formatted substitution stands where an injection does, and a string is no fields or elements"
@@ -785,12 +780,12 @@ final case class FormattedInjection(location: SourceLocation) extends PsiError {
   override def hint: Option[String] = Some("write a key and ':' or a '- ' before it, or remove the formatter")
 }
 
-/** A call of a directive the loader has no handler for (`format.md` §6). */
+/** A call of a directive the loader has no handler for. */
 final case class UnknownDirective(location: SourceLocation, name: String) extends PsiError {
   def message: String = "unknown directive " + Message.directive(name)
 }
 
-/** A call of a directive the loader was built with disabled (§6). */
+/** A call of a directive the loader was built with disabled. */
 final case class DisabledDirective(location: SourceLocation, name: String) extends PsiError {
   def message: String = "directive " + Message.directive(name) + " is disabled in this loader"
 }
@@ -809,7 +804,7 @@ final case class DirectiveNotMap(location: SourceLocation, name: String) extends
   override def hint: Option[String] = Some("make it the value of a field")
 }
 
-/** A call that parses a source already being expanded (§6).
+/** A call that parses a source already being expanded.
   *
   * @param chain
   *   the sources from the one loaded to the one parsed again, each as locations name it
@@ -818,7 +813,7 @@ final case class DirectiveCycle(location: SourceLocation, chain: ::[String]) ext
   def message: String = "a cycle of sources: " + chain.mkString(" -> ")
 }
 
-/** A call that parses a source `limit` sources deep: a backstop for a cycle no key catches (§6). */
+/** A call that parses a source `limit` sources deep: a backstop for a cycle no key catches. */
 final case class DirectiveTooDeep(location: SourceLocation, limit: Int) extends PsiError {
   def message: String = "sources nested " + limit.toString + " deep, a cycle that changes its source on every step"
 }
