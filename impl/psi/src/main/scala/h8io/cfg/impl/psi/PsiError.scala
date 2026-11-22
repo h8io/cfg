@@ -648,30 +648,7 @@ final case class TaggedInjection(location: SourceLocation) extends PsiError {
   def message: String = "a tag before an injection, whose fields or elements keep their own tags"
 
   override def hint: Option[String] =
-    Some("remove the tag, or write '- ' before it to put the node itself as one element")
-}
-
-/** A tag in `[…]` before a substitution, at `location`, of `\${path}`, which is a sequence: its elements stand there
-  * with tags of their own, and the tag has no node to go to; `found` is where the sequence is defined.
-  */
-final case class TaggedSequence(location: SourceLocation, path: String, found: PsiLocation) extends PsiError {
-  def message: String =
-    "a tag before '${" + Message.cut(path) + "}', a sequence whose elements stand in its place, keeping their own " +
-      "tags; it is defined at " + found.description
-
-  override def hint: Option[String] =
-    Some("remove the tag, or nest the sequence whole: [${" + Message.cut(path) + "}]")
-}
-
-/** A tag in `[…]` before a call that gave a sequence: its elements stand there with tags of their own, and the tag has
-  * no node to go to.
-  */
-final case class TaggedDirectiveSequence(location: SourceLocation, name: String) extends PsiError {
-  def message: String =
-    "a tag before " + Message.directive(name) + ", which gave a sequence whose elements stand in its place, keeping " +
-      "their own tags"
-
-  override def hint: Option[String] = Some("remove the tag, or nest the sequence whole: [#…]")
+    Some("remove the tag, or the '*' to put the node itself")
 }
 
 /** An injection among the elements of a sequence, at `location`, of `\${path}`, which is not a sequence; `found` is
@@ -681,39 +658,34 @@ final case class InjectionNotSequence(location: SourceLocation, path: String, fo
   def message: String =
     "'${" + Message.cut(path) + "}' injected among elements is not a sequence; it is defined at " + found.description
 
-  override def hint: Option[String] = Some("write '- ' before it to put it as one element")
+  override def hint: Option[String] = Some("remove the '*' to put it as one element")
 }
 
-/** A call alone on its line among the `- ` elements of a block, an injection, whose handler gave something other than a
+/** A call marked with a `*` among the elements of a sequence, an injection, whose handler gave something other than a
   * sequence.
   */
 final case class DirectiveNotSequence(location: SourceLocation, name: String) extends PsiError {
   def message: String = Message.directive(name) + " injected among elements gave something other than a sequence"
 
-  override def hint: Option[String] = Some("write '- ' before it to put what it gives as one element")
+  override def hint: Option[String] = Some("remove the '*' to put what it gives as one element")
 }
 
-/** In a block of injections alone, the first substitution, at `location`, that finds anything: `\${path}`, which is
-  * neither a map nor a sequence, so that the block is neither; `found` is where its node is defined.
+/** An injection after a key, `a: \${path*}` at `location`, of a node that is neither a map nor a sequence, so that the
+  * node it makes is neither; `found` is where the node is defined.
   */
 final case class InjectionNotContainer(location: SourceLocation, path: String, found: PsiLocation) extends PsiError {
   def message: String =
-    "'${" + Message.cut(path) + "}' injected in a block of injections alone is neither a map nor a sequence; it is " +
-      "defined at " + found.description
+    "'${" + Message.cut(path) + "}' injected after a key is neither a map nor a sequence; it is defined at " +
+      found.description
 
-  override def hint: Option[String] =
-    Some("give the block one value alone to take it whole, or write the values as elements with '- '")
+  override def hint: Option[String] = Some("remove the '*' to graft it whole")
 }
 
-/** In a block of injections alone, the first call that gives anything, which gave neither a map nor a sequence, so that
-  * the block is neither.
-  */
+/** A call injected after a key, `a: #name(…)*`, which gave neither a map nor a sequence. */
 final case class DirectiveNotContainer(location: SourceLocation, name: String) extends PsiError {
-  def message: String =
-    Message.directive(name) + " in a block of injections alone gave neither a map nor a sequence"
+  def message: String = Message.directive(name) + " injected after a key gave neither a map nor a sequence"
 
-  override def hint: Option[String] =
-    Some("give the block one value alone to take it whole, or write the values as elements with '- '")
+  override def hint: Option[String] = Some("remove the '*' to take what it gives whole")
 }
 
 /** An injection among the fields of the root, which every path goes through, so that it would refer to the tree it
@@ -782,13 +754,36 @@ final case class FormatterFailed(location: SourceLocation, name: String, error: 
   override def hint: Option[String] = error.hint
 }
 
-/** A formatted substitution where an injection stands: alone among fields, alone on its line among `- ` elements, or in
-  * a block of injections alone. What a formatter gives is a string, which is neither fields nor elements.
+/** A formatted substitution marked with a `*`, `\${a*; f(…)}`: what a formatter gives is a string, which is neither
+  * fields nor elements.
   */
 final case class FormattedInjection(location: SourceLocation) extends PsiError {
-  def message: String = "a formatted substitution stands where an injection does, and a string is no fields or elements"
+  def message: String = "a formatted substitution cannot inject: a string is no fields or elements"
 
-  override def hint: Option[String] = Some("write a key and ':' or a '- ' before it, or remove the formatter")
+  override def hint: Option[String] = Some("remove the '*', or the formatter")
+}
+
+/** A substitution or a call alone among the fields of a block with no `*`: one node, which has no key there. */
+final case class UnmarkedInjection(location: SourceLocation) extends PsiError {
+  def message: String = "a substitution or a call alone among fields, with no '*' to inject it"
+
+  override def hint: Option[String] = Some("write '*' after it to put its fields here, or a key and ':' before it")
+}
+
+/** A line among the `- ` elements of a block that does not start with `- `, an injection marked with a `*` included. */
+final case class UndashedElement(location: SourceLocation) extends PsiError {
+  def message: String = "an element of a sequence written without '- '"
+
+  override def hint: Option[String] = Some("write '- ' before it: '- $a' is one element, '- $a*' the elements of a")
+}
+
+/** A `*` marking a substitution that is not a whole value, element or field line: in a concatenation, `x\$b*`, or in
+  * quotes, `"\${b*}"`, where it would turn a string into an injection.
+  */
+final case class MarkedInString(location: SourceLocation) extends PsiError {
+  def message: String = "a '*' marks an injection, and a string cannot hold one"
+
+  override def hint: Option[String] = Some("write '$" + "{…}*' for the text '*' after a substitution")
 }
 
 /** A call of a directive the loader has no handler for. */

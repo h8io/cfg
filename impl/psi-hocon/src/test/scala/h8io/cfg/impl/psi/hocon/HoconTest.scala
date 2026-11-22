@@ -41,7 +41,7 @@ class HoconTest extends AnyFlatSpec with Matchers {
         case other => fail(other.toString)
       }
     val root = loaded(
-      "db: #hocon(file: \"db.conf\")\n#hocon(file: top)\nport: 1",
+      "db: #hocon(file: \"db.conf\")\n#hocon(file: top)*\nport: 1",
       "db.conf" -> "host: localhost\nurl: \"jdbc:\"${host}\ninclude \"more.conf\"",
       "more.conf" -> "pool: 10",
       "top.conf" -> "x: y\nport: 0"

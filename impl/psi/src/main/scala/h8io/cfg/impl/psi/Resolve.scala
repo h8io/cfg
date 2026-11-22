@@ -91,7 +91,7 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       case injection: Tree.Injection =>
         once(id, Some(new Following(injection.location, injection.path)))(injected(id, injection))
       // merged once, its children resolved apart, after it, so that one may refer to another
-      case injections: Tree.Injections => after(id, gathered(id, injections))
+      case contents: Tree.Contents => after(id, gathered(id, contents))
       case layers: Tree.Layers => after(id, stacked(id, layers))
       case Tree.Substitution(path, optional, tag, at) =>
         once(id, Some(new Following(at, path)))(
@@ -253,20 +253,20 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
         // a sequence grafted is a sequence
         .map(_ => graft(found, at, path, None).asInstanceOf[Tree.Sequence].elements)
 
-  /** What a block of injections alone at `id` gives (§4, §9), as [[read]] reads it, once: a map or a sequence with its
+  /** What an injection after a key at `id` gives (§9), as [[read]] reads it, once: a map or a sequence with its
     * children not resolved yet.
     */
-  private def gathered(id: Id, injections: Tree.Injections): Resolution =
-    once(id, injections.items.collectFirst { case Right(r) => new Following(r.location, r.path) })(
-      read(injections).flatMap {
+  private def gathered(id: Id, contents: Tree.Contents): Resolution =
+    once(id, contents.item.toOption.map(r => new Following(r.location, r.path)))(
+      read(contents).flatMap {
         case None => Right(None)
         case Some(Left(map)) => complete(id, map).map(Some(_))
         case Some(Right(sequence)) => Right(Some(sequence))
       })
 
-  /** What `merged` gave at `id`, a block of injections alone or layers, with its children resolved: apart from the
-    * merge, after it, so that a child may refer to another, as a map's with injections do. A failed map's abandoned
-    * fields are resolved for their own errors.
+  /** What `merged` gave at `id`, an injection after a key or layers, with its children resolved: apart from the merge,
+    * after it, so that a child may refer to another, as a map's with injections do. A failed map's abandoned fields are
+    * resolved for their own errors.
     */
   private def after(id: Id, merged: Resolution): Resolution =
     merged match {
@@ -276,52 +276,31 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       case other => other
     }
 
-  /** A block of injections alone read as a map or a sequence, still to be resolved (§4, §9): what the first that finds
-    * or gives anything, as written, finds or gives decides, and the block is then read as written with a map's fields
-    * or a sequence's elements: its substitutions injections among fields or among `- ` elements, and what its calls
-    * gave put there, each of which must be the same. The block's tag is its own; none when nothing finds or gives
-    * anything. Every substitution is resolved first, for its own errors.
+  /** An injection after a key read as a map or a sequence, still to be resolved (§9): a map holding the fields of the
+    * map found or given, or a sequence holding the elements of the sequence, with the tag written before it and none of
+    * the found node's own; none when an optional one finds nothing. Anything else is an error.
     */
-  private def read(injections: Tree.Injections): Either[Failure, Option[Either[Tree.Map, Tree.Sequence]]] = {
-    val Tree.Injections(items, tag, location) = injections
-    val found = items.map(_.map(r => r -> reference(r.path, r.optional, r.location)))
-    val first = found.collectFirst {
-      case Left(AST.Injected.Given(call, value)) => Left(call -> value)
-      case Right((r, Right(Some(value)))) => Right(r -> value)
-    }
-    failure(found.collect { case Right((_, resolution)) => resolution }).toLeft(first).flatMap {
-      case None => Right(None)
-      case Some(Left((_, _: AST.Block)) | Right((_, _: Tree.Map))) =>
-        val statements = items.flatMap {
-          case Right(r) => Vector(AST.InjectionStatement(r.path, r.optional, r.location, None))
-          case Left(AST.Injected.Given(_, AST.Block(statements, _, _))) => statements
-          case Left(_) => Vector.empty
+  private def read(contents: Tree.Contents): Either[Failure, Option[Either[Tree.Map, Tree.Sequence]]] = {
+    val Tree.Contents(item, tag, location) = contents
+    item match {
+      case Left(AST.Injected.Given(_, AST.Block(statements, _, _))) =>
+        Right(Some(Left(merging.block(Tree.Map.empty(tag, location), statements))))
+      case Left(AST.Injected.Given(_, AST.Sequence(elements, _, _))) =>
+        Right(Some(Right(merging.sequence(elements, tag, location))))
+      case Left(AST.Injected.Given(call, _)) => failed(DirectiveNotContainer(call.location, call.name))
+      case Right(r) =>
+        reference(r.path, r.optional, r.location).flatMap {
+          case None => Right(None)
+          case Some(_: Tree.Map) =>
+            val injection = AST.InjectionStatement(r.path, r.optional, r.location, None)
+            Right(Some(Left(merging.block(Tree.Map.empty(tag, location), Vector(injection)))))
+          case Some(_: Tree.Sequence) =>
+            val injection = AST.Substitution(r.path, r.optional, None, r.location)
+            Right(Some(Right(merging.sequence(Vector(AST.Element(injection, None, AST.Put.Elements)), tag, location))))
+          case Some(other) => failed(InjectionNotContainer(r.location, Message.path(r.path), other.location))
         }
-        mismatched(items)(_.isInstanceOf[AST.Block], DirectiveNotMap.apply)
-          .toLeft(Some(Left(merging.block(Tree.Map.empty(tag, location), statements))))
-      case Some(Left((_, _: AST.Sequence)) | Right((_, _: Tree.Sequence))) =>
-        val elements = items.flatMap {
-          case Right(r) =>
-            Vector(AST.Element(AST.Substitution(r.path, r.optional, None, r.location), None, AST.Put.Elements))
-          case Left(AST.Injected.Given(_, AST.Sequence(elements, _, _))) => elements
-          case Left(_) => Vector.empty
-        }
-        mismatched(items)(_.isInstanceOf[AST.Sequence], DirectiveNotSequence.apply)
-          .toLeft(Some(Right(merging.sequence(elements, tag, location))))
-      case Some(Left((call, _))) => failed(DirectiveNotContainer(call.location, call.name))
-      case Some(Right((r, other))) => failed(InjectionNotContainer(r.location, Message.path(r.path), other.location))
     }
   }
-
-  /** The failure of a block of injections alone whose calls gave what `fits` does not take, each reported as `error` at
-    * its call; none when every one fits.
-    */
-  private def mismatched(items: Vector[Either[AST.Injected.Given, Token.Reference]])(
-      fits: AST.Value => Boolean,
-      error: (SourceLocation, String) => PsiError): Option[Failure] =
-    failure(items.collect {
-      case Left(AST.Injected.Given(call, value)) if !fits(value) => failed(error(call.location, call.name))
-    })
 
   /** `value`, found by `\${path}` at `at`, grafted at `id` with the tag written before it in place of its own. */
   private def grafted(id: Id, value: Tree.Value, at: SourceLocation, path: Id.Branch, tag: Option[String]): Resolution =
@@ -336,18 +315,15 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       graft(value, at, path, tag))
 
   /** What an injection among elements finds: a sequence, whose elements are to stand in its place; none when an
-    * optional one finds nothing. Anything else is an error for a `required` one, and stands there as one element
-    * otherwise, with the tag written before it in place of its own, which a sequence's elements have no place for.
+    * optional one finds nothing. Anything else is an error.
     */
   private def injected(id: Id, injection: Tree.Injection): Resolution = {
-    val Tree.Injection(path, optional, tag, at, required) = injection
+    val Tree.Injection(path, optional, at) = injection
     reference(path, optional, at).flatMap(_.fold[Resolution](Right(None)) {
-      case found: Tree.Sequence if tag.nonEmpty => failed(TaggedSequence(at, Message.path(path), found.location))
       case found: Tree.Sequence =>
         // its elements stand where the injection does, below the sequence it stands in
         elements(segments(id).size - 1, found, at, path).map(e => Some(found.copy(elements = e)))
-      case found if required => failed(InjectionNotSequence(at, Message.path(path), found.location))
-      case found => grafted(id, found, at, path, tag)
+      case found => failed(InjectionNotSequence(at, Message.path(path), found.location))
     })
   }
 
@@ -413,8 +389,8 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
             case Right(Some(found)) => Right((() => placed(id, found, at, path, tag).map(Some(_)), maps))
             case Left(failure) => Left(failure)
           }
-        case (injections: Tree.Injections) :: earlier =>
-          read(injections) match {
+        case (contents: Tree.Contents) :: earlier =>
+          read(contents) match {
             case Right(None) => back(earlier, maps)
             case Right(Some(Left(map))) => back(earlier, map :: maps)
             case Right(Some(Right(sequence))) => Right((() => Right(Some(sequence)), maps))
@@ -510,7 +486,7 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
           case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Formatted | _: Tree.Marked =>
             resolve(id, value)
           // what they merge to, its children looked into one at a time
-          case injections: Tree.Injections => gathered(id, injections)
+          case contents: Tree.Contents => gathered(id, contents)
           case layers: Tree.Layers => stacked(id, layers)
           // what an injection brings in among fields is known only once it is resolved
           case map: Tree.Map if map.steps.nonEmpty => completed(id, map).map(Some(_))
@@ -545,7 +521,7 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     * index quadratic: the walk is kept, what it found and how deep resolving what went before each went, and a lookup
     * takes it up where the last one stopped. One that finds its element already found counts as deep as walking to it
     * would, and fails where that would go past the limit, at the first element resolved before it that resolving again
-    * goes past, as the walk would. A lookup into another sequence at `id`, which a block of injections alone gives anew
+    * goes past, as the walk would. A lookup into another sequence at `id`, which an injection after a key gives anew
     * each time, starts the walk anew.
     */
   private def indexed(id: Id, sequence: Tree.Sequence, index: Int): Either[Failure, Option[(Id, Tree.Value)]] = {
@@ -584,7 +560,7 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     else {
       val position = Id.Index(walk.scanned, id)
       walk.sequence.elements(walk.scanned) match {
-        case value @ (_: Tree.Injection | Tree.Substitution(_, true, _, _) | _: Tree.Injections | _: Tree.Formatted) =>
+        case value @ (_: Tree.Injection | Tree.Substitution(_, true, _, _) | _: Tree.Formatted) =>
           val outer = deepest
           deepest = steps
           val resolution = resolve(position, value)
@@ -597,12 +573,9 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
               walk.add(
                 position,
                 value match {
-                  // a sequence, anything else as one element, or nothing for an optional one
+                  // the elements of the sequence it found, or nothing for an optional one finding nothing
                   case _: Tree.Injection =>
-                    found.fold(Vector.empty[Tree.Value]) {
-                      case put: Tree.Sequence => put.elements
-                      case one => Vector(one)
-                    }
+                    found.collect { case put: Tree.Sequence => put.elements }.getOrElse(Vector.empty)
                   // one that finds nothing puts no element, a formatted one as any other
                   case _ => found.toVector
                 },
@@ -824,7 +797,7 @@ private[psi] object Resolve {
           map.copy(entries = entries, tag = tag.orElse(map.tag), location = location)
         // a node is resolved whole before it is grafted
         case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Formatted | _: Tree.Marked | _: Tree.Injection |
-            _: Tree.Injections | _: Tree.Layers =>
+            _: Tree.Contents | _: Tree.Layers =>
           throw new IllegalStateException("An unresolved substitution at " + value.location.description + " grafted")
       }
     }

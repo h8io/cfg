@@ -59,6 +59,15 @@ private[psi] final class Lexer(
     fatal.foreach(reported += _)
   }
 
+  /** Whether a `*` stands right here, touching what was read last, which it marks as an injection: a call's name or the
+    * `)` of its arguments (`format.md` §6, §9); read past when it does.
+    */
+  def marker(): Boolean =
+    at(offset, '*') && {
+      offset += 1
+      true
+    }
+
   /** Whether a field goes on from the key just read, read ahead and come back from: dotted keys, then `:` or `:=` with
     * whitespace after it, or `{` (`format.md` §4). With none, a `:` is text of a value, as in `http://host`.
     */
@@ -405,10 +414,15 @@ private[psi] final class Lexer(
     */
   private def unquoted(): Kind = {
     val parts = new Parts
+    // where each substitution marked with a `*` starts, which must be the whole scalar (§9)
+    var marks = List.empty[Int]
     while (!ended && has(offset) && !endsUnquoted(offset))
-      if (startsWith("${")) reference(quoted = false).foreach(parts.reference)
-      else if (at(offset, '$') && startsBare(offset)) bare().foreach(parts.reference)
-      else if (at(offset, '$')) {
+      if (startsWith("${") || at(offset, '$') && startsBare(offset)) {
+        val start = offset
+        marked = false
+        (if (startsWith("${")) reference(quoted = false) else bare()).foreach(parts.reference)
+        if (marked) marks ::= start
+      } else if (at(offset, '$')) {
         report(StrayDollar.apply, offset)
         parts.buffer += '$'
         offset += 1
@@ -418,7 +432,16 @@ private[psi] final class Lexer(
         parts.buffer += c
         offset += 1
       }
-    if (ended) End else Scalar(parts.result(), quoted = false)
+    if (ended) End
+    else {
+      val result = parts.result()
+      (marks, result) match {
+        case (List(_), Vector(reference: Reference)) => Spread(reference)
+        case _ =>
+          marks.reverse.foreach(report(MarkedInString.apply, _))
+          Scalar(result, quoted = false)
+      }
+    }
   }
 
   private def endsUnquoted(i: Int): Boolean = isBreak(i) || at(i, ',') || at(i, '}') || at(i, ']')
@@ -660,6 +683,16 @@ private[psi] final class Lexer(
       case Some(path) if at(offset, '}') =>
         offset += 1
         Some(Reference(path, optional, source.location(start)))
+      // marked with a `*` (§9): an injection unquoted and alone, an error in quotes, which hold a string
+      case Some(path) if at(offset, '*') && at(offset + 1, '}') =>
+        offset += 2
+        if (quoted) report(MarkedInString.apply, start) else marked = true
+        Some(Reference(path, optional, source.location(start)))
+      // a formatter gives a string, which injects nothing
+      case Some(path) if at(offset, '*') && at(offset + 1, ';') =>
+        report(FormattedInjection.apply, start)
+        offset += 1
+        formatted(Reference(path, optional, source.location(start)), quoted)
       case Some(path) if at(offset, ';') => formatted(Reference(path, optional, source.location(start)), quoted)
       case _ if !ended =>
         if (has(offset) && isSpace(text.charAt(offset)))
@@ -730,16 +763,26 @@ private[psi] final class Lexer(
 
   /** `$path` or `$?path` from its `$` (`format.md` §9), a path with no braces around it: it takes all it can, a `.`
     * followed by a key and an `[index]`, and stops before anything else, which is text again — `$name.txt` is the path
-    * `name.txt`, and `${name}.txt` the path `name` and the text `.txt`. `None` once an unterminated key in backticks
-    * has ended the source.
+    * `name.txt`, and `${name}.txt` the path `name` and the text `.txt`. A `*` right after the path marks it, and is
+    * read with it. `None` once an unterminated key in backticks has ended the source.
     */
   private def bare(): Option[Part] = {
     val start = offset
     offset += 1
     val optional = at(offset, '?')
     if (optional) offset += 1
-    key(Id.Root).map(key => Reference(greedy(key), optional, source.location(start)))
+    key(Id.Root).map { key =>
+      val path = greedy(key)
+      if (at(offset, '*')) {
+        offset += 1
+        marked = true
+      }
+      Reference(path, optional, source.location(start))
+    }
   }
+
+  /** Whether the last substitution read was marked with a `*`, `$a*` or `${a*}`, unquoted (§9). */
+  private var marked = false
 
   /** The segments of a path with no braces after `current`, as many as there are. */
   @tailrec private def greedy(current: Id.Branch): Id.Branch =

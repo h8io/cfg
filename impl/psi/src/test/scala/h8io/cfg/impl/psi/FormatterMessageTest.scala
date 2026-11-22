@@ -18,11 +18,10 @@ class FormatterMessageTest extends AnyFlatSpec with Matchers {
     text(UnknownFormatter(at, "f")) shouldBe (("unknown formatter 'f'", None))
   }
 
-  "A formatted substitution where an injection stands" should "say that a string is no fields or elements" in {
+  "A formatted substitution marked with a '*'" should "say that a string is no fields or elements" in {
     text(FormattedInjection(at)) shouldBe
-      ((
-        "a formatted substitution stands where an injection does, and a string is no fields or elements",
-        Some("write a key and ':' or a '- ' before it, or remove the formatter")))
+      (("a formatted substitution cannot inject: a string is no fields or elements",
+        Some("remove the '*', or the formatter")))
   }
 
   "A formatter that failed" should "be named, with its handler's message and hint" in {

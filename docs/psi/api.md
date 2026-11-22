@@ -95,5 +95,5 @@ val untrusted = Psi.builder.disableDirective("include").disableDirective("env").
 ```
 
 ```scala mdoc
-untrusted.map(_.parse("input", "#include(file: \"/etc/passwd\")").left.map(_.message))
+untrusted.map(_.parse("input", "#include(file: \"/etc/passwd\")*").left.map(_.message))
 ```

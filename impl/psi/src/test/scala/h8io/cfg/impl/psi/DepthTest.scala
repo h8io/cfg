@@ -70,16 +70,16 @@ class DepthTest extends AnyFlatSpec with Matchers {
 
   "A source a directive parses" should "be read from the depth of the call" in {
     val text = directive("t")(context => context.parse("t", "c { d { } }"))
-    errors("a { b { #t } }", text) shouldBe List(beyond(1, 3, "t"))
+    errors("a { b { #t* } }", text) shouldBe List(beyond(1, 3, "t"))
     errors("a { b: #t }", text) shouldBe List(beyond(1, 7, "t"))
     loads("a: #t", text) shouldBe true
   }
 
   it should "stand a level below its call among fields, as it does as a value" in {
     val text = directive("t")(context => context.parse("t", "c { d { } }"))
-    errors("#t", directive("t")(context => context.parse("t", "c { d { e { } } }"))) shouldBe List(beyond(1, 11, "t"))
-    errors("a { #t }", text) shouldBe List(beyond(1, 7, "t"))
-    loads("#t", text) shouldBe true
+    errors("#t*", directive("t")(context => context.parse("t", "c { d { e { } } }"))) shouldBe List(beyond(1, 11, "t"))
+    errors("a { #t* }", text) shouldBe List(beyond(1, 7, "t"))
+    loads("#t*", text) shouldBe true
   }
 
   "A chain of sources included among fields" should
@@ -87,7 +87,7 @@ class DepthTest extends AnyFlatSpec with Matchers {
       val dir = java.nio.file.Files.createTempDirectory("psi")
       def write(name: String, text: String) =
         java.nio.file.Files.write(dir.resolve(name), text.getBytes(java.nio.charset.StandardCharsets.UTF_8))
-      (0 until 63).foreach(i => write("i" + i.toString + ".psi", "#include(file: i" + (i + 1).toString + ")\n"))
+      (0 until 63).foreach(i => write("i" + i.toString + ".psi", "#include(file: i" + (i + 1).toString + ")*\n"))
       write("i63.psi", (0 until 255).map(i => "  " * i + "k" + i.toString + ":\n").mkString + "  " * 255 + "v\n")
       val loader = Psi.builder.withSystemProperties(Map.empty).build.fold(e => fail(e.toString), identity)
       var loaded: Either[Throwable, List[PsiError]] = Left(new IllegalStateException("never run"))
@@ -143,14 +143,14 @@ class DepthTest extends AnyFlatSpec with Matchers {
     }
     errors("x: #cache\na { b { y: #cache } }", cache) shouldBe
       List(DepthExceeded(at(2, 12), 3, fatal = false))
-    errors("a { b { c { #cache } } }", cache) shouldBe List(DepthExceeded(at(1, 13), 3, fatal = false))
+    errors("a { b { c { #cache* } } }", cache) shouldBe List(DepthExceeded(at(1, 13), 3, fatal = false))
   }
 
   it should "fail its call when built from a node too deep for where it lands" in {
     val node = Psi.parse("n", "p { q { r { } } }").fold(e => fail(e.toString), identity)
     val built = directive("built")(_ => Fragment(node))
-    loads("#built", built) shouldBe true
-    errors("a { b { #built } }", built) shouldBe List(DepthExceeded(at(1, 9), 3, fatal = false))
+    loads("#built*", built) shouldBe true
+    errors("a { b { #built* } }", built) shouldBe List(DepthExceeded(at(1, 9), 3, fatal = false))
     errors("v: #built", built) shouldBe List(DepthExceeded(at(1, 4), 3, fatal = false))
     val list = Psi.parse("n", "l: [[[]]]").fold(e => fail(e.toString), identity)("l") match {
       case seq: Node.ISeq[?] => seq
@@ -214,9 +214,9 @@ class DepthTest extends AnyFlatSpec with Matchers {
   }
 
   "An index looked up again" should "go past the limit where walking to it would, whatever order the keys are in" in {
-    // resolving `$t` takes steps: a lookup from deep in a chain goes past the limit, whether a shallow one found the
+    // resolving `$t*` takes steps: a lookup from deep in a chain goes past the limit, whether a shallow one found the
     // element before it or not
-    val sequence = "t: [a]\ns: [$t, b]\n"
+    val sequence = "t: [a]\ns: [$t*, b]\n"
     val chain = "c1: $c2\nc2: $c3\nc3: $c4\nc4: $s[1]\n"
     def result(limit: Int, text: String) =
       Psi.builder
@@ -234,7 +234,7 @@ class DepthTest extends AnyFlatSpec with Matchers {
   }
 
   "An index from the end" should "count as deep as walking to the end, injections after its element included" in {
-    val sequence = "t: [a]\ns: [b, $t]\n"
+    val sequence = "t: [a]\ns: [b, $t*]\n"
     def result(limit: Int, index: String) =
       Psi.builder
         .withDepthLimit(limit)
@@ -266,7 +266,7 @@ class DepthTest extends AnyFlatSpec with Matchers {
       Left(List("nothing at '" + "x." * 10 + "…' to substitute"))
     Psi.parse("s", "a: x $" + "{" + path + "}").left.map(_.errors.map(_.message)) shouldBe
       Left(List("a value right after another; values never join"))
-    Psi.parse("s", "#x(1 \"$" + "{" + path + "}\")").left.map(_.errors.map(_.message)) shouldBe
+    Psi.parse("s", "#x(1 \"$" + "{" + path + "}\")*").left.map(_.errors.map(_.message)) shouldBe
       Left(List("expected ',' or a line break, found a quoted string \"$" + "{" + "x." * 8 + "x…"))
   }
 

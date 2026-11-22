@@ -1,5 +1,5 @@
 // typesafe-config reads reference.conf by itself; Psi includes it
-#include(resource: "ported/reference")
+#include(resource: "ported/reference")*
 
 base-config: true
 

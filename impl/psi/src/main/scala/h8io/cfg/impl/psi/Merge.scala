@@ -50,7 +50,7 @@ private[psi] final class Merge {
 
   /** `value` merged with a `:` over `earlier`: maps merge, the later tag if written and the earlier otherwise, and
     * anything else replaces what was there, with only its own tag. Where either may turn out a map or not, a
-    * substitution or a block of injections alone, and the other may be a map, both are kept as layers, merged so once
+    * substitution or an injection after a key, and the other may be a map, both are kept as layers, merged so once
     * resolved (§7).
     */
   private def merged(earlier: Tree.Value, value: AST.Value): Tree.Value =
@@ -59,7 +59,7 @@ private[psi] final class Merge {
         block(map.copy(tag = tag.orElse(map.tag), location = Merge.again(location, map.location)), statements)
       case (earlier: Tree.Layer, AST.Substitution(path, optional, tag, location)) =>
         Tree.Layers(earlier, Tree.Substitution(path, optional, tag, location))
-      case (earlier: Tree.Layer, injections: AST.Injections) => Tree.Layers(earlier, this.injections(injections))
+      case (earlier: Tree.Layer, contents: AST.Contents) => Tree.Layers(earlier, this.contents(contents))
       case (earlier: Tree.Layer, AST.Formatted(part, tag, location)) =>
         Tree.Layers(earlier, Tree.Formatted(part, tag, location))
       // kept as written, so that a `:=` in it replaces what the earlier finds, once it is found
@@ -76,20 +76,20 @@ private[psi] final class Merge {
       case AST.Block(statements, tag, location) => block(Tree.Map.empty(tag, location), statements)
       case AST.Sequence(elements, tag, location) => sequence(elements, tag, location)
       case AST.Substitution(path, optional, tag, location) => Tree.Substitution(path, optional, tag, location)
-      case injections: AST.Injections => this.injections(injections)
+      case contents: AST.Contents => this.contents(contents)
       case AST.Concatenation(parts, tag, location) => Tree.Concatenation(parts, tag, location)
       case AST.Formatted(part, tag, location) => Tree.Formatted(part, tag, location)
       case AST.Marked(value, markers) => Tree.Marked(tree(value), markers)
       case AST.DirectiveValue(call, _) => unexpanded(call)
     }
 
-  private def injections(injections: AST.Injections): Tree.Injections = {
-    val kept = injections.items.map {
+  private def contents(contents: AST.Contents): Tree.Contents = {
+    val kept = contents.item match {
       case AST.Injected.Calling(call) => unexpanded(call)
       case gave: AST.Injected.Given => Left(gave)
       case AST.Injected.Referring(reference) => Right(reference)
     }
-    Tree.Injections(kept, injections.tag, injections.location)
+    Tree.Contents(kept, contents.tag, contents.location)
   }
 
   /** A sequence of `elements`, with nothing before it to merge with. */
@@ -99,10 +99,7 @@ private[psi] final class Merge {
   /** An element of a sequence, where a substitution may be an injection (§9). */
   private def element(element: AST.Element): Tree.Value =
     (element.value, element.put) match {
-      case (AST.Substitution(path, optional, tag, location), AST.Put.Found) =>
-        Tree.Injection(path, optional, tag, location, required = false)
-      case (AST.Substitution(path, optional, tag, location), AST.Put.Elements) =>
-        Tree.Injection(path, optional, tag, location, required = true)
+      case (AST.Substitution(path, optional, _, location), AST.Put.Elements) => Tree.Injection(path, optional, location)
       case (value, _) => tree(value)
     }
 

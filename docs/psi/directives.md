@@ -6,7 +6,8 @@ import h8io.cfg.pages.Example
 ```
 
 A directive is `#name(arguments)`, or `#name` with none: a call the loader makes where it stands, which gives a value,
-or among fields a block of fields. Psi has three, `#prop`, `#env` and `#include`, and a program can [add its
+or marked with a `*`, `#name(arguments)*`, the fields of a map among fields or the elements of a sequence among
+elements. Psi has three, `#prop`, `#env` and `#include`, and a program can [add its
 own](extending.md) or turn one off. Arguments are literals — strings, integers, bare names — positional ones
 first, then named ones, `name: value`. Where a directive stands decides what it may give, as for a substitution:
 [injections](substitutions.md#injections) say how.
@@ -42,8 +43,8 @@ db {
 
 ## Including other sources
 
-`#include` reads another Psi source where it stands. Among fields it merges the source's fields into the block, so
-the fields after it override them; as a value it makes the source a block.
+`#include` reads another Psi source where it stands. Among fields, marked, `#include(file: "x")*`, it merges the
+source's fields into the block, so the fields after it override them; as a value it makes the source a block.
 
 | Argument | Reads |
 |---|---|
@@ -62,7 +63,7 @@ val included = {
   val dir = java.nio.file.Files.createTempDirectory("psi")
   def write(name: String, text: String) = java.nio.file.Files.write(dir.resolve(name), text.getBytes("UTF-8"))
   write("defaults.psi", "server { host: localhost, port: 8080 }\nlog.level: INFO\n")
-  write("app.psi", "#include(file: \"defaults\")\nserver.port: 9090\n#include(file: \"local\", optional: true)\n")
+  write("app.psi", "#include(file: \"defaults\")*\nserver.port: 9090\n#include(file: \"local\", optional: true)*\n")
   Psi(dir.resolve("app.psi").toUri.toURL).fold(_.message, _.toString)
 }
 ```
@@ -77,9 +78,9 @@ log.level: INFO
 and no `local.psi` next to it,
 
 ```
-#include(file: "defaults")
+#include(file: "defaults")*
 server.port: 9090
-#include(file: "local", optional: true)
+#include(file: "local", optional: true)*
 ```
 
 ```scala mdoc:passthrough

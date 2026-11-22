@@ -6,5 +6,5 @@ formatter-errors.psi
         hint: remove it
   8:19: unknown formatter 'csv'
   9:19: argument 'separator' is required and not given
-  13:3: a formatted substitution stands where an injection does, and a string is no fields or elements
-        hint: write a key and ':' or a '- ' before it, or remove the formatter
+  12:11: a formatted substitution cannot inject: a string is no fields or elements
+         hint: remove the '*', or the formatter

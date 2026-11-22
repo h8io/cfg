@@ -36,7 +36,7 @@ class YamlTest extends AnyFlatSpec with Matchers {
 
   "#yaml" should "give a YAML file's tree where it stands, relative to the source, its tags as written" in {
     val root = loaded(
-      "db: #yaml(file: \"db.yaml\")\n#yaml(file: top)\nport: 1",
+      "db: #yaml(file: \"db.yaml\")\n#yaml(file: top)*\nport: 1",
       "db.yaml" -> "host: !h localhost\nports: [1, 2]\n",
       "top.yaml" -> "x: y\nport: 0\n")
     root.toString shouldBe "db:\n  host: @h localhost\n  ports:\n    - 1\n    - 2\nx: y\nport: 1\n"

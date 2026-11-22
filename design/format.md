@@ -1008,8 +1008,8 @@ elements, and `[$b*, $c]` the elements of `b` and then `c`.
   On the next line it means the same, `a:⏎  $b*` being `a: $b*` (§4).
 - **Two or more alone in a block opened by indentation**, `a:⏎  $b*⏎  $c*`, stand among fields, a
   line with no `- ` being a field's place: the block is a map, and each must find one. A sequence of
-  several is written with dashes, `a:⏎  - $b*⏎  - $c*`. With none finding anything the block is
-  nothing, and its key or element is left out, as an optional graft's is.
+  several is written with dashes, `a:⏎  - $b*⏎  - $c*`. With none finding anything the map is empty,
+  as `a { $?b*, $?c* }` is; only one alone, `a: $?b*`, leaves its key out.
 - **What it finds must be a map among fields and a sequence among elements**, an error naming where
   it is defined otherwise: the place says what the author meant, so a mismatch is the author's
   mistake.
@@ -1022,8 +1022,8 @@ elements, and `[$b*, $c]` the elements of `b` and then `c`.
   fields. In a concatenation it is an error, `x$b*` and `$dir*.log`, with a hint to write `${dir}*`
   for the text: a glob written `$prefix*` must not turn into an injection unnoticed. In quotes it is
   text, as everything is. With braces the `*` goes inside, `${b*}`; `${b}*` is the substitution and
-  the text `*`, an error among fields and among elements, where a scalar holding more than the
-  substitution is one.
+  the text `*`, a string after a key or a `- `, and an error alone among fields, where a scalar
+  holding more than the substitution is one.
 - **An index into a sequence counts the elements its injections put**, and resolves only those
   before the element it names: in `a: [x, $b*, $a[0]]`, `$a[0]` is `x`, and `$b` is not resolved to
   find it. An element that is no injection is one element, and is never resolved to count.
@@ -2938,4 +2938,6 @@ Fixed on a fourth review, the code of sessions 32 and 36 and the parser's, put t
 - Breaks every injection written since session 34, every `#include` in statement position, and an
   unquoted value ending in `$name*`: before 1.0, compatibility is not kept. The code follows in a
   PR of its own.
-
+- Settled in the code, put to the user: two or more injections alone in a block finding nothing make
+  an empty map, as the same in braces does, where session 42's text left the key out; and `${b}*`
+  after a `- ` is a string, as after a key.
