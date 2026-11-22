@@ -7,7 +7,7 @@ import java.net.URL
 import scala.collection.{immutable, mutable}
 import scala.util.control.ControlThrowable
 
-/** Parses a source and expands its directives (`format.md` §6, §8), the sources they parse included, depth-first.
+/** Parses a source and expands its directives, the sources they parse included, depth-first.
   *
   * A call is expanded only when its directive is registered and not disabled and its arguments go to its parameters;
   * any failure is reported at the call, which then contributes nothing, and expansion goes on. Every source being
@@ -73,7 +73,7 @@ private[psi] final class Expand private (
         Some(sequence.copy(elements = elements))
       case AST.DirectiveValue(call, tag) =>
         run(call, stack, depth + 1).fold(Option.empty[AST.Value])(placed(call, tag, _, depth))
-      // what a call gives is kept, to be put once substitutions are resolved, as what a substitution finds is (§9)
+      // what a call gives is kept, to be put once substitutions are resolved, as what a substitution finds is
       case AST.Contents(AST.Injected.Calling(call), tag, location) =>
         run(call, stack, depth + 1)
           .fold(Option.empty[AST.Value])(placed(call, None, _, depth))
@@ -111,7 +111,7 @@ private[psi] final class Expand private (
     }
 
   /** A fragment injected among the elements of a sequence, `depth` levels deep: the elements of a sequence, in its
-    * place; anything else is an error (§9).
+    * place; anything else is an error.
     */
   private def injected(call: AST.Call, fragment: Fragment.Some, depth: Int): Vector[AST.Value] =
     fragment match {
@@ -156,7 +156,7 @@ private[psi] final class Expand private (
     * call; a container past the limit throws [[TooDeep]].
     */
   private def built(call: AST.Call, node: Node.ISome[Id], tag: Option[String], depth: Int): AST.Value = {
-    // counted before it is built, so that an alias in YAML used over and over cannot take the heap (§11)
+    // counted before it is built, so that an alias in YAML used over and over cannot take the heap
     nodes.count()
     val location = DirectiveLocation(call.location, call.name, node.location)
     node match {
@@ -277,7 +277,7 @@ private[psi] final class Expand private (
 
 private[psi] object Expand {
 
-  /** How many sources deep directives may parse, a backstop for a key that changes on every step (§6). */
+  /** How many sources deep directives may parse, a backstop for a key that changes on every step. */
   def MaxDepth: Int = 64
 
   /** A node a handler built that goes past the depth limit. */
@@ -287,9 +287,9 @@ private[psi] object Expand {
   private case object TooLarge extends ControlThrowable
 
   /** The nodes fragments bring into the syntax trees of one load beyond its sources' own, at most `limit`, the load's
-    * node limit, which grafts share once the sources are expanded (§11): every node a handler built from a `Node`,
-    * every use counted, and every node of a source parsed but on its first use in the load that parsed it — a fragment
-    * a handler keeps and gives again, in this load or a later one, copies what was read once.
+    * node limit, which grafts share once the sources are expanded: every node a handler built from a `Node`, every use
+    * counted, and every node of a source parsed but on its first use in the load that parsed it — a fragment a handler
+    * keeps and gives again, in this load or a later one, copies what was read once.
     */
   final class Nodes(val limit: Int) {
     var used = 0L

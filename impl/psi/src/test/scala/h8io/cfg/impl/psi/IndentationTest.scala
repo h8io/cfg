@@ -4,7 +4,7 @@ import h8io.cfg.{Id, Node}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** The indented syntax (`format.md` §4, Indentation). */
+/** The indented syntax. */
 class IndentationTest extends AnyFlatSpec with Matchers {
   private def at(line: Int, column: Int): SourceLocation = SourceLocation("s", line, column)
 

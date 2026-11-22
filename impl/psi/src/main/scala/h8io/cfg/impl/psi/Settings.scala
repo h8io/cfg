@@ -2,7 +2,7 @@ package h8io.cfg.impl.psi
 
 import java.time.Duration
 
-/** What a [[PsiLoader]] is built with (`format.md` §5, §6, §9, §11), every field validated by [[PsiBuilder.build]].
+/** What a [[PsiLoader]] is built with, every field validated by [[PsiBuilder.build]].
   *
   * @param directives
   *   the loader's directives, the markers and formatters likewise, each with the name it is registered by, in order

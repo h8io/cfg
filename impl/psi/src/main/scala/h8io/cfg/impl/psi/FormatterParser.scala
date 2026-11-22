@@ -3,10 +3,10 @@ package h8io.cfg.impl.psi
 import h8io.cfg.impl.psi.Lexer.*
 import h8io.cfg.impl.psi.MarkerParser.Call
 
-/** Reads the formatter of a substitution (`format.md` §9) from just after its `;`: whitespace, a call written as a
-  * marker's is, its name by the key rule, and the `}` that closes the substitution. `line` is the rest of the source's
-  * line, up to a forbidden character, and `offsets` the offset in the source of each of its characters and of the end
-  * after them; a `"` or a `}` inside an argument's literal closes nothing.
+/** Reads the formatter of a substitution from just after its `;`: whitespace, a call written as a marker's is, its name
+  * by the key rule, and the `}` that closes the substitution. `line` is the rest of the source's line, up to a
+  * forbidden character, and `offsets` the offset in the source of each of its characters and of the end after them; a
+  * `"` or a `}` inside an argument's literal closes nothing.
   *
   * The call is bound to its arguments as it is read, the built-in `join` or a loader's formatter, whose handler is
   * called with them.

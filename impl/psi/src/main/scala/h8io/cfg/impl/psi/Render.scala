@@ -5,13 +5,13 @@ import h8io.cfg.impl.psi.Token.{Formatted, KeyMode, Reference, Text, ValueMode}
 
 /** Writes a merged tree as Psi source, which parses and merges back to the same tree, its locations aside.
   *
-  * It writes indentation, as a source is usually written (`format.md` §4): a field takes a line, and a map or a
-  * sequence that holds anything stands in a block below its key, indented by two spaces, a map as its fields and a
-  * sequence as `- ` elements; braces are left for the empty `{}` and `[]`. Tags go after the `:`, or after the `- ` of
-  * an element, with the block below them. An element that is a map has its first field on the line of its `- `, and a
-  * sequence its first element, `- - x`. Keys and tags are written as `Id.path` writes keys, bare when they can be and
-  * in backticks otherwise (`format.md` §3). A scalar is written bare when the lexer reads it back as the same scalar,
-  * in double quotes otherwise; a concatenation always in double quotes.
+  * It writes indentation, as a source is usually written: a field takes a line, and a map or a sequence that holds
+  * anything stands in a block below its key, indented by two spaces, a map as its fields and a sequence as `- `
+  * elements; braces are left for the empty `{}` and `[]`. Tags go after the `:`, or after the `- ` of an element, with
+  * the block below them. An element that is a map has its first field on the line of its `- `, and a sequence its first
+  * element, `- - x`. Keys and tags are written as `Id.path` writes keys, bare when they can be and in backticks
+  * otherwise. A scalar is written bare when the lexer reads it back as the same scalar, in double quotes otherwise; a
+  * concatenation always in double quotes.
   *
   * A merged tree holds what is still unresolved, which only a test or a debugger shows. An injection is written with
   * its `*`, among elements after a `- ` and after a key on the key's line. What a call injected after a key gave has no
@@ -202,7 +202,7 @@ private[psi] object Render {
       }
     }
 
-  /** A character that may not stand raw even in quotes (`format.md` §3), or half a surrogate pair with no other half.
+  /** A character that may not stand raw even in quotes, or half a surrogate pair with no other half.
     */
   private def forbidden(text: String, i: Int): Boolean = {
     val c = text.charAt(i)

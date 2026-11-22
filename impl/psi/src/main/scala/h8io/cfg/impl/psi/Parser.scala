@@ -6,10 +6,10 @@ import h8io.cfg.impl.psi.Token.*
 import scala.annotation.tailrec
 import scala.util.control.ControlThrowable
 
-/** Reads the syntax tree of one source by recursive descent over its tokens (`format.md` §3, §4, §6, §9).
+/** Reads the syntax tree of one source by recursive descent over its tokens.
   *
-  * The lexer's errors are collected as it reports them, and it goes on past them. So does the parser, at the
-  * synchronisation points of §11: a broken field, element or argument is reported, skipped to the next separator at its
+  * The lexer's errors are collected as it reports them, and it goes on past them. So does the parser, at its
+  * synchronisation points: a broken field, element or argument is reported, skipped to the next separator at its
   * bracket depth or to the bracket closing its container, and left out of the tree. A directive call with any error in
   * it is left out whole. An unbalanced bracket ends the source, as a fatal error of the lexer does; one that closes
   * nothing at the top level is skipped.
@@ -34,7 +34,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
   /** The brackets open around the token being read, innermost first. */
   private var open: List[Closing] = Nil
 
-  /** The keys after a dot of the dotted keys around the token being read, each a level (`format.md` §11). */
+  /** The keys after a dot of the dotted keys around the token being read, each a level. */
   private var dots = 0
 
   /** The maps and sequences opened by indentation around the token being read, each a level. */
@@ -46,7 +46,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
   private def depth: Int = base + open.size + dots + levels
 
   /** The containers around the token being read, innermost first: a block's region, whose lines the indentation syntax
-    * counts, or none for `[…]` and `(…)`, where indentation means nothing (`format.md` §4).
+    * counts, or none for `[…]` and `(…)`, where indentation means nothing.
     */
   private var layouts: List[Option[Region]] = Nil
 
@@ -70,12 +70,12 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
   /** Where the doc comment before the item being read stands, if it has one. */
   private var docAt: Option[SourceLocation] = None
 
-  /** Before `token` opens a level: past the limit, the source ends there (§11). */
+  /** Before `token` opens a level: past the limit, the source ends there. */
   private def enter(token: Token, reported: Int = reportedAfter): Unit =
     if (depth >= limit) halt(token, DepthExceeded(token.location, limit, fatal = true), reported)
 
   def document(): Result[AST.Document] = {
-    // the top level starts at column 1 (§4)
+    // the top level starts at column 1
     val statements = new Statements
     new Items(KeyMode, None, documented = true, Some(new Region(1, indented = false)), statements).read()
     Result(AST.Document(statements.read.result()), lexer.errors)
@@ -107,7 +107,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
 
   /** Breaks the item being read at `error`, found at `token`, keeping the lexer's errors up to `reported`; the item is
     * skipped from `token` on. At the end of a source that a fatal error has ended nothing is reported but the fatal
-    * error, which is the cause (§11), and the source ends.
+    * error, which is the cause, and the source ends.
     */
   private def fail(token: Token, error: PsiError, reported: Int = reportedAfter): Nothing =
     if (token.kind == End && lexer.halted) throw Halt(None, lexer.errorCount)
@@ -124,19 +124,19 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     reportedAfter = lexer.errorCount
   }
 
-  /** The fields of a block, the elements of a sequence or the arguments of a directive, separated by `,` and newlines
-    * (§3): a run of newlines with at most one `,` is one separator, and a `,` with no item before it in its container
-    * is an empty element.
+  /** The fields of a block, the elements of a sequence or the arguments of a directive, separated by `,` and newlines:
+    * a run of newlines with at most one `,` is one separator, and a `,` with no item before it in its container is an
+    * empty element.
     *
-    * In a `region` the lines are counted (§4): a line starts at the region's width, set by the first line of a `{…}`
-    * that starts in it; a line further left ends a block opened by indentation, the line then read by a block further
-    * out, and one that lands on no width, or goes deeper where nothing opens a block, is reported and skipped. A line
+    * In a `region` the lines are counted: a line starts at the region's width, set by the first line of a `{…}` that
+    * starts in it; a line further left ends a block opened by indentation, the line then read by a block further out,
+    * and one that lands on no width, or goes deeper where nothing opens a block, is reported and skipped. A line
     * holding only a doc comment is not counted, the comment going with the item after it; one that starts with a doc
     * comment and goes on with its item starts where the doc comment does.
     *
-    * A broken item is skipped (§11). A bracket that closes another container than this one ends the source when any is
-    * open, and is skipped when none is; in a block opened by indentation it ends the block, for a container further out
-    * to close.
+    * A broken item is skipped. A bracket that closes another container than this one ends the source when any is open,
+    * and is skipped when none is; in a block opened by indentation it ends the block, for a container further out to
+    * close.
     *
     * @param closing
     *   the bracket that ends the container, with the location of the one that opened it; none for a document, which the
@@ -336,7 +336,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     * mode the parser read last.
     *
     * What the lexer finds on the way is forgotten, a fatal error but excepted: the tokens are read in a guessed mode,
-    * and the parser cannot tell what they were meant to be (§11).
+    * and the parser cannot tell what they were meant to be.
     */
   private def skip(token: Token, context: Mode): Token = {
     val reported = lexer.errorCount
@@ -445,7 +445,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
   /** A statement that starts with anything but a key, which [[Statements]] reads with [[keys]] itself. */
   private def statement(first: Token, doc: Option[String]): AST.Statement =
     first.kind match {
-      // among the fields of a block a call or a substitution alone injects when marked with a `*` (§6, §9)
+      // among the fields of a block a call or a substitution alone injects when marked with a `*`
       case Directive(name) =>
         val (read, marked) = call(first, name)
         if (marked) AST.DirectiveStatement(read, doc)
@@ -510,7 +510,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     }
   }
 
-  /** A value from `token`, after the tag already read before it; a second one is reported (`format.md` §5). */
+  /** A value from `token`, after the tag already read before it; a second one is reported. */
   @tailrec private def value(token: Token, tag: Option[String]): AST.Value =
     token.kind match {
       case Tag(name) =>
@@ -533,7 +533,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
         val (read, marked) = call(token, name)
         if (marked) AST.Contents(AST.Injected.Calling(read), tag, token.location) else AST.DirectiveValue(read, tag)
       case Name(_, _) => fail(token, BacktickedValue(token.location))
-      // inside `[…]` indentation means nothing, and a value goes on its tag's line (§4)
+      // inside `[…]` indentation means nothing, and a value goes on its tag's line
       case Newline if layouts.headOption.flatten.isEmpty =>
         val after = skipNewlines(ValueMode)
         after.kind match {
@@ -548,7 +548,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     }
 
   /** A scalar: a substitution when it is one unquoted `${…}` and nothing else, a concatenation when it holds any other,
-    * `null` when it is that word unquoted (§3, §9).
+    * `null` when it is that word unquoted.
     */
   private def scalar(token: Token, parts: Vector[Part], quoted: Boolean, tag: Option[String]): AST.Value = {
     unquoted = !quoted
@@ -564,14 +564,14 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
   }
 
   /** Sets the column a block opened below the value about to be read goes deeper than: that of the block it stands in,
-    * or of the line, `column`, if that goes deeper still (§4).
+    * or of the line, `column`, if that goes deeper still.
     */
   private def below(column: Int): Unit =
     deeper = layouts.headOption.flatten.fold(column)(region => math.max(region.width, column))
 
   /** The block below `newline`, which ends the line of a `:`, a tag or a `- `, indented deeper than [[deeper]], with
-    * `tag` written before it; with no line deeper, an error (§4). The caller reads it, so that this method's frame is
-    * gone by then: a value nested in a value recurses through the reading.
+    * `tag` written before it; with no line deeper, an error. The caller reads it, so that this method's frame is gone
+    * by then: a value nested in a value recurses through the reading.
     */
   private def indented(newline: Token, tag: Option[String]): Content = {
     val threshold = deeper
@@ -584,7 +584,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
       }
     }
     val after = first()
-    // a fatal error ahead ends the source, and is all that is reported (§11)
+    // a fatal error ahead ends the source, and is all that is reported
     if (after.kind == End && lexer.halted) fail(after, NothingIndented(newline.location))
     rewind(mark)
     after.kind match {
@@ -595,7 +595,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
   }
 
   /** A block opened by indentation, its first token at `at`, the lines of its block starting at its column: a map, a
-    * sequence of `- ` elements, or one value, which takes `tag` too (§4, §9). A line with no `- ` is a field's place: a
+    * sequence of `- ` elements, or one value, which takes `tag` too. A line with no `- ` is a field's place: a
     * substitution or a call alone there injects when marked with a `*`, and two or more lines of values make a map when
     * any is a substitution or a call. The first item on its line goes below to a block deeper than `first`, as it would
     * after a `- `.
@@ -687,7 +687,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
               values += ((value, doc.zip(doced), first))
               if (injects(value)) injecting = true
               // two or more, a substitution or a call among them: lines with no `- `, which are fields' places, the
-              // block a map, and a level from here, counted as one a field opens is (§9)
+              // block a map, and a level from here, counted as one a field opens is
               if (read > 1 && injecting) becomes(first, Fields)(field)
           }
       }
@@ -704,7 +704,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
           val all = values.result()
           all match {
             case (value, doc, start) +: rest =>
-              // the tag after the key and one before the value are two on one value (§4, §5)
+              // the tag after the key and one before the value are two on one value
               if (tag.isDefined && value.tag.isDefined) record(SecondTag(start.location))
               doc.foreach { case (_, at) => record(MisplacedDocComment(at)) }
               rest.foreach { case (_, _, at) => record(SecondValue(at.location)) }
@@ -744,7 +744,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
 
   /** One value alone in a block opened by indentation, which takes the `tag` written before the block when it has none
     * of its own, a second being reported before: a substitution or a call alone after a key or a `- ` is its value,
-    * whole (§4, §9).
+    * whole.
     */
   private def lone(value: AST.Value, tag: Option[String]): AST.Value =
     value match {
@@ -761,7 +761,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     }
 
   /** An element after its `- `, `dash`: a value on the dash's line, the lines of a block it opens aligned under its
-    * first token, or below it, deeper than the dash (§4).
+    * first token, or below it, deeper than the dash.
     */
   private def dashed(dash: Token, doc: Option[String]): AST.Element = {
     val mark = lexer.mark()
@@ -793,11 +793,11 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     substituted = false
   }
 
-  /** An element in `[…]`, where a substitution or a call is an injection of what it finds or gives (§9). */
+  /** An element in `[…]`, where a substitution or a call is an injection of what it finds or gives. */
   private def sequenceElement(first: Token, doc: Option[String]): AST.Element = listed(value(first, None), doc)
 
   /** An element read as `value`: one, or marked with a `*` the elements of a sequence, which have no place for a tag
-    * written before it (§9).
+    * written before it.
     */
   private def listed(value: AST.Value, doc: Option[String]): AST.Element =
     value match {
@@ -837,10 +837,10 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
   }
 
   /** A directive from its `#name` token, the last one read: with its arguments when a `(` touches the name, with none
-    * when nothing does — a `(` apart from the name, on its line or a later one, is an error (§6).
+    * when nothing does — a `(` apart from the name, on its line or a later one, is an error.
     *
     * A call with any error in it, its name's or its arguments', is read to its end and then left out, its item with it:
-    * a handler must not run on arguments that are not what was meant (§11).
+    * a handler must not run on arguments that are not what was meant.
     */
   private def call(directive: Token, name: String): (AST.Call, Boolean) = {
     val before = reportedBefore
@@ -865,15 +865,15 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
             Some(Vector.empty)
         }
       }
-    // a `*` touching the `)` marks a call with arguments (§6, §9)
+    // a `*` touching the `)` marks a call with arguments
     val marked = read.isEmpty || lexer.marker()
     ended()
     if (lexer.errorCount > before) throw Dropped
     (AST.Call(name, read.getOrElse(Vector.empty), directive.location), marked)
   }
 
-  /** The arguments after `open`, positional ones first and no name twice (§6). Each one out of place is reported as it
-    * is read, so that an error further on that ends the source does not hide it.
+  /** The arguments after `open`, positional ones first and no name twice. Each one out of place is reported as it is
+    * read, so that an error further on that ends the source does not hide it.
     */
   private def arguments(open: Token): Vector[AST.Argument] = {
     var named = Set.empty[String]
@@ -900,7 +900,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
     arguments.result()
   }
 
-  /** `name: literal`, or a literal alone; `name = literal` is an error that says to write `:` (§6). */
+  /** `name: literal`, or a literal alone; `name = literal` is an error that says to write `:`. */
   private def argument(first: Token): AST.Argument =
     first.kind match {
       case Name(name, _) =>
@@ -919,7 +919,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
       case _ => fail(first, ExpectedArgument(first.location, describe(first.kind)))
     }
 
-  /** An argument's value, as the string the handler gets (§6): a bare name, an integer as written, a quoted string. */
+  /** An argument's value, as the string the handler gets: a bare name, an integer as written, a quoted string. */
   private def literal(token: Token): String =
     token.kind match {
       case Name(name, false) => name
@@ -942,7 +942,7 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
 private[psi] object Parser {
 
   /** `source` parsed, standing `base` levels deep, where a directive placed it, its tree limited to `limit` levels in
-    * all (`format.md` §11).
+    * all.
     */
   def parse(
       source: Source,
@@ -953,7 +953,7 @@ private[psi] object Parser {
     new Parser(new Lexer(source, markers, formatters), base, limit).document()
 
   /** The lines of a block, which start at `width`, unknown in a `{…}` until a line starts in it; `indented` for a block
-    * opened by indentation, which a line further left ends (`format.md` §4).
+    * opened by indentation, which a line further left ends.
     */
   private final class Region(var width: Int, val indented: Boolean)
 
