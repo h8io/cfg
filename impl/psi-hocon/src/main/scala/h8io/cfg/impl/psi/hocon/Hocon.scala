@@ -13,7 +13,7 @@ final case class HoconInvalid(source: String, reason: String) extends DirectiveE
   def message: String = source + " cannot be read as HOCON: " + reason
 }
 
-/** Psi's import of a HOCON file (`format.md` §6), registered under a name of the loader's choosing, `hocon` by custom:
+/** Psi's import of a HOCON file, registered under a name of the loader's choosing, `hocon` by custom:
   * `Psi.builder.withDirective("hocon", Hocon)`.
   *
   * `#hocon(file: "app.conf")` gives the file's whole tree where the call stands, resolved on its own: no system

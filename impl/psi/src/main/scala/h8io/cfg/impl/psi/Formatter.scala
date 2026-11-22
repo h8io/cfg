@@ -2,8 +2,8 @@ package h8io.cfg.impl.psi
 
 import h8io.cfg.{Id, Node}
 
-/** A formatter, registered with a loader under a name through [[PsiBuilder.withFormatter]] (`format.md` §9): what
-  * `\${path; name(…)}` calls to turn the node a substitution finds into a string.
+/** A formatter, registered with a loader under a name through [[PsiBuilder.withFormatter]]: what `\${path; name(…)}`
+  * calls to turn the node a substitution finds into a string.
   *
   * It is called in two steps. First with its arguments, literals only, laid out over the [[parameters]] as a
   * directive's are, once the framework has found every argument going to a parameter, none twice and every required one

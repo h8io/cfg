@@ -189,8 +189,8 @@ final case class ConcatenationLocation(at: SourceLocation, parts: ::[ReferenceLo
   override def toString: String = PsiLocation.show(this)
 }
 
-/** A map defined in more places than one, merged (`format.md` §7, §10): `at` is where it was defined last, `earlier`
-  * the places before, the latest first.
+/** A map defined in more places than one, merged: `at` is where it was defined last, `earlier` the places before, the
+  * latest first.
   */
 final case class MergedLocation(at: PsiLocation, earlier: ::[PsiLocation]) extends PsiLocation {
   // a location shares those it refers to, which the hash of a case class would compute again for every path to them
@@ -209,7 +209,7 @@ case object NoSourceLocation extends PsiLocation {
   def description: String = "no source"
 }
 
-/** A node a directive built from a `Node` of its own and placed at `at`, the call (`format.md` §6, §10).
+/** A node a directive built from a `Node` of its own and placed at `at`, the call.
   *
   * @param directive
   *   the directive's name, rendered after `#` as a key is, in backticks when it is not bare
@@ -228,12 +228,12 @@ final case class DirectiveLocation(at: SourceLocation, directive: String, origin
   override def toString: String = PsiLocation.show(this)
 }
 
-/** A value `#prop` read from the system property `name` (`format.md` §6, §10). */
+/** A value `#prop` read from the system property `name`. */
 final case class SystemPropertyLocation(name: String) extends PsiLocation {
   def description: String = "system property " + name
 }
 
-/** A value `#env` read from the environment variable `name` (`format.md` §6, §10). */
+/** A value `#env` read from the environment variable `name`. */
 final case class EnvironmentLocation(name: String) extends PsiLocation {
   def description: String = "environment variable " + name
 }

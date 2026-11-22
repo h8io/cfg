@@ -5,8 +5,8 @@ import h8io.cfg.CfgError
 /** Every error a load reported, in the order found. The loader reports as many as it can without inventing any. */
 final case class PsiErrors(errors: ::[PsiError]) extends CfgError {
 
-  /** The errors as one report (`format.md` §11): a count, then the errors grouped by source in the order found, each
-    * source named on a line of its own and each error under it as `line:column: message`, its hint on the next line.
+  /** The errors as one report: a count, then the errors grouped by source in the order found, each source named on a
+    * line of its own and each error under it as `line:column: message`, its hint on the next line.
     */
   def message: String = {
     val groups = errors.groupBy(_.location.source)

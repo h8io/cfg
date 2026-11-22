@@ -4,8 +4,7 @@ import h8io.cfg.{Id, Node}
 
 import java.net.URL
 
-/** A Psi loader with the directives, markers and formatters it was built with (`format.md` §5, §6, §9); [[Psi]] is the
-  * one with nothing added.
+/** A Psi loader with the directives, markers and formatters it was built with; [[Psi]] is the one with nothing added.
   */
 final class PsiLoader private[psi] (settings: Settings) {
   import settings.{characterLimit, depthLimit, nodeLimit, readBytes, readTime}
@@ -25,7 +24,7 @@ final class PsiLoader private[psi] (settings: Settings) {
     directives ++ Seq[(String, Directive)](Include.name -> Include, prop.name -> prop, env.name -> env)
   }
 
-  /** Loads and merges the sources at `urls`, in order, each named in locations by its URL as given (§10). */
+  /** Loads and merges the sources at `urls`, in order, each named in locations by its URL as given. */
   def apply(urls: URL*): Either[PsiErrors, Node.IMap[Id.Root]] = {
     val budget = new ReadBudget(readBytes, readTime)
     load(
