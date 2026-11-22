@@ -111,6 +111,15 @@ last: $hosts[-1]
 
 ```scala mdoc:passthrough
 Example.psi("""
+base: [db1, db2]
+site: [db3]
+hosts: [$base, $site]
+last: $hosts[-1]
+""")
+```
+
+```scala mdoc:passthrough
+Example.psi("""
 all: [x, $all[-1]]
 """)
 ```
