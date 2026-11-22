@@ -40,6 +40,26 @@ class HardeningTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChe
     }
   }
 
+  "A source of many broken fields" should "give its errors in time linear in its length" in {
+    // the errors the parser read past were dropped from a list, walking it from the head, which took seconds here
+    val n = 200000
+    Psi.parse("s", "a:\n  1: x\n" * n).left.map(_.errors.size) shouldBe Left(n)
+  }
+
+  "A sequence looked into at every index" should "load in time linear in its length" in {
+    // each lookup walked the sequence from its first element, which took minutes here
+    val n = 200000
+    val lookups = (0 until n).map(i => "r" + i.toString + ": $s[" + i.toString + "]").mkString("\n")
+    for (sequence <-
+        List("s: [" + (0 until n).mkString(", ") + "]", "t: [a]\ns: [$t, " + (1 until n).mkString(", ") + "]"))
+      Psi.parse("s", sequence + "\n" + lookups).map(root => (root.size, root("r" + (n - 1).toString).toString)) match {
+        case Right((size, last)) =>
+          size should be > n
+          last should include((n - 1).toString)
+        case Left(errors) => fail(errors.toString)
+      }
+  }
+
   "A long line with a character beyond Latin-1" should "load as fast as one of Latin-1" in {
     // a column counted from the start of its line for every token took minutes on this line
     val n = 500000

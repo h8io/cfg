@@ -94,6 +94,24 @@ class ResolveTest extends AnyFlatSpec with Matchers {
     root("u") shouldBe Node.IScalar(keyed("u"), None, "0", ref(3, 4, "s[0]", ref(1, 5, "x", at(4, 4))))
   }
 
+  it should "find each element of a sequence by index, however many lookups go into it, in any order" in {
+    def values(text: String, keys: String*): Seq[String] = {
+      val root = loaded(text)
+      keys.map(key =>
+        root(key) match {
+          case scalar: Node.IScalar[?] => scalar.value
+          case other => other.toString
+        })
+    }
+    val lookups = "\nk3: $s[3]\nk0: $s[0]\nk5: $?s[5]\nk2: $s[2]\nk4: $s[4]\nk1: $s[1]"
+    values("t: [a, b]\ns: [x, $t, ${?n}, ${t; join(\"-\")}, y]" + lookups, "k0", "k1", "k2", "k3", "k4", "k5") shouldBe
+      Seq("x", "a", "b", "a-b", "y", "INone(Key(k5,Root))")
+    // a block of injections alone gives its sequence anew to each lookup
+    values(
+      "t: [a, b]\nu: [c]\ns:\n  $t\n  $u\nk3: $?s[3]\nk1: $s[1]\nk2: $s[2]\nk0: $s[0]", "k0", "k1", "k2", "k3") shouldBe
+      Seq("a", "b", "c", "INone(Key(k3,Root))")
+  }
+
   it should "read as empty in a concatenation" in {
     loaded("e: \"${?x}\"")("e") shouldBe Node.IScalar(keyed("e"), None, "", at(1, 4))
   }

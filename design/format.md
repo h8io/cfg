@@ -1210,8 +1210,10 @@ mistake is worse than stopping.
     substitution grafts, counted from where it lands. It is reported, as `DepthExceeded`, where it
     is crossed:
     - in a source's text, which ends the source, as an unbalanced bracket does: what follows
-      cannot be read without the levels it stands in. A source a directive parses is read from the
-      depth of the call, so expanding includes inside blocks stays within the limit too;
+      cannot be read without the levels it stands in. A source a directive parses is read a level
+      below the call, so expanding includes inside blocks stays within the limit too; among fields
+      as well, where its fields open no level in the tree (session 40): its parse takes a level's
+      stack, and a chain of 63 includes among fields over 255 levels overflowed a stack of 1 MB;
     - where a directive places a fragment that does not fit there, a failure of the call, which
       contributes nothing: a fragment is a value, and a handler may give one back elsewhere, and
       one built from a `Node` has no depth but the handler's;
@@ -2833,4 +2835,23 @@ Fixed on a third review of session 39's code, nothing of the files' meaning chan
   read, over merging every one; every extension of `reference`, `.Ψ` over `.ψ` over `.psi`, then
   class path order; one resolution over all the sources, with no check that a reference resolves
   alone; no system property choosing the file, as session 25 has it.
+
+### Session 40 — 2026-11-22
+
+Fixed on a fourth review, the code of sessions 32 and 36 and the parser's, put to the user with the fix:
+
+- **A chain of includes among fields overflowed the stack within both limits**: 63 sources each
+  including the next among fields, the last 255 levels deep, threw a `StackOverflowError` on a
+  stack of 1 MB, breaking classes for the JVM. A source parsed in value position was read a level
+  below the call; among fields it was read at the call's own depth, its parse costing stack and no
+  level. It is read a level below there too (§11), so that a chain of includes takes no more stack
+  than the levels it is charged. Mine; it changes what fits, by a level for each include among fields.
+- **The parser's errors were forgotten from a list walked from its head**, the reading ahead and
+  coming back dropping a tail each time: 400 KB of `a:⏎  1: x` took 8 seconds. They are kept in an
+  array.
+- **An index into a sequence walked it from its first element on every lookup**: 100 000 lookups
+  of a sequence of literals took 14 seconds. The walk is kept by position and taken up where it
+  stopped; a lookup that finds its element already found counts as deep as walking to it would,
+  and fails where that would go past the limit, as the walk would, so the limit still does not
+  depend on order (§11).
 

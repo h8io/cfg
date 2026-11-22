@@ -22,7 +22,8 @@ private[psi] final class Lexer(
   private var atLineStart = true
   private var afterDash = false
   private var ended = false
-  private val reported = mutable.ListBuffer.empty[PsiError]
+  // errors are forgotten from the end, often, as the parser reads ahead and comes back: an array drops a tail in place
+  private val reported = mutable.ArrayBuffer.empty[PsiError]
 
   /** The errors found so far, in order. */
   def errors: List[PsiError] = reported.toList

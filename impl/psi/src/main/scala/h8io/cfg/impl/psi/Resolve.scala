@@ -66,6 +66,9 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     */
   private val abandoned = mutable.Map.empty[Id, List[Tree.Map]]
 
+  /** By position, the walk of the last sequence looked into there by index ([[indexed]]). */
+  private val walks = mutable.Map.empty[Id, Walk]
+
   def tree: Result[Tree.Map] = {
     // every path goes through the root: an injection there would refer to the tree it is building (§9)
     errors ++= root.steps.collect { case Tree.Step.Injection(_, _, at) => InjectionAtRoot(at) }
@@ -523,36 +526,75 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
           case Some(value) => Right(Some(Id.Key(key, id) -> value))
           case None => Right(None)
         }
-      case (sequence: Tree.Sequence, Id.Index(index, _)) =>
-        @tailrec def element(i: Int, left: Int): Either[Failure, Option[(Id, Tree.Value)]] =
-          if (i == sequence.elements.size) Right(None)
-          else
-            sequence.elements(i) match {
-              case injection: Tree.Injection =>
-                resolve(Id.Index(i, id), injection) match {
-                  case Right(found) =>
-                    // a sequence, anything else as one element, or nothing for an optional one
-                    val elements = found.fold(Vector.empty[Tree.Value]) {
+      case (sequence: Tree.Sequence, Id.Index(index, _)) => indexed(id, sequence, index)
+      case _ => Right(None)
+    }
+
+  /** The element of `sequence` at `id` that `index` names. An injection or an optional substitution before it is
+    * resolved, to know how many elements it puts, and an injection that puts several gives its own position to each.
+    *
+    * Walking from the first element on every lookup took time linear in the index, and a sequence looked into at every
+    * index quadratic: the walk is kept, what it found and how deep resolving what went before each went, and a lookup
+    * takes it up where the last one stopped. One that finds its element already found counts as deep as walking to it
+    * would, and fails where that would go past the limit, at the first element resolved before it that resolving again
+    * goes past, as the walk would. A lookup into another sequence at `id`, which a block of injections alone gives anew
+    * each time, starts the walk anew.
+    */
+  private def indexed(id: Id, sequence: Tree.Sequence, index: Int): Either[Failure, Option[(Id, Tree.Value)]] = {
+    val walk = walks.get(id).filter(_.sequence eq sequence).getOrElse {
+      val walk = new Walk(sequence)
+      walks(id) = walk
+      walk
+    }
+    val height = if (index < walk.found.size) walk.heights(index) else walk.height
+    if (height >= 0 && steps + height > limit) {
+      // resolved before, and so once more past the limit, the failure reported as resolving it again reports it
+      val (first, _) = walk.resolved.find { case (_, height) => steps + height > limit }.get
+      Left(resolve(Id.Index(first, id), sequence.elements(first)).swap.toOption.get)
+    } else {
+      deepest = math.max(deepest, steps + height)
+      extended(id, walk, index)
+    }
+  }
+
+  /** The element at `index` of `walk`'s sequence, at `id`, walking it on from where it stopped as far as `index`. */
+  @tailrec private def extended(id: Id, walk: Walk, index: Int): Either[Failure, Option[(Id, Tree.Value)]] =
+    if (index < walk.found.size) Right(Some(walk.found(index)))
+    else if (walk.scanned == walk.sequence.elements.size) Right(None)
+    else {
+      val position = Id.Index(walk.scanned, id)
+      walk.sequence.elements(walk.scanned) match {
+        case value @ (_: Tree.Injection | Tree.Substitution(_, true, _, _) | _: Tree.Injections | _: Tree.Formatted) =>
+          val outer = deepest
+          deepest = steps
+          val resolution = resolve(position, value)
+          val height = deepest - steps
+          deepest = math.max(outer, deepest)
+          walk.resolved += walk.scanned -> height
+          resolution match {
+            case Right(found) =>
+              // a lookup made while resolving it never walks past it: it would resolve it again, a cycle
+              walk.add(
+                position,
+                value match {
+                  // a sequence, anything else as one element, or nothing for an optional one
+                  case _: Tree.Injection =>
+                    found.fold(Vector.empty[Tree.Value]) {
                       case put: Tree.Sequence => put.elements
                       case one => Vector(one)
                     }
-                    if (left < elements.size) Right(Some(Id.Index(i, id) -> elements(left)))
-                    else element(i + 1, left - elements.size)
-                  case Left(failure) => Left(failure)
-                }
-              // one that finds nothing puts no element, a formatted one as any other
-              case value @ (Tree.Substitution(_, true, _, _) | _: Tree.Injections | _: Tree.Formatted) =>
-                resolve(Id.Index(i, id), value) match {
-                  case Right(None) => element(i + 1, left)
-                  case Right(Some(_)) if left > 0 => element(i + 1, left - 1)
-                  case Right(Some(value)) => Right(Some(Id.Index(i, id) -> value))
-                  case Left(failure) => Left(failure)
-                }
-              case value if left == 0 => Right(Some(Id.Index(i, id) -> value))
-              case _ => element(i + 1, left - 1)
-            }
-        element(0, index)
-      case _ => Right(None)
+                  // one that finds nothing puts no element, a formatted one as any other
+                  case _ => found.toVector
+                },
+                height
+              )
+              extended(id, walk, index)
+            case Left(failure) => Left(failure)
+          }
+        case value =>
+          walk.add(position, Vector(value), -1)
+          extended(id, walk, index)
+      }
     }
 
   /** A scalar of text and `\${…}`, each referring to a scalar; an optional one with nothing to refer to is empty. */
@@ -659,6 +701,29 @@ private[psi] object Resolve {
       case branch: Id.Branch => branch.parent == id || below(branch.parent, id)
       case _ => false
     }
+
+  /** A walk of `sequence` by index: the elements found so far, each with its position, `scanned` the elements of the
+    * sequence walked past, and `height` how many steps deeper than the walk resolving them went, -1 for none resolved;
+    * `heights` holds that height as it was when each element found was, and `resolved` each element resolved, by index,
+    * with how many steps deeper resolving it went.
+    */
+  private final class Walk(val sequence: Tree.Sequence) {
+    val found: mutable.ArrayBuffer[(Id, Tree.Value)] = mutable.ArrayBuffer.empty
+    val heights: mutable.ArrayBuffer[Int] = mutable.ArrayBuffer.empty
+    val resolved: mutable.ArrayBuffer[(Int, Int)] = mutable.ArrayBuffer.empty
+    var scanned = 0
+    var height: Int = -1
+
+    /** Walks past the element at `position`, which put `elements`, resolving it `height` steps deep, -1 for none. */
+    def add(position: Id, elements: Vector[Tree.Value], height: Int): Unit = {
+      this.height = math.max(this.height, height)
+      elements.foreach { element =>
+        found += position -> element
+        heights += this.height
+      }
+      scanned += 1
+    }
+  }
 
   /** Why a node did not resolve: it failed, its error already reported, or it is part of a cycle not reported yet. */
   sealed trait Failure

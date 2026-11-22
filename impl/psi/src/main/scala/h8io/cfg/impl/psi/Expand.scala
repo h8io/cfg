@@ -51,8 +51,10 @@ private[psi] final class Expand private (
       case injection: AST.InjectionStatement => Vector(injection)
       case field: AST.Field =>
         value(field.value, stack, depth + field.keys.size - 1).map(value => field.copy(value = value))
+      // a source parsed among fields stands a level below the call, as one in a value does: it opens none in the tree,
+      // but its parse takes a level's stack, which a chain of them would otherwise add on top of the limit
       case AST.DirectiveStatement(call, _) =>
-        run(call, stack, depth).fold(Vector.empty[AST.Statement])(fields(call, _, depth))
+        run(call, stack, depth + 1).fold(Vector.empty[AST.Statement])(fields(call, _, depth))
     }
 
   /** `value` expanded, with `depth` levels around it. */
