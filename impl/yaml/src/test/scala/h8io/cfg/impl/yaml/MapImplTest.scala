@@ -147,4 +147,18 @@ a: 1
   it should "render the entries sharing a key only once" in {
     MapImpl(Id.Root, yaml"{a: 1, a: 2}").toString shouldBe "{a: 2}\n"
   }
+
+  it should "give each anchor a name of its own, so that two files that share one read back as overlaid" in {
+    // both files anchor a node as `x`: written as both had it, the alias after the second would refer to it
+    val overlaid = MapImpl(Id.Root, mergeMappings(yaml"{a: &x first, b: 0, c: *x}", yaml"{b: &x second}"))
+    val values = (node: Node.IMap[?]) =>
+      node.iterator.collect { case Node.IScalar(id, _, value, _) => id.key -> value }.toList
+    values(overlaid) shouldBe List("a" -> "first", "b" -> "second", "c" -> "first")
+    val shown = overlaid.toString
+    values(MapImpl(Id.Root, yaml"$shown")) shouldBe values(overlaid)
+    // a name taken keeps its node, and a fresh name is never one the source used
+    shown should include("&x first")
+    MapImpl(Id.Root, mergeMappings(yaml"{a: &id001 p, b: 0, c: *id001, d: &z q, e: *z}", yaml"{b: &z r, f: *z}"))
+      .toString shouldBe "{a: &id001 p, b: &z r, c: *id001, d: &id002 q, e: *id002, f: *z}\n"
+  }
 }

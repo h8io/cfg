@@ -45,6 +45,7 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
         )
       case Tree.Formatted(part, tags, _) => Tree.Formatted(formatted(part), tags, nowhere)
       case Tree.Layers(layers) => Tree.Layers(layers.map(layer => located(layer).asInstanceOf[Tree.Layer]))
+      case Tree.Kept(value) => Tree.Kept(located(value))
       case written: Tree.Map =>
         // a block merged over what may turn out no map is kept as written: its statements are what it holds
         val map = written.steps.foldLeft(written.copy(steps = Vector.empty)) {
@@ -129,6 +130,8 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     roundTrip("`a b`: @`t:x` \"q\\\"b\\\\d$x\\${y}\"\nf: x${g}y\nh: \"${i}\"\ns: \"\"")
     roundTrip("a: @t ${?h; join(\", \")}\nb: \"<${h; join(\"}\\\"\")}>\"\nc: [${h; join(x)}]")
     roundTrip("a: [$b*, @t $c, $?d*]\ne: @t $f*\ng: $?h*\ni:\n  - $j*\n  - $k")
+    // a value below an optional substitution, which it stands for when that finds nothing
+    roundTrip("a: 1\na: $?x\nb: [c]\nb: $?y*\nb: $?z")
   }
 
   it should "write an injection with its '*', after a key on its line and among elements after a `- `" in {
@@ -279,6 +282,8 @@ class RenderTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     val sub = Tree.Substitution(Id.Key("a", Id.Root), optional = false, None, nowhere)
     the[IllegalStateException] thrownBy Render.value(Tree.Layers(sub, sub)) should have message
       "Layers at s:1:1 with no key to write again"
+    the[IllegalStateException] thrownBy Render.value(Tree.Kept(Tree.Scalar("v", Some("t"), nowhere))) should
+      have message "Layers at s:1:1 with no key to write again"
   }
 
   it should "not write what a call gave to inject after a key, which has no source" in {

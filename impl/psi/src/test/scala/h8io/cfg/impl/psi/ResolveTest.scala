@@ -126,6 +126,12 @@ class ResolveTest extends AnyFlatSpec with Matchers {
     values("s: [x]\ns: [y, z]\nl: $s[-1]\ne: []\nf: $?e[-1]", "l", "f") shouldBe Seq("z", "INone(Key(f,Root))")
   }
 
+  it should "count a formatted substitution as one element, resolved only when optional" in {
+    // required, it is one element, a string: resolving it to count was a cycle when it referred into its own sequence
+    loaded("a: [${a[1]; join(\",\")}, [z]]").toString shouldBe "a:\n  - z\n  - - z\n"
+    loaded("a: [${a[-1]; join(\",\")}, [z]]").toString shouldBe "a:\n  - z\n  - - z\n"
+  }
+
   it should "take the last of a list gathered from several, located where it was written" in {
     loaded("a.hosts: [h1, h2]\nb.hosts: [h3]\nall: [$a.hosts*, $b.hosts*]\nlast: $all[-1]")("last") shouldBe
       Node.IScalar(keyed("last"), None, "h3", ref(4, 7, "all[-1]", ref(3, 18, "b.hosts[0]", at(2, 11))))
@@ -214,6 +220,26 @@ class ResolveTest extends AnyFlatSpec with Matchers {
     }
     shown("x { s: 1 }\na { k { p: 1 } }\na: $b\nb {}\na { k: $x, k { q: 2 } }") shouldBe
       "k:\n  p: 1\n  s: 1\n  q: 2"
+  }
+
+  it should "leave what stands before an optional one that finds nothing, whatever it is" in {
+    def shown(text: String): String =
+      Psi.parse("s", text).fold(e => fail(e.toString), _("a")) match {
+        case h8io.cfg.Node.IScalar(_, _, value, _) => value
+        case _: h8io.cfg.Node.INull[?] => "null"
+        case other => other.toString
+      }
+    // as it does below a substitution that finds what an optional one then does not
+    shown("b: 1\na: $b\na: $?missing") shouldBe "1"
+    shown("a: 1\na: $?missing") shouldBe "1"
+    shown("a: [1]\na: $?missing*") shouldBe "- 1"
+    shown("a: null\nh: [x]\na: ${?missing; join(\",\")}") shouldBe "null"
+    shown("x: 2\na: \"v${x}\"\na: $?missing\na: $?none") shouldBe "v2"
+    // a value found replaces it, a map merging over none of it
+    shown("a: 1\nb { c: 2 }\na: $?b") shouldBe "c: 2"
+    shown("a: [1]\nb: [2]\na: $?b*") shouldBe "- 2"
+    shown("a: 1\na: $?missing\na: 3") shouldBe "3"
+    shown("a: 1\nb: $?missing\nb: $?none\na: $?b") shouldBe "1"
   }
 
   it should "merge a block over what it finds as written there, a `:=` in it replacing" in {

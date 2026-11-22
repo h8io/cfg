@@ -20,7 +20,9 @@ package object yaml {
   /** YAML 1.2 core schema: `~`, `Null` and `NULL` are nulls and `<<` merge keys are supported. */
   private[yaml] val CoreSchemaInstance: Schema = new CoreSchema
 
-  private[yaml] val DumpOptions: DumpSettings = DumpSettings.builder().setSchema(CoreSchemaInstance).build()
+  /** How a node is written, with anchors named for this one rendering ([[Anchors]]). */
+  private def dumpSettings(): DumpSettings =
+    DumpSettings.builder().setSchema(CoreSchemaInstance).setAnchorGenerator(new Anchors).build()
 
   private[yaml] def settings(label: String): LoadSettings =
     LoadSettings.builder().setLabel(label).setSchema(CoreSchemaInstance).build()
@@ -130,7 +132,8 @@ package object yaml {
 
   /** `node` as YAML, every tag written in the source written again ([[Written]]). */
   private[yaml] def render(node: YamlNode): String = {
-    val events = new Serialize(DumpOptions).serializeOne(node).asScala.toVector
-    new Present(DumpOptions).emitToString(Written(node, events).iterator.asJava)
+    val settings = dumpSettings()
+    val events = new Serialize(settings).serializeOne(node).asScala.toVector
+    new Present(settings).emitToString(Written(node, events).iterator.asJava)
   }
 }

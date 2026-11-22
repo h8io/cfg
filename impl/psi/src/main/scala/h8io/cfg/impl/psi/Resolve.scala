@@ -93,6 +93,15 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
       // merged once, its children resolved apart, after it, so that one may refer to another
       case contents: Tree.Contents => after(id, gathered(id, contents))
       case layers: Tree.Layers => after(id, stacked(id, layers))
+      // inside the layers it stands below, resolved once with them: what needs `once` of its own is resolved without
+      case Tree.Kept(kept) =>
+        kept match {
+          case concatenation: Tree.Concatenation => this.concatenation(concatenation).map(Some(_))
+          case Tree.Marked(value, markers) => this.markers(value, markers)
+          // its elements resolved after the layers, as a sequence the layers give
+          case sequence: Tree.Sequence => Right(Some(sequence))
+          case other => resolve(id, other)
+        }
       case Tree.Substitution(path, optional, tag, at) =>
         once(id, Some(new Following(at, path)))(
           reference(path, optional, at).flatMap(_.fold[Resolution](Right(None))(grafted(id, _, at, path, tag))))
@@ -103,16 +112,20 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
         once(id, Some(new Following(reference.location, reference.path)))(this.formatted(formatted))
       case Tree.Marked(value, markers) =>
         // resolved inside `once`, so that a cycle through the block is caught and the block resolved only once
-        once(id, Some(value).collect { case concatenation: Tree.Concatenation => concatenation }.flatMap(first)) {
-          val text = value match {
-            case concatenation: Tree.Concatenation => this.concatenation(concatenation)
-            case scalar: Tree.Scalar => Right(scalar)
-            // the parser marks quoted blocks only, which are scalars or concatenations
-            case other => throw new IllegalStateException("Markers on a non-scalar at " + other.location.description)
-          }
-          text.map(scalar => Some(marked(scalar, markers)))
-        }
+        once(id, Some(value).collect { case concatenation: Tree.Concatenation => concatenation }.flatMap(first))(
+          this.markers(value, markers))
     }
+
+  /** A block's `value`, a scalar or a concatenation, with the loader's `markers` run over it (§5). */
+  private def markers(value: Tree.Value, markers: Vector[MarkerParser.MarkerCall]): Resolution = {
+    val text = value match {
+      case concatenation: Tree.Concatenation => this.concatenation(concatenation)
+      case scalar: Tree.Scalar => Right(scalar)
+      // the parser marks quoted blocks only, which are scalars or concatenations
+      case other => throw new IllegalStateException("Markers on a non-scalar at " + other.location.description)
+    }
+    text.map(scalar => Some(marked(scalar, markers)))
+  }
 
   /** `scalar` with the loader's markers run over its value in turn (§5); with none of them when one fails. */
   private def marked(scalar: Tree.Scalar, markers: Vector[MarkerParser.MarkerCall]): Tree.Scalar =
@@ -405,6 +418,8 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
           }
         // layers merged into a map in their turn, as they would have been at this key
         case Tree.Layers(inner) :: earlier => back(inner.reverse.toList ++ earlier, maps)
+        // the first, no map, below layers that all found nothing or maps
+        case (kept: Tree.Kept) :: _ => Right((() => resolve(id, kept), maps))
       }
     back(layers.layers.reverse.toList, Nil).flatMap {
       case (alone, Nil) => alone()
@@ -560,7 +575,11 @@ private[psi] final class Resolve(root: Tree.Map, limit: Int, nodeLimit: Int, cha
     else {
       val position = Id.Index(walk.scanned, id)
       walk.sequence.elements(walk.scanned) match {
-        case value @ (_: Tree.Injection | Tree.Substitution(_, true, _, _) | _: Tree.Formatted) =>
+        // what may put other than one element: an injection, and an optional substitution, formatted or not, which may
+        // put none; a required formatted one is one element, a string, and resolving it to count would be a cycle
+        // where it refers into its own sequence
+        case value @ (_: Tree.Injection | Tree.Substitution(_, true, _, _) |
+            Tree.Formatted(Token.Formatted(Token.Reference(_, true, _), _), _, _)) =>
           val outer = deepest
           deepest = steps
           val resolution = resolve(position, value)
@@ -797,7 +816,7 @@ private[psi] object Resolve {
           map.copy(entries = entries, tag = tag.orElse(map.tag), location = location)
         // a node is resolved whole before it is grafted
         case _: Tree.Substitution | _: Tree.Concatenation | _: Tree.Formatted | _: Tree.Marked | _: Tree.Injection |
-            _: Tree.Contents | _: Tree.Layers =>
+            _: Tree.Contents | _: Tree.Layers | _: Tree.Kept =>
           throw new IllegalStateException("An unresolved substitution at " + value.location.description + " grafted")
       }
     }

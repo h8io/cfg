@@ -62,6 +62,13 @@ private[psi] final class Merge {
       case (earlier: Tree.Layer, contents: AST.Contents) => Tree.Layers(earlier, this.contents(contents))
       case (earlier: Tree.Layer, AST.Formatted(part, tag, location)) =>
         Tree.Layers(earlier, Tree.Formatted(part, tag, location))
+      // what finds nothing puts nothing, and what stands before it, no map, stands then (§7)
+      case (earlier, AST.Substitution(path, true, tag, location)) =>
+        Tree.Layers(Tree.Kept(earlier), Tree.Substitution(path, optional = true, tag, location))
+      case (earlier, contents @ AST.Contents(AST.Injected.Referring(reference), _, _)) if reference.optional =>
+        Tree.Layers(Tree.Kept(earlier), this.contents(contents))
+      case (earlier, AST.Formatted(part, tag, location)) if part.reference.optional =>
+        Tree.Layers(Tree.Kept(earlier), Tree.Formatted(part, tag, location))
       // kept as written, so that a `:=` in it replaces what the earlier finds, once it is found
       case (Merge.Unknown(earlier), AST.Block(statements, tag, location)) =>
         Tree.Layers(earlier, Tree.Map.empty(tag, location).copy(steps = Merge.steps(statements)))

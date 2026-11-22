@@ -52,6 +52,7 @@ private[psi] object Render {
   private def layers(value: Tree.Value): Vector[Tree.Value] =
     value match {
       case Tree.Layers(layers) => layers.flatMap(this.layers)
+      case Tree.Kept(value) => Vector(value)
       case _ => Vector(value)
     }
 
@@ -138,7 +139,7 @@ private[psi] object Render {
                 " gave to inject after a key has no source"),
           r => reference(out, r.path, r.optional, marked = true)
         )
-      case layers: Tree.Layers =>
+      case layers @ (_: Tree.Layers | _: Tree.Kept) =>
         throw new IllegalStateException("Layers at " + layers.location.description + " with no key to write again")
       case Tree.Concatenation(parts, _, _) => quoted(out, parts)
       case Tree.Formatted(part, _, _) => formatted(out, part)
