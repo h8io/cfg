@@ -48,9 +48,11 @@ private[psi] object PsiLocation {
         case Left(text) :: tail =>
           val _ = out.append(text)
           loop(tail)
-        case Right(
-              composite @ (_: ReferenceLocation | _: ConcatenationLocation | _: MergedLocation | _: DirectiveLocation)) ::
-            tail =>
+        case Right(composite @ (
+              _: ReferenceLocation |
+              _: ConcatenationLocation |
+              _: MergedLocation |
+              _: DirectiveLocation)) :: tail =>
           val product = composite.asInstanceOf[Product]
           loop(Left(product.productPrefix + "(") :: fields(product.productIterator.toList) ::: tail)
         case Right(list: List[?]) :: tail => loop(Left("List(") :: fields(list) ::: tail)
