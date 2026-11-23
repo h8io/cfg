@@ -2,9 +2,9 @@ package h8io.cfg.impl.psi
 
 import h8io.cfg.impl.psi.Lexer.*
 import h8io.cfg.impl.psi.MarkerParser.*
-
 import h8io.cfg.{Id, Node}
 
+import scala.annotation.tailrec
 import scala.collection.{immutable, mutable}
 
 /** Reads calls, a name and its arguments in parentheses, as the markers of a triple-quoted block and the formatter of a
@@ -59,31 +59,26 @@ private[psi] abstract class CallReader(
     i += 1
     skipSpaces()
     val read = Vector.newBuilder[Argument]
-    var result: Option[Vector[Argument]] = None
-    var more = true
-    while (more)
+    @tailrec def loop(): Option[Vector[Argument]] =
       if (at(i, ')')) {
         i += 1
-        result = Some(read.result())
-        more = false
+        Some(read.result())
       } else if (at(i, ',')) {
         error(EmptyElement.apply, i)
-        more = false
-      } else
-        argument() match {
-          case Some(argument) =>
-            read += argument
+        None
+      } else argument() match {
+        case Some(argument) =>
+          read += argument
+          skipSpaces()
+          if (at(i, ',')) {
+            i += 1
             skipSpaces()
-            if (at(i, ',')) {
-              i += 1
-              skipSpaces()
-            } else if (!at(i, ')')) {
-              syntaxError()
-              more = false
-            }
-          case None => more = false
-        }
-    result
+            loop()
+          } else if (at(i, ')')) loop()
+          else invalid
+        case None => None
+      }
+    loop()
   }
 
   /** `name: literal`, or a literal alone, positional; `name = literal` is reported and read as the former. A name is
