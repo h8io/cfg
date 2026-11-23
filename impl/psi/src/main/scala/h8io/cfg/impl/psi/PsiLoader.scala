@@ -118,7 +118,7 @@ private[psi] object PsiLoader {
 
   /** How deep a loaded tree, and the resolution of its substitutions, may go unless the builder says otherwise.
     */
-  def DefaultDepthLimit: Int = 256
+  def DefaultDepthLimit: Int = 128
 
   /** The names of the built-in directives, which no handler may take. */
   val BuiltInDirectives: Seq[String] = Seq("include", "prop", "env")

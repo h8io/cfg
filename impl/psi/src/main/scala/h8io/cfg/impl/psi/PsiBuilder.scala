@@ -34,7 +34,7 @@ final class PsiBuilder private (settings: Settings) {
     new PsiBuilder(settings.copy(environment = Some(environment)))
 
   /** Limits the depth of the tree loaded, and of the resolution of its substitutions, to `limit`, at least 1, rather
-    * than to 256. The default holds on a thread with the JVM's default stack; lower it for a thread with a smaller one.
+    * than to 128. The default holds on a thread with the JVM's default stack; lower it for a thread with a smaller one.
     */
   def withDepthLimit(limit: Int): PsiBuilder = new PsiBuilder(settings.copy(depthLimit = limit))
 

@@ -137,7 +137,7 @@ rules); nothing set at launch overrides a value; `MapImpl` and `SeqImpl` are the
 Errors are collected, never thrown: every `PsiError` carries a `PsiLocation`, a `message` and a `hint`, computed from
 its fields; `PsiErrors.message` is the report, grouped by source. Errors of the syntax and of directives come as one
 batch, and substitutions are resolved only when it is empty. A scalar is the text written, a tag is there only when
-written, and nothing is typed. Depth is limited (256 by default, `withDepthLimit`) in the tree loaded and in
+written, and nothing is typed. Depth is limited (128 by default, `withDepthLimit`) in the tree loaded and in
 resolution, so that no input overflows the stack; nothing on a path from the input recurses past the limit, and a
 path is written with `Message.path`, never `Id.path`, which recurses. What resolution adds is limited too (1 000 000
 nodes grafts copy, 10 000 000 characters concatenations build, `withSizeLimit`), counted before it is built, and so is
