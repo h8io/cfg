@@ -16,6 +16,7 @@ module.exports = {
         'psi/directives',
         'psi/errors',
         'psi/caveats',
+        'psi/differences',
         'psi/api',
         'psi/extending',
       ],
