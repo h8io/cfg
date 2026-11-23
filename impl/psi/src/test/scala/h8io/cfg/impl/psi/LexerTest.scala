@@ -514,7 +514,7 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
     value("```width(2, 3)\n    a\n  ```", "  a", ExtraArgument(loc(1, 13)))
     value("```width(n: 2, 3)\n    a\n  ```", "  a", PositionalAfterNamed(loc(1, 16)))
     value("```width(two)\n    a\n  ```", "  a", InvalidArgument(loc(1, 10), "n"))
-    List("0", "-1", "\"2\"", "'2'", "two", "2147483648").foreach { width =>
+    List("0", "-1", "-2147483648", "\"2\"", "'2'", "two", "2147483648", "9" * 1000).foreach { width =>
       withClue(width) {
         value(s"```width(n: $width)\n    a\n  ```", "  a", InvalidArgument(loc(1, 13), "n"))
       }
