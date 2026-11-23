@@ -25,15 +25,15 @@ private[psi] object PsiLocation {
     */
   def describe(location: Location): String = {
     val out = new java.lang.StringBuilder
-    var stack: List[Part] = Right(location) :: Nil
-    while (stack.nonEmpty && out.length <= DescriptionLimit) {
-      val head = stack.head
-      stack = stack.tail
-      head match {
-        case Left(text) => val _ = out.append(text)
-        case Right(next) => stack = parts(next) ::: stack
+    @tailrec def loop(stack: List[Part]): Unit =
+      if (out.length <= DescriptionLimit) stack match {
+        case Left(text) :: tail =>
+          val _ = out.append(text)
+          loop(tail)
+        case Right(next) :: tail => loop(parts(next) ::: tail)
+        case Nil =>
       }
-    }
+    loop(Right(location) :: Nil)
     if (out.length <= DescriptionLimit) out.toString else out.substring(0, DescriptionLimit) + "…"
   }
 
@@ -43,20 +43,23 @@ private[psi] object PsiLocation {
     */
   def show(location: PsiLocation): String = {
     val out = new java.lang.StringBuilder
-    var stack: List[Either[String, Any]] = Right(location) :: Nil
-    while (stack.nonEmpty && out.length <= DescriptionLimit) {
-      val head = stack.head
-      stack = stack.tail
-      head match {
-        case Left(text) => val _ = out.append(text)
-        case Right(composite @ (_: ReferenceLocation | _: ConcatenationLocation | _: MergedLocation |
-            _: DirectiveLocation)) =>
+    @tailrec def loop(stack: List[Either[String, Any]]): Unit =
+      if (out.length <= DescriptionLimit) stack match {
+        case Left(text) :: tail =>
+          val _ = out.append(text)
+          loop(tail)
+        case Right(
+              composite @ (_: ReferenceLocation | _: ConcatenationLocation | _: MergedLocation | _: DirectiveLocation)) ::
+            tail =>
           val product = composite.asInstanceOf[Product]
-          stack = Left(product.productPrefix + "(") :: fields(product.productIterator.toList) ::: stack
-        case Right(list: List[?]) => stack = Left("List(") :: fields(list) ::: stack
-        case Right(other) => val _ = out.append(other.toString)
+          loop(Left(product.productPrefix + "(") :: fields(product.productIterator.toList) ::: tail)
+        case Right(list: List[?]) :: tail => loop(Left("List(") :: fields(list) ::: tail)
+        case Right(other) :: tail =>
+          val _ = out.append(other.toString)
+          loop(tail)
+        case Nil =>
       }
-    }
+    loop(Right(location) :: Nil)
     if (out.length <= DescriptionLimit) out.toString else out.substring(0, DescriptionLimit) + "…"
   }
 
