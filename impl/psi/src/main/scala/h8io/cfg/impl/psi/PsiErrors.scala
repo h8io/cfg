@@ -2,10 +2,12 @@ package h8io.cfg.impl.psi
 
 import h8io.cfg.CfgError
 
-/** Every error a load reported, in the order found. The loader reports as many as it can without inventing any. */
+/** Every error a load reported, each source's by line and column. The loader reports as many as it can without
+  * inventing any.
+  */
 final case class PsiErrors(errors: ::[PsiError]) extends CfgError {
 
-  /** The errors as one report: a count, then the errors grouped by source in the order found, each source named on a
+  /** The errors as one report: a count, then the errors grouped by source in the order above, each source named on a
     * line of its own and each error under it as `line:column: message`, its hint on the next line.
     */
   def message: String = {

@@ -235,16 +235,16 @@ class FormatterTest extends AnyFlatSpec with Matchers {
       List(
         MissingArgument(at(1, 9), "p"),
         ExtraArgument(at(2, 20)),
-        UnknownArgument(at(3, 17), "q"),
-        MissingArgument(at(3, 9), "p"))
+        MissingArgument(at(3, 9), "p"),
+        UnknownArgument(at(3, 17), "q"))
     calls shouldBe 0
     errors("a: ${x; join}\nb: ${x; join(\",\", 2)}\nc: ${x; join(p: 1, \",\")}") shouldBe
       List(
         MissingArgument(at(1, 9), "separator"),
         ExtraArgument(at(2, 19)),
+        MissingArgument(at(3, 9), "separator"),
         UnknownArgument(at(3, 14), "p"),
-        PositionalAfterNamed(at(3, 20)),
-        MissingArgument(at(3, 9), "separator")
+        PositionalAfterNamed(at(3, 20))
       )
   }
 
@@ -258,7 +258,7 @@ class FormatterTest extends AnyFlatSpec with Matchers {
     errors("a: ${x; 1}") shouldBe List(InvalidFormatter(at(1, 9)))
     errors("a: ${x; join(\",\")x}") shouldBe List(InvalidFormatter(at(1, 18)))
     errors("a: ${x; join(\",\"\nb: 1") shouldBe List(InvalidFormatter(at(1, 17)))
-    errors("a: \"${x; join(\"\"\nb: 1") shouldBe List(InvalidFormatter(at(1, 17)), UnterminatedString(at(1, 4), "\""))
+    errors("a: \"${x; join(\"\"\nb: 1") shouldBe List(UnterminatedString(at(1, 4), "\""), InvalidFormatter(at(1, 17)))
     errors("a: ${x; join(\"," + 0x202e.toChar.toString + "\")}") shouldBe
       // what follows the character is read anew, as after a broken substitution
       List(

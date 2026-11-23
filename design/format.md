@@ -1215,9 +1215,9 @@ mistake is worse than stopping.
 - **Directive failures are local.** A missing include, a cycle, an unknown or disabled
   directive or a bad argument is reported, the directive contributes nothing, and expansion
   continues.
-- **The second batch goes in the order of the sources**, each source's errors by line and column,
+- **Both batches go in the order of the sources**, each source's errors by line and column,
   and the sources directives parsed right after the one that parsed them, in the order they were
-  parsed (session 20).
+  parsed (session 20; the first batch since session 47, in the order found before).
 - **Phases are gated.** If phases 1–2 (§8) produced any error, phases 3–6 do not run: substitutions
   over a tree with holes cut by recovery would report references to fields that exist but were lost
   in the skip. Syntax and directive errors come as one batch; substitution errors, if the first
@@ -2196,8 +2196,8 @@ Spec gaps of plan step 7, the node views and the loader, settled with the user b
   before the release (plan step 14): a directive with the syntax errors, before merging (session
   15); a substitution, alone or in a concatenation, with the merge errors, as phase 4's would be.
 - Taken as they stood, not raised as questions: the extension of a URL passed to the loader is not
-  checked, as in `impl/yaml`; errors come in the order of the sources, each source's in the order
-  found in the first batch and by line and column in the second, since merging and resolving go by
+  checked, as in `impl/yaml`; errors come in the order of the sources, each source's by line and column
+  (the first batch in the order found until session 47), since merging and resolving go by
   key and would otherwise put a later source's error first (found in review of #157); an
   unreadable source does not keep the others' errors from being reported.
 
@@ -3044,3 +3044,13 @@ Fixed on a fifth review, put to the user with the fixes:
   user's call, as I put it: one rule for the built-in markers and for a loader's, `width("2")` now
   `width(2)`, and the kinds of literal gone from the code; an integer is still checked as written,
   an optional `-` and no leading zeros.
+
+### Session 47 — 2026-11-23
+
+- **The first batch goes by line and column too** (§11), as the second has since session 20: the
+  order found put the lexer's errors inside a token before the parser's at its start, so pasted
+  HOCON, `url: "jdbc:"${host}"/db"`, was reported at 1:20 and 1:26, then 1:12. The user's call, on
+  the docs page comparing Psi with YAML and HOCON. The sources keep the order of the second batch,
+  an included source's errors after every error of the source including it, where before they stood
+  at the call; the report groups them by source either way. A fatal error, last in the order found,
+  now stands at its line and column: an unterminated string before the errors found inside it.

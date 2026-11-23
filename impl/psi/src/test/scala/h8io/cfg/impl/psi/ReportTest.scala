@@ -24,6 +24,12 @@ class ReportTest extends AnyFlatSpec with Matchers {
         |       hint: separate items with ',' or a line break; whitespace never separates""".stripMargin
   }
 
+  it should "list the syntax's errors by line and column, not in the order found" in {
+    // the lexer reports the quotes inside the second value as it reads it, before the parser finds it a second value
+    Psi.parse("s", "a: \"x\"${b}\"y\"").fold(_.errors.map(_.location), root => fail(root.toString)) shouldBe
+      List(SourceLocation("s", 1, 7), SourceLocation("s", 1, 11), SourceLocation("s", 1, 13))
+  }
+
   it should "say one error in one source in the singular, and show an error with no hint on one line" in {
     PsiErrors(::(UnknownDirective(SourceLocation("s", 1, 1), "x"), Nil)).message shouldBe
       "1 error in 1 source\ns\n  1:1: unknown directive '#x'"
