@@ -355,7 +355,7 @@ private[psi] object Expand {
     }
 
   /** `source` parsed and its directives expanded, with every error found in it and in the sources it parsed, and the
-    * names of those sources, in the order parsed.
+    * names of those sources, in the order parsed. The errors go by source, in that order, and then by line and column.
     */
   def apply(
       source: Source,
@@ -368,6 +368,10 @@ private[psi] object Expand {
       nodes: Nodes): Result[(AST.Document, List[String])] = {
     val expand = new Expand(directives, disabled, markers, formatters, limit, budget, nodes)
     val document = expand.document(source, Nil, 0)
-    Result((document, expand.included.toList), expand.errors.toList)
+    val included = expand.included.toList
+    // the lexer reports what is wrong inside a token as it reads it, and the parser what is wrong with the token once
+    // read, so in the order found an error inside a value would come before one at its start
+    val sources = source.name :: included
+    Result((document, included), expand.errors.toList.sortBy(_.location.order(sources)))
   }
 }

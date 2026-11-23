@@ -141,11 +141,12 @@ class IncludeTest extends AnyFlatSpec with Matchers {
       case List(
             DirectiveFailed(l2, "include", IncludeNotFound("missing")),
             DirectiveFailed(l3, "include", IncludeUnreadable(target, cause)),
-            InvalidEncoding(encoding),
             DirectiveFailed(l5, "include", IncludeOptional("yes")),
             DirectiveFailed(l6, "include", IncludeTargets(List("file", "url"))),
             DirectiveFailed(l7, "include", IncludeTargets(Nil)),
-            DirectiveFailed(l8, "include", IncludeInvalidTarget("a b"))
+            DirectiveFailed(l8, "include", IncludeInvalidTarget("a b")),
+            // the included source's, after every error of the source including it
+            InvalidEncoding(encoding)
           ) =>
         List(l2, l3, l5, l6, l7, l8) shouldBe List(2, 3, 5, 6, 7, 8).map(location)
         target shouldBe "jar:" + url(notZip) + "!/x.psi"
