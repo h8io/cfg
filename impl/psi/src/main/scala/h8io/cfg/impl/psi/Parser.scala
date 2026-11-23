@@ -421,8 +421,8 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
         val error =
           if (field && !substitutes(word)) MissingSeparator(word.location, describe(word.kind))
           else wordError(word, inBlock = true)
-        fail(word, error)
-      case ValueMode => fail(token, wordError(token, inBlock = false))
+        fail(word, explain(error))
+      case ValueMode => fail(token, explain(wordError(token, inBlock = false)))
       case ArgumentMode => fail(token, MissingSeparator(token.location, describe(token.kind)))
     }
 
@@ -435,6 +435,17 @@ private[psi] final class Parser(lexer: Lexer, base: Int, limit: Int) {
       case Scalar(parts, _, _) if inBlock && unquoted => SpaceInValue(word.location, written(parts))
       case _ => MissingSeparator(word.location, describe(word.kind))
     }
+
+  /** `error`, the lexer's errors on the word it is about that it explains forgotten: a quote inside a word joined to a
+    * value is where HOCON's `"a"\${b}"c"` meant a value to start or end, and goes once the parts are one string.
+    */
+  private def explain(error: PsiError): PsiError = {
+    if (error.isInstanceOf[JoinedValues]) {
+      lexer.forget(reportedBefore)(_.isInstanceOf[QuoteInUnquotedScalar])
+      reportedAfter = lexer.errorCount
+    }
+    error
+  }
 
   private def substitutes(token: Token): Boolean =
     token.kind match {

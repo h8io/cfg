@@ -435,6 +435,14 @@ class ParserTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks
     errors("a: [a ${b}]") shouldBe List(JoinedValues(loc(1, 7)))
   }
 
+  it should "explain the quotes inside the joined word, and no other error the lexer found in it" in {
+    errors("a: \"jdbc:\"${host}\"/db\"") shouldBe List(JoinedValues(loc(1, 11)))
+    errors("a: [\"a\"${b}\"c\"]") shouldBe List(JoinedValues(loc(1, 8)))
+    errors("a: \"a\"${`b\\q`}\"c\"") shouldBe List(InvalidEscape(loc(1, 11), "\\q"), JoinedValues(loc(1, 7)))
+    errors("a: foo bar!\"baz\"") shouldBe
+      List(QuoteInUnquotedScalar(loc(1, 12)), QuoteInUnquotedScalar(loc(1, 16)), SpaceInValue(loc(1, 8), "bar!\"baz\""))
+  }
+
   it should "not be reported for a field after a substitution" in {
     errors("a: ${x} b: 2") shouldBe List(MissingSeparator(loc(1, 9), "'b:'"))
   }

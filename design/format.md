@@ -1202,6 +1202,10 @@ mistake is worse than stopping.
   node of its own standing for it; phases 3–6 never see the tree (below), and a directive's
   arguments are literals, so no hole can make an error of its own. What the lexer finds in skipped
   text is not reported, a fatal error excepted: the parser cannot tell what the text was meant to be.
+  Nor is a quote inside a word the parser reports as joined to a value, HOCON's `"a"${b}"c"`: the
+  quote is where the author meant a value to start or end, which the join already says, and it goes
+  once the parts are one string. Every other error the lexer finds in that word stays, as in any
+  word the parser rejects (session 47).
 - **A directive call with any error in it is left out whole**, with the field or element it is the
   value of. Every error in its arguments is reported, a duplicate name and a positional argument
   after a named one included, but its handler never runs on arguments that are not what was meant.
@@ -3054,3 +3058,11 @@ Fixed on a fifth review, put to the user with the fixes:
   an included source's errors after every error of the source including it, where before they stood
   at the call; the report groups them by source either way. A fatal error, last in the order found,
   now stands at its line and column: an unterminated string before the errors found inside it.
+- **A join explains the quotes inside the word joined** (§11): pasted HOCON,
+  `url: "jdbc:"${host}"/db"`, was reported three times, two quotes inside the unquoted word
+  `${host}"/db"` and the join. The user's call, after the one above. Only the quotes go, and only
+  with a join: an invisible character or a bad escape in the word stays wrong once the parts are one
+  string, and so does a quote in a second word, `a: foo bar"baz"`, or in a second element,
+  `[x b"c]`, whose fix, quoting the value or a `,`, keeps it. Forgetting every
+  error in the word, my first try, lost those, and the whitespace before it too, which the lexer
+  reports with the word.
