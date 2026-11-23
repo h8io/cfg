@@ -38,6 +38,7 @@ value a string, written with [indentation](syntax.md#indentation).
   HOCON.
 - [Errors and limits](errors.md) — what a load reports, and how far it goes.
 - [Caveats](caveats.md) — what is easy to get wrong.
+- [Psi, YAML and HOCON](differences.md) — what is written differently, for a reader who knows either.
 
 ## From a program
 
