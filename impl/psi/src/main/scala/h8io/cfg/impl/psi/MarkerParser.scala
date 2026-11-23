@@ -1,8 +1,9 @@
 package h8io.cfg.impl.psi
 
 import h8io.cfg.impl.psi.Lexer.*
-
 import h8io.cfg.{Id, Node}
+
+import scala.annotation.tailrec
 
 /** Reads the markers of a triple-quoted block — what stands between the opening delimiter and the end of its line —
   * into the layout stages they pick.
@@ -41,9 +42,9 @@ private[psi] final class MarkerParser(
       skipSpaces()
     }
     val calls = Vector.newBuilder[Call]
-    var broken = false
-    while (!broken && has(i))
-      call() match {
+    @tailrec def loop(): Option[Vector[Call]] =
+      if (!has(i)) Some(calls.result())
+      else call() match {
         case Some(read) =>
           calls += read
           if (has(i))
@@ -51,13 +52,15 @@ private[psi] final class MarkerParser(
               val spaces = i
               skipSpaces()
               if (!has(i)) report(WhitespaceAfterDelimiter.apply, offsets(spaces))
+              loop()
             } else {
               syntaxError()
-              broken = true
+              None
             }
-        case None => broken = true
+          else loop()
+        case None => None
       }
-    if (broken) None else Some(calls.result())
+    loop()
   }
 
   /** A marker: its name, and its arguments in parentheses if any. */
