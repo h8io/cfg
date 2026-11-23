@@ -221,19 +221,22 @@ private[psi] final class Lexer(
   private def skipBlockComment(): Option[String] = {
     val start = offset
     offset += 2
-    var depth = 1
-    while (depth > 0 && has(offset))
-      if (startsWith("/*")) {
-        depth += 1
+    @tailrec def loop(depth: Int): Option[String] =
+      if (depth == 0) Some(text.substring(start + 2, offset - 2))
+      else if (!has(offset)) {
+        stop(UnterminatedComment.apply, start)
+        None
+      } else if (startsWith("/*")) {
         offset += 2
+        loop(depth + 1)
       } else if (startsWith("*/")) {
-        depth -= 1
         offset += 2
-      } else if (!skipForbidden()) offset += 1
-    if (depth > 0) {
-      stop(UnterminatedComment.apply, start)
-      None
-    } else Some(text.substring(start + 2, offset - 2))
+        loop(depth - 1)
+      } else {
+        if (!skipForbidden()) offset += 1
+        loop(depth)
+      }
+    loop(1)
   }
 
   private def read(mode: Mode): Kind = {
@@ -504,41 +507,40 @@ private[psi] final class Lexer(
     */
   private def content(start: Int, quote: Char): Option[Vector[Line]] = {
     val lines = Vector.newBuilder[Line]
-    var line = Vector.newBuilder[Piece]
-    var lineStart = offset
-    var closed = false
-    while (!closed && !ended && has(offset)) {
-      var run = 0
-      while (at(offset + run, quote)) run += 1
-      if (run >= 3) {
-        // a run of more than three quotes closes at its last three
-        for (_ <- 3 until run) line += Written(quote)
-        offset += run
-        closed = true
-      } else if (run > 0) {
-        for (_ <- 0 until run) line += Written(quote)
-        offset += run
-      } else if (isNewline(offset)) {
-        lines += Line(lineStart, line.result())
-        line = Vector.newBuilder[Piece]
-        offset += (if (at(offset, '\r')) 2 else 1)
-        lineStart = offset
-      } else if (quote == '\'') {
-        val escaped = rawEscape()
-        escaped.foreach(c => line += Escaped(c.toString))
-        if (escaped.isEmpty) written(line)
-      } else if (at(offset, '\\')) {
-        val value = new StringBuilder
-        escape(value)
-        if (value.nonEmpty) line += Escaped(value.result())
-      } else if (startsWith("${")) reference(quoted = true).foreach(line += Substituted(_))
-      else written(line)
-    }
-    if (closed) Some(lines.result() :+ Line(lineStart, line.result()))
-    else {
-      if (!ended) stop(UnterminatedString(_, quote.toString * 3), start)
-      None
-    }
+    @tailrec def loop(line: mutable.Builder[Piece, Vector[Piece]], lineStart: Int): Option[Vector[Line]] =
+      if (ended || !has(offset)) {
+        if (!ended) stop(UnterminatedString(_, quote.toString * 3), start)
+        None
+      } else {
+        var run = 0
+        while (at(offset + run, quote)) run += 1
+        if (run >= 3) {
+          // a run of more than three quotes closes at its last three
+          for (_ <- 3 until run) line += Written(quote)
+          offset += run
+          Some(lines.result() :+ Line(lineStart, line.result()))
+        } else if (isNewline(offset)) {
+          lines += Line(lineStart, line.result())
+          offset += (if (at(offset, '\r')) 2 else 1)
+          loop(Vector.newBuilder[Piece], offset)
+        } else {
+          if (run > 0) {
+            for (_ <- 0 until run) line += Written(quote)
+            offset += run
+          } else if (quote == '\'') {
+            val escaped = rawEscape()
+            escaped.foreach(c => line += Escaped(c.toString))
+            if (escaped.isEmpty) written(line)
+          } else if (at(offset, '\\')) {
+            val value = new StringBuilder
+            escape(value)
+            if (value.nonEmpty) line += Escaped(value.result())
+          } else if (startsWith("${")) reference(quoted = true).foreach(line += Substituted(_))
+          else written(line)
+          loop(line, lineStart)
+        }
+      }
+    loop(Vector.newBuilder[Piece], offset)
   }
 
   /** A character as written, here; a forbidden one is reported and dropped instead. */
