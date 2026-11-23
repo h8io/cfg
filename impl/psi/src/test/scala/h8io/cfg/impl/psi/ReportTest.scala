@@ -25,9 +25,9 @@ class ReportTest extends AnyFlatSpec with Matchers {
   }
 
   it should "list the syntax's errors by line and column, not in the order found" in {
-    // the lexer reports the quotes inside the second value as it reads it, before the parser finds it a second value
-    Psi.parse("s", "a: \"x\"${b}\"y\"").fold(_.errors.map(_.location), root => fail(root.toString)) shouldBe
-      List(SourceLocation("s", 1, 7), SourceLocation("s", 1, 11), SourceLocation("s", 1, 13))
+    // the lexer reports the quotes inside the second word as it reads it, before the parser finds it a second word
+    Psi.parse("s", "a: foo bar!\"baz\"").fold(_.errors.map(_.location), root => fail(root.toString)) shouldBe
+      List(SourceLocation("s", 1, 8), SourceLocation("s", 1, 12), SourceLocation("s", 1, 16))
   }
 
   it should "say one error in one source in the singular, and show an error with no hint on one line" in {

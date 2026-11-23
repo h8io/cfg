@@ -46,6 +46,15 @@ private[psi] final class Lexer(
     reported.remove(mark.reported, reported.length - mark.reported)
   }
 
+  /** Forgets the errors after the first `count` that `explained` holds explained by an error the parser reports; a
+    * fatal error stays, and stays last.
+    */
+  def forget(count: Int)(explained: PsiError => Boolean): Unit = {
+    val kept = reported.drop(count).filterNot(explained)
+    reported.remove(count, reported.length - count)
+    reported ++= kept
+  }
+
   /** Keeps the first `count` errors and forgets the rest, then adds `error`; a fatal error stays, and stays last.
     *
     * What the parser found goes in among the lexer's errors, in the order found, and what it skipped is forgotten.
