@@ -1370,15 +1370,17 @@ mistake is worse than stopping.
    Indentation), implemented in session 32.
 3. ~~**Multi-line strings**~~ — closed in session 7: reopened by the user and settled point by
    point (§5, §14).
-4. **Templates in the direction of StringTemplate 4.** Raised by the user in session 7: substitutions
-   stay as they are in v1, but the way forward is to look at ST4's ideas. Nothing is decided yet.
-   Noted so far:
-   - **Delimiters chosen per template.** ST4 lets a template use `<…>` or `$…$`, whichever does not
-     clash with its content. The case for it: a shell script, a Helm template or a Spring config in
-     a `"""` block is full of `${`, each of which needs `\${` in v1 — the common case is settled by
-     `'''…'''`, which substitutes nothing (§5). A marker on the opening quotes
-     could turn substitution off or change its syntax; markers do not combine in v1 (§5), and this
-     one would have to combine with the indent markers.
+4. ~~**Templates in the direction of StringTemplate 4.**~~ — closed in session 45, each of its points
+   settled or declined. Raised by the user in session 7: substitutions stay as they are in v1, but
+   the way forward was to look at ST4's ideas:
+   - ~~**Delimiters chosen per template.**~~ — declined by the user in session 45: a syntax of
+     substitution for each block would make every reader learn which one is in force where. ST4
+     lets a template use `<…>` or `$…$`, whichever does not clash with its content. The case for
+     it: a shell script, a Helm template or a Spring config in a `"""` block is full of `${`, each
+     of which needs `\${` in v1 — the common case is settled by `'''…'''`, which substitutes
+     nothing (§5). A marker on the opening quotes could turn substitution off or change its syntax;
+     markers do not combine in v1 (§5), and this one would have to combine with the indent markers.
+     Turning substitution off is what `'''…'''` does; changing its syntax stays out.
    - ~~**A template applied to a collection with a separator**~~, `<hosts; separator=",">` — as a
      string, settled in session 38 by the formatter `join` (§9). Joining values into a node, a
      sequence out of two, stays with value expressions (item 1), parked.
@@ -1389,8 +1391,12 @@ mistake is worse than stopping.
 5. ~~**Cycles, for every directive.**~~ — closed in session 19, settled in §6.
 
 6. **Meta-fields.** Raised by the user in session 15, **after v1**: a meta-field `id`, the key or
-   index of an object, to start with. The protocol already gives every node its `Id`; what a
-   meta-field adds is the value inside the config text, where it makes templates of substitutions:
+   index of an object, to start with. **Parked** by the user in session 45, for no set time: the
+   need that raised it is no longer remembered — do not reopen it until it is raised again, with a
+   case it serves. What follows is kept for that day.
+
+   The protocol already gives every node its `Id`; what a meta-field adds is the value inside the
+   config text, where it makes templates of substitutions:
 
    ```
    defaults { name: ${@id}, host: "${@id}.internal" }   // `${@id}` a placeholder syntax
@@ -2997,3 +3003,13 @@ Fixed on a fifth review, put to the user with the fixes:
   formatted or not, or an optional injection after a key, stands when it finds nothing, kept below
   it as `Tree.Kept`.
 
+### Session 45 — 2026-11-23
+
+- **Meta-fields parked** (§13 item 6), by the user's call, for no set time: the user no longer
+  remembers what they were wanted for, and nothing in the format or the docs waits on them. The
+  notes of sessions 15 and 16 stay in §13 for when a case for them comes back.
+- **Delimiters chosen per template declined** (§13 item 4), by the user's call: a block that picks
+  its own syntax of substitution, `<…>` or `$…$` as in ST4, would leave each reader to find out which
+  syntax holds where, a circus of them. A block whose text is full of `${` is written `'''…'''`,
+  which substitutes nothing (§5), or escapes each as `\${`. With it the last open point of item 4 is
+  gone, and the item is closed: lists joined by `join`, options by formatters (session 38).
