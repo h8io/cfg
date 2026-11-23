@@ -130,13 +130,13 @@ private[psi] final class MarkerParser(
     if (n.isEmpty) error(MissingArgument(_, "n"), call.at)
     n.map { argument =>
       val width = argument.value match {
-        case IntegerLiteral(text) => Some(BigInt(text)).filter(w => w >= 1 && w <= Int.MaxValue)
+        case IntegerLiteral(text) => text.toIntOption.filter(_ >= 1)
         case _ => None
       }
       width.fold {
         error(InvalidArgument(_, "n"), argument.valueAt)
         WidthIndent(1)
-      }(w => WidthIndent(w.toInt))
+      }(WidthIndent(_))
     }
   }
 
