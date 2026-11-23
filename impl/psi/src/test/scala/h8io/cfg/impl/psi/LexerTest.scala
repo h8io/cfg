@@ -438,6 +438,9 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
   it should "strip the opening line's indent and an explicit width" in {
     value("  ```width(n: 2)\n      abc\n\n    ```", "  abc\n")
     value("```width(n: 1)\n  a\n   b\n```", " a\n  b")
+    // a literal has no type until a handler reads it, a built-in marker's alike: quoted, the width is the same
+    value("```width(n: \"1\")\n  a\n   b\n```", " a\n  b")
+    value("```width('1')\n  a\n   b\n```", " a\n  b")
     value("  ```width(2)\n      abc\n\n    ```", "  abc\n")
     value("  ```width( n: 2 ) +\n    a\n    b\n      c\n  ```", "a b\n  c")
   }
@@ -514,7 +517,7 @@ class LexerTest extends AnyFlatSpec with Matchers with ScalaCheckPropertyChecks 
     value("```width(2, 3)\n    a\n  ```", "  a", ExtraArgument(loc(1, 13)))
     value("```width(n: 2, 3)\n    a\n  ```", "  a", PositionalAfterNamed(loc(1, 16)))
     value("```width(two)\n    a\n  ```", "  a", InvalidArgument(loc(1, 10), "n"))
-    List("0", "-1", "-2147483648", "\"2\"", "'2'", "two", "2147483648", "9" * 1000).foreach { width =>
+    List("0", "-1", "-2147483648", "\"0\"", "\" 2\"", "'2.0'", "two", "2147483648", "9" * 1000).foreach { width =>
       withClue(width) {
         value(s"```width(n: $width)\n    a\n  ```", "  a", InvalidArgument(loc(1, 13), "n"))
       }

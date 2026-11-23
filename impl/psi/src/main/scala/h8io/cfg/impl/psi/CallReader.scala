@@ -142,19 +142,19 @@ private[psi] abstract class CallReader(
     }
   }
 
-  /** A string in `"…"` or `'…'`, an integer or a name, as a directive's arguments are. */
-  protected def literal(): Option[Literal] =
+  /** A string in `"…"` or `'…'`, an integer or a name, as a directive's arguments are, and its text. */
+  protected def literal(): Option[String] =
     if (at(i, '"')) quoted()
     else if (at(i, '\'')) raw()
     else if (at(i, '-') || has(i) && isDigit(line.charAt(i))) integer()
     else {
       val start = i
       identifier()
-      if (i > start) Some(NameLiteral(line.subSequence(start, i).toString)) else invalid
+      if (i > start) Some(line.subSequence(start, i).toString) else invalid
     }
 
   /** A string with the escapes of `"…"`; `\${` is an error, an argument being literal. */
-  protected def quoted(): Option[Literal] = {
+  protected def quoted(): Option[String] = {
     val start = i
     i += 1
     val value = new StringBuilder
@@ -175,7 +175,7 @@ private[psi] abstract class CallReader(
   }
 
   /** A string with the escapes of `'…'`: `\'` and `\\`. */
-  protected def raw(): Option[Literal] = {
+  protected def raw(): Option[String] = {
     val start = i
     i += 1
     val value = new StringBuilder
@@ -188,17 +188,17 @@ private[psi] abstract class CallReader(
   }
 
   /** The string read, at its closing quote; with none, a syntax error at its opening one. */
-  protected def closing(start: Int, value: StringBuilder): Option[Literal] =
+  protected def closing(start: Int, value: StringBuilder): Option[String] =
     if (has(i)) {
       i += 1
-      Some(StringLiteral(value.result()))
+      Some(value.result())
     } else {
       i = start
       invalid
     }
 
   /** An optional `-` and decimal digits, with no leading zeros. */
-  protected def integer(): Option[Literal] = {
+  protected def integer(): Option[String] = {
     val start = i
     if (at(i, '-')) i += 1
     val digits = i
@@ -207,24 +207,16 @@ private[psi] abstract class CallReader(
     else if (i - digits > 1 && line.charAt(digits) == '0') {
       i = digits + 1
       invalid
-    } else Some(IntegerLiteral(line.subSequence(start, i).toString))
+    } else Some(line.subSequence(start, i).toString)
   }
 
   /** The arguments of a handler's call, as it gets them: by parameter, in the order declared. */
   protected def handed(call: Call, bound: Map[String, Argument]): Node.IMap[Id.Root] = {
     val entries = bound.toVector.map { case (name, argument) =>
-      name -> (Tree.Scalar(text(argument.value), None, locate(offsets(argument.valueAt))): Tree.Value)
+      name -> (Tree.Scalar(argument.value, None, locate(offsets(argument.valueAt))): Tree.Value)
     }
     MapImpl(Id.Root, Tree.Map(entries.map(_._1), immutable.Map(entries*), None, locate(offsets(call.at))))
   }
-
-  /** A literal as a handler gets it: a string, an integer as written, a bare name. */
-  protected def text(literal: Literal): String =
-    literal match {
-      case StringLiteral(value) => value
-      case IntegerLiteral(text) => text
-      case NameLiteral(value) => value
-    }
 
   /** The arguments of `call` by the parameter they go to — positional ones in order, then named ones, as in Scala —
     * every one that goes to none, or to one already given, reported.

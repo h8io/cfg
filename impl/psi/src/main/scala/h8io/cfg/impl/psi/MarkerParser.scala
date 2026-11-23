@@ -132,11 +132,7 @@ private[psi] final class MarkerParser(
     val n = arguments.get("n")
     if (n.isEmpty) error(MissingArgument(_, "n"), call.at)
     n.map { argument =>
-      val width = argument.value match {
-        case IntegerLiteral(text) => text.toIntOption.filter(_ >= 1)
-        case _ => None
-      }
-      width.fold {
+      argument.value.toIntOption.filter(_ >= 1).fold {
         error(InvalidArgument(_, "n"), argument.valueAt)
         WidthIndent(1)
       }(WidthIndent(_))
@@ -156,8 +152,11 @@ private object MarkerParser {
 
   final case class Call(name: String, at: Int, arguments: Vector[Argument])
 
-  /** An argument, named or positional. */
-  final case class Argument(name: Option[String], at: Int, value: Literal, valueAt: Int)
+  /** An argument, named or positional, and its value as a handler gets it, whatever kind of literal was written: a
+    * string's text, an integer as written, `-0` included, or a bare name, `true` and `false` included. A literal has no
+    * type until a handler reads it, the built-in markers' alike.
+    */
+  final case class Argument(name: Option[String], at: Int, value: String, valueAt: Int)
 
   /** A loader's marker called on a block by `name`, with its arguments, at `location`, run over the block's value.
     */
@@ -165,13 +164,4 @@ private object MarkerParser {
 
   /** A built-in marker: its parameters, in order, and the stage it picks from its arguments by parameter. */
   final case class BuiltIn(parameters: Vector[String], stage: (Call, Map[String, Argument]) => Option[Stage])
-
-  sealed trait Literal
-  final case class StringLiteral(value: String) extends Literal
-
-  /** An integer as written, `-0` included: a handler gets it as text, as it gets a directive's. */
-  final case class IntegerLiteral(text: String) extends Literal
-
-  /** A bare name, `true` and `false` included: a literal has no type until a handler reads it. */
-  final case class NameLiteral(value: String) extends Literal
 }
