@@ -429,8 +429,10 @@ space, an empty line becomes a newline,
 and a line indented deeper is not folded — neither it nor the newlines around it — so a list or a
 code sample inside prose survives.
 
-**An explicit width** is `width(n: N)`, N a positive integer. As in YAML it counts from the indent
-of the line holding the opening delimiter: that indent and then N whitespace characters are
+**An explicit width** is `width(n: N)`, N a positive integer in whatever literal it is written: an
+argument has no type until a handler reads it (§6), and the built-in markers read theirs as any
+handler does, so `width("2")` and `width('2')` are `width(2)` (session 46). As in YAML it counts
+from the indent of the line holding the opening delimiter: that indent and then N whitespace characters are
 stripped from every non-blank line, and a line that does not start with them is an error. The closing delimiter's column does not count then. Counting from that line
 keeps the value when a formatter shifts the whole block:
 
@@ -3027,10 +3029,18 @@ Fixed on a fifth review, put to the user with the fixes:
   rendering each took 450 to 550 KB — and the costliest load, 710 KB, was a chain of substitutions
   each referring to a key written after it, all of it resolving, where a map of maps took 620 KB.
   At 128 they take about 420 KB and 370 KB, with more than half of a 1 MB stack to spare (Java 25,
-  without coverage, whose frames are larger). An
-  explicit stack, the user's first favourite, would have relieved the parser alone — the chain,
-  which takes nothing to parse, not at all, and a map of maps by about an eighth — unless `Merge`,
-  `Resolve` and `Render` were rewritten too; with
-  the limit at 128 the user judged none of it critical, and §13 item 12 is closed. `cfg-yaml`
+  without coverage, whose frames are larger). An explicit stack, the user's first favourite, would
+  have relieved the parser alone — the chain, which takes nothing to parse, not at all, and a map
+  of maps by about an eighth — unless `Merge`, `Resolve` and `Render` were rewritten too; with the
+  limit at 128 the user judged none of it critical, and §13 item 12 is closed. `cfg-yaml`
   keeps its 256: its recursion is snakeyaml-engine's, measured on its own (§13 item 10). Breaks a
   source deeper than 128 levels loaded with the default: before 1.0, compatibility is not kept.
+
+### Session 46 — 2026-11-23
+
+- **A built-in marker reads its arguments as text, as a handler does** (§5): `width` took only an
+  integer written bare, `width("2")` an error, the one place where the kind of literal written
+  mattered — a handler gets each argument as text, a string, an integer and a bare name alike. The
+  user's call, as I put it: one rule for the built-in markers and for a loader's, `width("2")` now
+  `width(2)`, and the kinds of literal gone from the code; an integer is still checked as written,
+  an optional `-` and no leading zeros.

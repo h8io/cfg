@@ -55,7 +55,7 @@ private[psi] final class FormatterParser(
     val location = locate(offsets(call.at))
     if (call.name == "join") {
       val separator = bind(call, Vector(Parameter("separator", required = true))).get("separator")
-      separator.filter(_ => !failed).map(argument => Token.Join(text(argument.value), written, location))
+      separator.filter(_ => !failed).map(argument => Token.Join(argument.value, written, location))
     } else
       formatters.get(call.name) match {
         case Some(formatter) =>
