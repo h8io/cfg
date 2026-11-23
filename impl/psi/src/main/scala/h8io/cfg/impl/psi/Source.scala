@@ -8,7 +8,6 @@ import java.nio.{ByteBuffer, CharBuffer}
 import java.util.Arrays
 import java.util.jar.JarFile
 import java.util.zip.ZipFile
-import scala.annotation.tailrec
 import scala.util.control.NonFatal
 
 /** The text of one source, with a byte order mark at its start already skipped, and the means to turn an offset into
@@ -146,16 +145,14 @@ private[psi] object Source {
       */
     private def copy(in: InputStream, out: OutputStream): Unit = {
       val buffer = new Array[Byte](8192)
-      @tailrec def loop(): Unit = {
-        val n = in.read(buffer)
-        if (n >= 0) {
-          budget.count(name, n)
-          out.write(buffer, 0, n)
-        }
+      var n = in.read(buffer)
+      while (n >= 0) {
+        budget.count(name, n)
+        out.write(buffer, 0, n)
         val _ = budget.timeout(name, readTimeout)
-        if (n >= 0) loop()
+        n = in.read(buffer)
       }
-      loop()
+      val _ = budget.timeout(name, readTimeout)
     }
 
     /** The entry of a jar `url` names, read from the jar itself rather than through the connection a `jar:` URL opens:
