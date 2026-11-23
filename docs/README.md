@@ -36,7 +36,7 @@ Every artifact is built for Scala 2.13 and 3.
 | Input it can take | anyone's | trusted only | anyone's |
 | Dependencies | `snakeyaml-engine` | Typesafe Config, `typesafe-config-yaml` | none |
 
-`cfg-psi` and `cfg-yaml` limit how deep input nests, 256 levels, so that none overflows the stack. `cfg-hocon` is for
+`cfg-psi` and `cfg-yaml` limit how deep input nests, 128 and 256 levels, so that none overflows the stack. `cfg-hocon` is for
 configuration you trust, as Typesafe Config is: it parses and resolves by recursion with no limit (see
 [HOCON](hocon.md)). So is a HOCON file Psi imports with `cfg-psi-hocon`, which Typesafe Config reads.
 

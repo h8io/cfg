@@ -115,15 +115,19 @@ class DepthTest extends AnyFlatSpec with Matchers {
     }
 
   "A source as deep as the default limit" should "load on a stack of 1 MB, however its levels are written" in {
-    // a block opened by indentation is the costliest level to parse, and `- k:` opens two on each line. The most a map
-    // of maps 256 levels deep takes is with the parser compiled by C1 with profiling, a few loads after the JVM started:
-    // 880 KB before the parser's frames were slimmed a second time, about 620 KB since. Measured with coverage, as CI
-    // runs it, every frame is larger, and 768 KB is not enough
+    // a block opened by indentation is the costliest level to parse, and `- k:` opens two on each line; a chain of
+    // substitutions each referring to a key written after it is the costliest to resolve, and the costliest load of all.
+    // The most each takes is with the code compiled by C1 with profiling, a few loads after the JVM started: at a limit
+    // of 128, about 370 KB for a map of maps and 420 KB for the chain; at 256, as the limit was, 620 KB and 710 KB.
+    // Measured with coverage, as CI runs it, every frame is larger
     val sources = List(
-      "maps" -> ((0 until 255).map(i => "  " * i + "k:\n").mkString + "  " * 255 + "v\n"),
+      "maps" -> ((0 until 129).map(i => "  " * i + "k:\n").mkString + "  " * 129 + "v\n"),
       "elements of maps" ->
-        ("a:\n" + (0 until 127).map(i => "    " * i + "  - k:\n").mkString + "    " * 127 + "  v\n"),
-      "braces" -> ("a: " + "{ a: " * 254 + "{ }" + " }" * 254)
+        ("a:\n" + (0 until 64).map(i => "    " * i + "  - k:\n").mkString + "    " * 64 + "  v\n"),
+      "braces" -> ("a: " + "{ a: " * 127 + "{ }" + " }" * 127),
+      "a chain of substitutions" ->
+        ("a0: x" :: (1 to 128).map(i => "a" + i.toString + ": $" + "{a" + (i - 1).toString + "}").toList).reverse
+          .mkString("\n")
     )
     val loader = Psi.builder.withSystemProperties(Map.empty).build.fold(e => fail(e.toString), identity)
     val loaded = sources.map { case (name, text) =>
@@ -259,14 +263,14 @@ class DepthTest extends AnyFlatSpec with Matchers {
     result(6, "-2").isRight shouldBe true
   }
 
-  "A chain of substitutions" should "go 256 links at the default limit, and no further, in either order" in {
+  "A chain of substitutions" should "go 128 links at the default limit, and no further, in either order" in {
     def chain(n: Int): List[String] =
       "a0: x" :: (1 to n).map(i => "a" + i.toString + ": $" + "{a" + (i - 1).toString + "}").toList
     for {
-      n <- List(256, 257, 100000)
+      n <- List(128, 129, 100000)
       order <- List(chain(n), chain(n).reverse)
     }
-      Psi.parse("s", order.mkString("\n")).isRight shouldBe n == 256
+      Psi.parse("s", order.mkString("\n")).isRight shouldBe n == 128
   }
 
   "A path of any length" should "be followed, rendered and described with no recursion" in {

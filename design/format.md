@@ -1229,8 +1229,8 @@ mistake is worse than stopping.
   brought being unknown; `b { $missing*, x := $other }` names both. A field that refers into the
   failed block fails with it, silently. An error found twice is reported once, as in every phase
   (§6): a source included in two blocks resolves twice.
-- **Depth is limited, to 256 unless the loader is built with another**, `withDepthLimit(n)`, `n` at
-  least 1 (session 22), so that no input overflows the stack: a
+- **Depth is limited, to 128 unless the loader is built with another**, `withDepthLimit(n)`, `n` at
+  least 1 (session 22; 256 until session 45), so that no input overflows the stack: a
   `StackOverflowError` thrown while a class is being initialised leaves that class broken for the
   rest of the JVM, and every later load, of any config, fails. The limit is on:
   - **the depth of the tree as loaded**, not only as written: each `{`, `[` and `(` and each key
@@ -1262,10 +1262,14 @@ mistake is worse than stopping.
     reaches it first in the order resolved — or, reached where it stands in the tree with no
     substitution followed, at the node's own first reference.
 
-  256 holds with a margin of three and more on a thread with the JVM's default stack, 1 MB on
-  HotSpot, which virtual threads share as their limit (measured in session 22: past 800 levels for
-  the deepest path, `{ … }`, and 2 000 links of a chain). On a thread with a smaller stack the real
-  limit is lower: about 280 levels and 160 links at 512 KB, 100 and 60 at 256 KB. What a thread's
+  128 is far past any configuration written by hand, which seldom goes a dozen levels deep, and
+  holds on a thread with the JVM's default stack, 1 MB on HotSpot, which virtual threads share as
+  their limit, with more than half of it to spare: measured in session 45 on each phase, a few
+  loads after the JVM started, where C1's frames make it worst, the costliest load at the limit, a
+  chain of 128 substitutions each referring to a key written after it, takes about 420 KB, and a
+  map of maps 128 levels deep about 370 KB. Every phase that walks the tree — parsing, merging,
+  resolving, rendering — recurses by level, and each takes 250 to 420 KB at the limit; a dotted key
+  and a chain of substitutions, flat as written, take next to nothing to parse. What a thread's
   stack holds only the application knows, hence the builder's setting: lower for a small stack,
   higher for a large one. The limit of 64 sources deep (§6) stays fixed.
 - **What resolution adds to the tree is limited, to 1 000 000 nodes and 10 000 000 characters
@@ -1444,20 +1448,23 @@ mistake is worse than stopping.
 11. ~~**Merging over a substitution or a block of injections alone**~~ — settled in session 36: a
     merge with either waits until it is resolved, and merges as `:` does (§7).
 
-12. **Stack headroom.** Raised by the user in session 40: the depth limit keeps no input from
-    overflowing a stack of 1 MB, but only from a stack nearly empty when the load starts. Measured
-    in session 43 on a map of maps 256 levels deep, the costliest form to parse, the most it takes
-    is not on a JVM just started but a few loads later, the parser compiled by C1 with profiling,
-    whose frames are larger than the interpreter's: 880 KB before session 43, about 620 KB after it
-    (512 KB cold, 256 KB fully compiled). Session 43 took the first of these ways; the rest stay open:
+12. ~~**Stack headroom.**~~ — closed in session 45 by a lower default limit, 128 (§11). Raised by
+    the user in session 40: the depth limit kept no input from overflowing a stack of 1 MB, but
+    only from a stack nearly empty when the load starts. Measured in session 43 on a map of maps
+    256 levels deep, a few loads after the JVM started, where C1's frames make it worst: 880 KB,
+    about 620 KB once the parser's frames were slimmed. Measured in session 45 on each phase, the
+    parser was not alone: merging, resolving and rendering each took 450 to 550 KB at 256, and a
+    chain of substitutions written in reverse 710 KB, all of it resolving. At 128 the costliest
+    load takes about 420 KB. The ways considered:
     - **Fewer and smaller frames** on the path a nested value recurses through (done in session 43):
       `statement`, `indented` off it, the state of `items` and of a block opened by indentation in
       fields rather than locals.
-    - **A lower default limit**, 192 or 128: one line, the headroom doubled, a source deeper than it
-      needing `withDepthLimit`.
-    - **An explicit stack** in place of recursion in the parser: depth costs no stack at all, at the
-      price of rewriting the recursive descent, its recovery from errors and indentation included;
-      `Expand`, `Merge`, `Resolve` and `Render` recurse too, if less per level.
+    - **A lower default limit** (done in session 45): one line, every phase relieved at once, a
+      source deeper than it needing `withDepthLimit`.
+    - **An explicit stack** in place of recursion: depth would cost no stack at all, but only in
+      the phases rewritten, and every phase that walks the tree takes as much as the parser; the
+      recursive descent, its recovery from errors and indentation, `Merge`, `Resolve` and `Render`
+      all rewritten, for a depth no configuration reaches. Not needed, by the user's call.
     - **`scala.util.control.TailCalls`**, the user's suggestion, as that explicit stack without one
       of our own: depth goes to the heap. The catch: a `try`/`finally` or `catch` around a recursive
       call no longer wraps it, the deferred call running after the `finally` — the parser's `dots`,
@@ -3013,3 +3020,17 @@ Fixed on a fifth review, put to the user with the fixes:
   syntax holds where, a circus of them. A block whose text is full of `${` is written `'''…'''`,
   which substitutes nothing (§5), or escapes each as `\${`. With it the last open point of item 4 is
   gone, and the item is closed: lists joined by `join`, options by formatters (session 38).
+- **The default depth limit lowered to 128, from 256** (§11, §13 item 12), my proposal on
+  measurements, the user's call: even 32 levels is a lot for a configuration, and 128 is past
+  anything reasonable. Measured on each phase in a fresh JVM for each try, a few loads in, where
+  C1's frames make it worst: at 256 the parser was not the only cost — merging, resolving and
+  rendering each took 450 to 550 KB — and the costliest load, 710 KB, was a chain of substitutions
+  each referring to a key written after it, all of it resolving, where a map of maps took 620 KB.
+  At 128 they take about 420 KB and 370 KB, with more than half of a 1 MB stack to spare (Java 25,
+  without coverage, whose frames are larger). An
+  explicit stack, the user's first favourite, would have relieved the parser alone — the chain,
+  which takes nothing to parse, not at all, and a map of maps by about an eighth — unless `Merge`,
+  `Resolve` and `Render` were rewritten too; with
+  the limit at 128 the user judged none of it critical, and §13 item 12 is closed. `cfg-yaml`
+  keeps its 256: its recursion is snakeyaml-engine's, measured on its own (§13 item 10). Breaks a
+  source deeper than 128 levels loaded with the default: before 1.0, compatibility is not kept.

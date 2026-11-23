@@ -23,10 +23,10 @@ is not reported as missing: `${db.host}` above is reported once the rest is fixe
 
 ## Limits
 
-A tree loaded is at most 256 levels deep, counting each `{`, `[` and key after a dot; a source a directive such as
-`#include` reads starts a level below the call, among fields too. Resolving a substitution goes at most 256 steps, each
+A tree loaded is at most 128 levels deep, counting each `{`, `[` and key after a dot; a source a directive such as
+`#include` reads starts a level below the call, among fields too. Resolving a substitution goes at most 128 steps, each
 a level descended or a substitution followed, a substitution used again counting as deep as it went the first time. So a
-chain of substitutions goes 256 links, whatever order its keys are written in. Resolving substitutions adds at most
+chain of substitutions goes 128 links, whatever order its keys are written in. Resolving substitutions adds at most
 1 000 000 nodes, those grafts copy and those a directive such as `#yaml` brings, every use of a YAML alias counted, and
 10 000 000 characters, those of the scalars concatenations build; a source's own size is not limited. Reading the
 sources of a load takes at most 10 000 000 bytes, every read counted, and 60 seconds; a wait already begun runs its
