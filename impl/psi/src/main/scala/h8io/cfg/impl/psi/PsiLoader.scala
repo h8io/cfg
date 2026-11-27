@@ -64,6 +64,16 @@ final class PsiLoader private[psi] (settings: Settings) {
   def parse(name: String, text: String): Either[PsiErrors, Node.IMap[Id.Root]] =
     load(Right(Source(name, text)) :: Nil, new ReadBudget(readBytes, readTime))
 
+  /** The errors in the syntax of a source held as `text`, named `name` in locations: what lexing and parsing find in
+    * it, with this loader's markers, formatters and depth limit, in the order of their lines and columns. Nothing is
+    * read, no directive runs and no substitution is resolved, so the errors those would find are not among them: a
+    * check of a source as it is being written, for an editor, which [[parse]] completes.
+    */
+  def check(name: String, text: String): List[PsiError] =
+    PsiLoader
+      .distinct(Parser.parse(Source(name, text), markers, 0, depthLimit, formatters).errors)
+      .sortBy(_.location.order(name :: Nil))
+
   private[psi] def load(
       sources: Seq[Either[PsiError, Source]],
       budget: ReadBudget): Either[PsiErrors, Node.IMap[Id.Root]] = {

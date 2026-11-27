@@ -55,6 +55,11 @@ object Psi {
   /** Loads a source held as `text`, named `name` in locations. */
   def parse(name: String, text: String): Either[PsiErrors, Node.IMap[Id.Root]] = loader.parse(name, text)
 
+  /** The errors in the syntax of a source held as `text`, named `name` in locations, nothing read or run
+    * ([[PsiLoader.check]]).
+    */
+  def check(name: String, text: String): List[PsiError] = loader.check(name, text)
+
   private val loader: PsiLoader = new PsiLoader(Settings())
 
   /** Loads `sources` with no directive of its own, `#prop` reading `properties`. */
