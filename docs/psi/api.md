@@ -68,6 +68,19 @@ Psi.parse("app.psi", "a = 1").left.map(_.errors)
 Psi.parse("app.psi", "a = 1").left.foreach(errors => println(errors.message))
 ```
 
+### Checking a source
+
+`Psi.check(name, text)` gives the errors in the syntax of a source held as a string, what lexing and parsing find in
+it, in the order of their lines and columns, and nothing when there are none: a check of a source as it is being
+written, for an editor or a linter. Nothing is read, no directive runs and no substitution is resolved, so it is cheap
+and safe on any input, and the errors those would find, a missing include or a substitution that finds nothing, are
+left to `parse`. A loader's own `check` knows its markers and formatters; `Psi`'s reports them as `UnknownMarker` and
+`UnknownFormatter`, which a tool that does not know the loader may pass over.
+
+```scala mdoc
+Psi.check("app.psi", "a: 1\nb:c\nd: ${nowhere}")
+```
+
 ## Building a loader
 
 `Psi` is the loader with nothing added. A builder makes another:
@@ -84,7 +97,7 @@ Psi.parse("app.psi", "a = 1").left.foreach(errors => println(errors.message))
 | `withMarker(name, marker)` | adds a marker of its own, written `name` ([Extending](extending.md#markers)) |
 | `withFormatter(name, formatter)` | adds a formatter of its own, called `${path; name(…)}` ([Extending](extending.md#formatters)) |
 
-`build` gives the `PsiLoader`, with `apply(urls*)` and `parse(name, text)` as `Psi` has, or every error of its
+`build` gives the `PsiLoader`, with `apply(urls*)`, `parse(name, text)` and `check(name, text)` as `Psi` has, or every error of its
 configuration at once: a name registered twice, the built-in directives `include`, `prop` and `env`, the built-in
 markers `<`, `>`, `width` and `+` and the built-in formatter `join` included,
 a disabled name registered, a parameter declared twice, a marker named as no marker can be written, a depth limit

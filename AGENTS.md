@@ -122,7 +122,8 @@ Unlike the HOCON loader this one sets `tag` — but only when the tag was *writt
 
 ### Psi loader (`h8io.cfg.impl.psi`)
 
-`Psi.apply(urls: URL*)` and `Psi.parse(name, text)` load Psi sources into `Either[PsiErrors, Node.IMap[Id.Root]]`;
+`Psi.apply(urls: URL*)` and `Psi.parse(name, text)` load Psi sources into `Either[PsiErrors, Node.IMap[Id.Root]]`,
+and `Psi.check(name, text)` gives a source's syntax errors alone, nothing read or run, for an editor;
 `Psi.standard()` loads every `reference` on the class path and the first `application`, and `withReferences(urls*)`
 the references and the URLs given (`format.md` §8); `Psi.builder` builds a `PsiLoader` (from a `Settings`) with
 directives, markers and formatters (`${path; name(…)}`) of its own, each registered under the name the files call it
